@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import PortfolioTracker from './PortfolioTracker'
 import PortfolioReport from './PortfolioReport'
+import PortfolioNews from './PortfolioNews'
 import './App.css'
 
 function App() {
@@ -112,6 +113,12 @@ function App() {
         >
           🧠 Rekomendacje
         </button>
+        <button
+          onClick={() => setActiveTab('newsy')}
+          style={{ padding: '8px 16px', background: activeTab === 'newsy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+        >
+          🔥 Newsy
+        </button>
       </div>
 
       {/* Zawartość zakładki "Analiza" - renderuje się TYLKO gdy activeTab === 'analiza' */}
@@ -161,6 +168,9 @@ function App() {
 
       {/* Zawartość zakładki "Rekomendacje" - renderuje się TYLKO gdy activeTab === 'rekomendacje' */}
       {activeTab === 'rekomendacje' && <PortfolioReport />}
+
+      {/* Zawartość zakładki "Newsy" - renderuje się TYLKO gdy activeTab === 'newsy' */}
+      {activeTab === 'newsy' && <PortfolioNews />}
     </div>
   )
 }

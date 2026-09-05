@@ -39,6 +39,10 @@ function PortfolioTracker() {
   const [followUpLoading, setFollowUpLoading] = useState(false)
   const [followUpError, setFollowUpError] = useState('')
 
+  // Import z pliku CSV
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+
   const fetchPortfolio = async () => {
     setLoading(true)
     setError('')
@@ -87,6 +91,36 @@ function PortfolioTracker() {
       fetchPortfolio()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  const handleCsvImport = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setImportLoading(true)
+    setImportResult(null)
+    setError('')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/import-csv`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się zaimportować pliku CSV.')
+      }
+      const data = await res.json()
+      setImportResult(data)
+      fetchPortfolio()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setImportLoading(false)
+      e.target.value = '' // pozwala wybrać ten sam plik ponownie, jeśli trzeba
     }
   }
 
@@ -240,6 +274,47 @@ function PortfolioTracker() {
           Dodaj
         </button>
       </form>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label
+          style={{
+            display: 'inline-block',
+            padding: '10px 20px',
+            background: '#444',
+            color: 'white',
+            borderRadius: '5px',
+            cursor: importLoading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {importLoading ? 'Importuję...' : '📁 Importuj z CSV'}
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleCsvImport}
+            disabled={importLoading}
+            style={{ display: 'none' }}
+          />
+        </label>
+        <span style={{ color: '#777', fontSize: '12px', marginLeft: '10px' }}>
+          Oczekiwane kolumny: ticker, ilość, cena, data (nazwy PL/EN rozpoznawane automatycznie)
+        </span>
+
+        {importResult && (
+          <div style={{ marginTop: '10px', color: importResult.errors.length > 0 ? '#FFA726' : '#4CAF50' }}>
+            ✅ Zaimportowano {importResult.added} pozycji.
+            {importResult.errors.length > 0 && (
+              <div style={{ color: '#FF5252', marginTop: '5px' }}>
+                Błędy w {importResult.errors.length} wierszach:
+                <ul style={{ margin: '5px 0 0 20px', padding: 0 }}>
+                  {importResult.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {error && <div style={{ color: '#FF5252', marginBottom: '15px' }}>{error}</div>}
       {loading && <div style={{ color: '#aaa', marginBottom: '15px' }}>Ładowanie...</div>}

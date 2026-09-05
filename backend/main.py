@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yfinance as yf
@@ -7,7 +7,13 @@ import os
 import json
 import uuid
 import math
+import csv
+import io
+import re
 import logging
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()  # wczytuje zmienne z pliku .env leżącego obok main.py
@@ -70,6 +76,43 @@ def get_company_name(ticker):
     except Exception:
         logger.warning("Nie udało się pobrać nazwy spółki dla %s", ticker)
     return None
+
+
+def normalize_date(raw):
+    """Próbuje sprowadzić różne formaty dat z CSV do YYYY-MM-DD."""
+    raw = raw.strip()
+    formats = ["%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y"]
+    for fmt in formats:
+        try:
+            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return raw  # nie rozpoznano - zostawiamy jak jest, użytkownik poprawi ręcznie w razie czego
+
+
+def get_news_headlines(company_name, max_items=6):
+    """
+    Pobiera świeże nagłówki newsów dla spółki z Google News RSS (darmowe, bez klucza API,
+    zgodne z regulaminem - to publicznie dostępny kanał RSS, nie scraping).
+    """
+    try:
+        url = f"https://news.google.com/rss/search?q={quote(company_name)}&hl=pl&gl=PL&ceid=PL:pl"
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+        items = root.findall(".//item")[:max_items]
+        headlines = []
+        for item in items:
+            title = (item.findtext("title") or "").strip()
+            pub_date = (item.findtext("pubDate") or "").strip()
+            source = item.find("source")
+            source_name = source.text if source is not None else ""
+            if title:
+                headlines.append(f"- {title} [{source_name}, {pub_date}]")
+        return headlines
+    except Exception:
+        logger.exception("Nie udało się pobrać newsów dla %s", company_name)
+        return []
 
 
 def load_portfolio():
@@ -257,6 +300,151 @@ def add_portfolio_entry(entry: PortfolioEntryCreate):
     entries.append(new_entry)
     save_portfolio(entries)
     return new_entry
+
+
+def extract_name_and_ticker(raw_value):
+    """
+    Rozbija pole typu 'NASDAQ 100 ETF (CNDX.UK)' na (nazwa, ticker).
+    Jeśli nie ma nawiasu, traktuje całość jako ticker.
+    """
+    match = re.search(r"\(([^)]+)\)\s*$", raw_value)
+    if match:
+        ticker = match.group(1).strip()
+        name = raw_value[: match.start()].strip()
+        return name, ticker
+    return None, raw_value.strip()
+
+
+def find_header_row(lines):
+    """
+    Niektóre eksporty z platform brokerskich mają nad tabelą wiersze podsumowania
+    (np. 'Łączny wolumen...'), więc szukamy pierwszego wiersza, który wygląda jak
+    prawdziwy nagłówek tabeli - zawiera jednocześnie coś w stylu 'data' i
+    'instrument/ticker/symbol' lub 'ilość/wolumen/quantity'.
+    """
+    for idx, line in enumerate(lines):
+        lower = line.lower()
+        delimiter = ";" if lower.count(";") > lower.count(",") else ","
+        cells = [c.strip().lower() for c in line.split(delimiter)]
+        has_date = any("data" in c or "date" in c for c in cells)
+        has_instrument = any(
+            any(key in c for key in ["instrument", "ticker", "symbol", "spółka", "spolka"])
+            for c in cells
+        )
+        has_qty = any(
+            any(key in c for key in ["ilość", "ilosc", "quantity", "qty", "wolumen"])
+            for c in cells
+        )
+        if has_date and (has_instrument or has_qty):
+            return idx, delimiter
+    return None, None
+
+
+@app.post("/api/portfolio/import-csv")
+async def import_portfolio_csv(file: UploadFile = File(...)):
+    """
+    Importuje pozycje portfela z pliku CSV. Radzi sobie z dwoma typami plików:
+    1. Prosty, płaski CSV z kolumnami ticker/ilość/cena/data.
+    2. Eksporty z platform brokerskich, które mają nad tabelą wiersze podsumowania,
+       nazwy kolumn typu 'Cena zakupu USD' czy 'Wolumen pozostały', oraz pole
+       instrumentu w formie 'Nazwa spółki (TICKER)'.
+    Importuje TYLKO otwarte/aktywne pozycje - jeśli plik ma osobną sekcję z
+    zamkniętymi/zrealizowanymi transakcjami (np. nagłówek zawierający 'zamkniet'
+    lub 'closed'), przestaje czytać w tym miejscu, żeby nie dodać ich jako aktywnych.
+    """
+    raw_bytes = await file.read()
+    try:
+        text = raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw_bytes.decode("latin-1")
+
+    all_lines = text.splitlines()
+    header_idx, delimiter = find_header_row(all_lines)
+
+    if header_idx is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Nie znaleziono w pliku wiersza, który wygląda jak nagłówek tabeli pozycji."
+        )
+
+    # Zbieramy wiersze tabeli od nagłówka, aż do pustej linii albo kolejnej sekcji
+    # (np. '=== POZYCJE ZAMKNIETE ===' - to już nie są aktywne pozycje).
+    table_lines = [all_lines[header_idx]]
+    for line in all_lines[header_idx + 1:]:
+        stripped = line.strip()
+        if not stripped:
+            break
+        # Zatrzymujemy się tylko na prawdziwym nagłówku nowej sekcji (np. '=== POZYCJE ZAMKNIETE ==='),
+        # NIE na dowolnym wystąpieniu słowa 'zamknięta' - to słowo może pojawić się też w statusie
+        # częściowo zrealizowanej, ale wciąż otwartej pozycji (np. 'Otwarta (częściowo zamknięta...)').
+        if stripped.startswith("=") and stripped.endswith("="):
+            break
+        table_lines.append(line)
+
+    reader = csv.DictReader(io.StringIO("\n".join(table_lines)), delimiter=delimiter)
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Nie udało się odczytać nagłówków tabeli pozycji.")
+
+    def find_col(keywords):
+        for name in reader.fieldnames:
+            lower = name.strip().lower()
+            if any(kw in lower for kw in keywords):
+                return name
+        return None
+
+    col_instrument = find_col(["instrument", "ticker", "symbol", "spółka", "spolka"])
+    col_qty = find_col(["pozostał", "pozostal", "ilość", "ilosc", "quantity", "qty", "wolumen"])
+    col_price = find_col(["cena", "price"])
+    col_date = find_col(["data", "date"])
+    col_note = find_col(["notatka", "note", "uwagi", "komentarz", "status"])
+
+    if not all([col_instrument, col_qty, col_price, col_date]):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Nie rozpoznano wymaganych kolumn (instrument/ticker, ilość, cena, data). "
+                "Znalezione nagłówki: " + ", ".join(reader.fieldnames)
+            ),
+        )
+
+    entries = load_portfolio()
+    added = []
+    errors = []
+
+    for i, row in enumerate(reader, start=header_idx + 2):
+        try:
+            raw_instrument = (row.get(col_instrument) or "").strip()
+            if not raw_instrument:
+                continue
+
+            company_name, ticker = extract_name_and_ticker(raw_instrument)
+            ticker = ticker.upper()
+
+            quantity = float(str(row.get(col_qty, "")).replace(",", ".").strip())
+            buy_price = float(str(row.get(col_price, "")).replace(",", ".").strip())
+
+            raw_date = (row.get(col_date, "") or "").strip()
+            raw_date = raw_date.split(" ")[0]  # obcinamy godzinę, jeśli jest ('24.10.2025 10:38' -> '24.10.2025')
+            buy_date = normalize_date(raw_date)
+
+            note = (row.get(col_note) or "").strip() if col_note else ""
+
+            new_entry = {
+                "id": str(uuid.uuid4()),
+                "ticker": ticker,
+                "name": company_name or get_company_name(ticker) or ticker,
+                "quantity": quantity,
+                "buy_price": buy_price,
+                "buy_date": buy_date,
+                "note": note,
+            }
+            entries.append(new_entry)
+            added.append(new_entry)
+        except Exception as e:
+            errors.append(f"Wiersz {i}: {e}")
+
+    save_portfolio(entries)
+    return {"added": len(added), "errors": errors, "total_rows_processed": len(added) + len(errors)}
 
 
 @app.delete("/api/portfolio/{entry_id}")
@@ -518,6 +706,78 @@ def portfolio_report():
         raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści raportu.")
 
     return {"report": report_text, "positions_analyzed": len(positions)}
+
+
+@app.get("/api/portfolio/news")
+def portfolio_news():
+    """
+    Pobiera świeże nagłówki newsów (Google News RSS) dla każdej unikalnej spółki
+    w portfelu i prosi AI o ocenę, czy coś z tego wygląda na realny katalizator
+    ruchu kursu (pozytywny lub negatywny), a nie o sztuczne dorabianie sensacji.
+    """
+    entries = load_portfolio()
+    if not entries:
+        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
+
+    seen_tickers = set()
+    news_blocks = []
+    checked = []
+
+    for entry in entries:
+        ticker = entry["ticker"]
+        if ticker in seen_tickers:
+            continue
+        seen_tickers.add(ticker)
+        checked.append(ticker)
+
+        name = entry.get("name") or ticker
+        headlines = get_news_headlines(name)
+
+        if headlines:
+            news_blocks.append(f"### {name} ({ticker})\n" + "\n".join(headlines))
+        else:
+            news_blocks.append(f"### {name} ({ticker})\nBrak świeżych newsów w wyszukiwaniu.")
+
+    prompt = (
+        "Jesteś analitykiem rynkowym monitorującym newsy pod kątem inwestora giełdowego. "
+        "Poniżej masz najświeższe nagłówki newsów dla spółek z jego portfela. Dla KAŻDEJ spółki:\n"
+        "1. Krótko podsumuj o czym mówią newsy (2-3 zdania) - jeśli newsów brak, napisz to wprost.\n"
+        "2. Oceń, czy coś z tego wygląda na realny katalizator ruchu kursu (pozytywny lub negatywny) "
+        "- np. wzmianka ważnej osoby/instytucji, zapowiedź konferencji, wyniki finansowe, plotki rynkowe, "
+        "zmiana otoczenia regulacyjnego.\n"
+        "3. Jeśli nic istotnego się nie dzieje, napisz to wprost zamiast naciągać newsy na sensację - "
+        "fałszywy alarm jest gorszy niż brak alarmu.\n\n"
+        + "\n\n".join(news_blocks)
+        + "\n\nZakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+    )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    try:
+        resp = requests.post(url, json=payload, timeout=60)
+    except requests.exceptions.RequestException as e:
+        logger.exception("Błąd sieci przy wywołaniu Gemini (newsy portfela)")
+        raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
+
+    try:
+        data = resp.json()
+    except ValueError:
+        logger.error("Gemini zwrócił nie-JSON (newsy portfela): %s", resp.text[:500])
+        raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
+
+    if resp.status_code != 200:
+        err = data.get("error", {}).get("message", "Nieznany błąd API")
+        logger.error("BŁĄD Z GOOGLE (newsy portfela, status %s): %s", resp.status_code, err)
+        raise HTTPException(status_code=502, detail=err)
+
+    try:
+        news_report = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        logger.error("Nieoczekiwany kształt odpowiedzi Gemini (newsy portfela): %s", data)
+        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści raportu newsów.")
+
+    return {"report": news_report, "tickers_checked": checked}
 
 
 @app.post("/api/analyze")
