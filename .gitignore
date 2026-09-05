@@ -1,0 +1,46 @@
+# --- Sekrety / środowisko ---
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# --- Dane portfela (prywatne dane finansowe) ---
+backend/portfolio.json
+portfolio.json
+
+# --- Python / backend ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / frontend ---
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+.vite/
+
+# --- Logi ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Edytory / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- System ---
+.DS_Store
+Thumbs.db
+desktop.ini
