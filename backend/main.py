@@ -56,6 +56,7 @@ class PortfolioEntryCreate(BaseModel):
     buy_price: float
     buy_date: str  # format "YYYY-MM-DD"
     note: str = ""
+    currency: str = ""  # "PLN"/"USD"/"EUR"/"GBP"... puste = autodetekcja po tickerze
 
 
 class PositionAnalysisRequest(BaseModel):
@@ -76,6 +77,62 @@ def get_company_name(ticker):
     except Exception:
         logger.warning("Nie udało się pobrać nazwy spółki dla %s", ticker)
     return None
+
+
+def get_currency(ticker):
+    """Ustala walutę notowań danego tickera (np. 'USD' dla ETF-ów notowanych w USD, 'PLN' dla GPW)."""
+    try:
+        stock = yf.Ticker(ticker)
+        currency = None
+        try:
+            currency = stock.fast_info.get("currency")
+        except Exception:
+            pass
+        if not currency:
+            currency = stock.info.get("currency")
+        if currency:
+            return currency.upper()
+    except Exception:
+        logger.warning("Nie udało się ustalić waluty dla %s", ticker)
+    return None
+
+
+def get_fx_rate(currency, cache=None):
+    """
+    Zwraca kurs wymiany 1 jednostki danej waluty na PLN (np. USD -> ~4.0).
+    Dla PLN zwraca zawsze 1.0. `cache` to opcjonalny słownik do przekazania
+    między wywołaniami w obrębie jednego requestu, żeby nie pytać Yahoo
+    o ten sam kurs kilka razy.
+    """
+    currency = (currency or "PLN").upper()
+    if currency == "PLN":
+        return 1.0
+    if cache is not None and currency in cache:
+        return cache[currency]
+
+    rate = None
+    try:
+        fx_ticker = yf.Ticker(f"{currency}PLN=X")
+        hist = fx_ticker.history(period="5d")
+        if not hist.empty:
+            last = float(hist["Close"].iloc[-1])
+            if not math.isnan(last) and not math.isinf(last):
+                rate = last
+    except Exception:
+        logger.warning("Nie udało się pobrać kursu %sPLN", currency)
+
+    if rate is None:
+        try:
+            fx_ticker = yf.Ticker(f"{currency}PLN=X")
+            fast_price = fx_ticker.fast_info.get("lastPrice")
+            if fast_price is not None:
+                rate = float(fast_price)
+        except Exception:
+            logger.warning("Nie udało się pobrać kursu %sPLN (fast_info)", currency)
+
+    if cache is not None:
+        cache[currency] = rate
+    return rate
 
 
 def normalize_date(raw):
@@ -240,32 +297,57 @@ def health():
 
 @app.get("/api/portfolio")
 def get_portfolio():
-    """Zwraca wszystkie pozycje portfela wraz z aktualną wyceną i zyskiem/stratą."""
+    """
+    Zwraca wszystkie pozycje portfela wraz z aktualną wyceną i zyskiem/stratą.
+    Koszt/wartość/zysk-strata są ZAWSZE przeliczone na PLN, niezależnie od tego,
+    w jakiej walucie notowany jest dany instrument (np. ETF w USD).
+    """
     entries = load_portfolio()
     enriched = []
     total_cost = 0.0
     total_value = 0.0
     price_cache = {}
+    currency_cache = {}
+    fx_cache = {}
 
     for entry in entries:
         ticker = entry["ticker"]
 
         if ticker not in price_cache:
             price_cache[ticker] = get_current_price(ticker)
+        if ticker not in currency_cache:
+            currency_cache[ticker] = get_currency(ticker)
 
         current_price = price_cache[ticker]
-        cost = entry["quantity"] * entry["buy_price"]
-        value = entry["quantity"] * current_price if current_price is not None else None
-        profit = (value - cost) if value is not None else None
-        profit_pct = (profit / cost * 100) if profit is not None and cost > 0 else None
+        # Waluta zakupu - to co zapisaliśmy przy dodawaniu pozycji (ważne dla starych
+        # wpisów sprzed wprowadzenia walut, które domyślnie zakładamy jako PLN)
+        buy_currency = entry.get("currency") or "PLN"
+        # Waluta notowań bieżącej ceny - zwykle taka sama jak buy_currency, ale
+        # liczymy osobno na wszelki wypadek (np. inna klasa udziałów)
+        quote_currency = currency_cache[ticker] or buy_currency
 
-        total_cost += cost
+        fx_buy = get_fx_rate(buy_currency, fx_cache)
+        fx_quote = get_fx_rate(quote_currency, fx_cache)
+
+        cost = entry["quantity"] * entry["buy_price"] * fx_buy if fx_buy is not None else None
+        value = (
+            entry["quantity"] * current_price * fx_quote
+            if current_price is not None and fx_quote is not None
+            else None
+        )
+        profit = (value - cost) if (value is not None and cost is not None) else None
+        profit_pct = (profit / cost * 100) if profit is not None and cost else None
+
+        if cost is not None:
+            total_cost += cost
         if value is not None:
             total_value += value
 
         enriched.append({
             **entry,
             "name": entry.get("name") or ticker,
+            "currency": buy_currency,
+            "quote_currency": quote_currency,
             "current_price": safe_round(current_price),
             "cost": safe_round(cost),
             "value": safe_round(value),
@@ -288,12 +370,14 @@ def add_portfolio_entry(entry: PortfolioEntryCreate):
     """Dodaje nową pozycję (transakcję kupna) do portfela."""
     entries = load_portfolio()
     ticker = entry.ticker.upper().strip()
+    currency = entry.currency.strip().upper() if entry.currency else (get_currency(ticker) or "PLN")
     new_entry = {
         "id": str(uuid.uuid4()),
         "ticker": ticker,
         "name": get_company_name(ticker) or ticker,
         "quantity": entry.quantity,
         "buy_price": entry.buy_price,
+        "currency": currency,
         "buy_date": entry.buy_date,
         "note": entry.note,
     }
@@ -407,9 +491,19 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
             ),
         )
 
+    # Waluta z nagłówka kolumny ceny, np. 'Cena zakupu USD' -> 'USD'. Jeśli nagłówek
+    # jej nie podaje, dociągamy autodetekcję po tickerze (osobno dla każdej spółki niżej).
+    known_currencies = {"PLN", "USD", "EUR", "GBP", "CHF", "JPY"}
+    header_currency = None
+    for code in known_currencies:
+        if code in col_price.upper():
+            header_currency = code
+            break
+
     entries = load_portfolio()
     added = []
     errors = []
+    currency_cache = {}
 
     for i, row in enumerate(reader, start=header_idx + 2):
         try:
@@ -429,12 +523,20 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
 
             note = (row.get(col_note) or "").strip() if col_note else ""
 
+            if header_currency:
+                currency = header_currency
+            else:
+                if ticker not in currency_cache:
+                    currency_cache[ticker] = get_currency(ticker) or "PLN"
+                currency = currency_cache[ticker]
+
             new_entry = {
                 "id": str(uuid.uuid4()),
                 "ticker": ticker,
                 "name": company_name or get_company_name(ticker) or ticker,
                 "quantity": quantity,
                 "buy_price": buy_price,
+                "currency": currency,
                 "buy_date": buy_date,
                 "note": note,
             }
@@ -445,6 +547,40 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
 
     save_portfolio(entries)
     return {"added": len(added), "errors": errors, "total_rows_processed": len(added) + len(errors)}
+
+
+@app.post("/api/portfolio/fix-currencies")
+def fix_currencies():
+    """
+    Naprawcza operacja dla pozycji dodanych PRZED wprowadzeniem obsługi walut
+    (nie miały pola 'currency', więc były domyślnie liczone jako PLN nawet jeśli
+    faktycznie chodziło o ETF w USD/EUR). Dla każdej pozycji bez ustawionej waluty
+    (albo ustawionej na PLN mimo że ticker faktycznie notowany jest w innej walucie)
+    dociąga prawdziwą walutę z Yahoo Finance i nadpisuje wpis.
+    """
+    entries = load_portfolio()
+    fixed = []
+    currency_cache = {}
+
+    for entry in entries:
+        ticker = entry["ticker"]
+        current_currency = entry.get("currency")
+
+        if ticker not in currency_cache:
+            currency_cache[ticker] = get_currency(ticker)
+        real_currency = currency_cache[ticker]
+
+        # Naprawiamy tylko gdy brakuje waluty w ogóle, albo mamy realną (różną) walutę
+        # z Yahoo, a zapisana wartość to nadal domyślne "PLN" - to sygnał, że nikt
+        # świadomie nie wybrał PLN, tylko zadziałał stary fallback sprzed poprawki.
+        if real_currency and (not current_currency or current_currency == "PLN") and real_currency != "PLN":
+            entry["currency"] = real_currency
+            fixed.append({"ticker": ticker, "id": entry["id"], "new_currency": real_currency})
+        elif not current_currency:
+            entry["currency"] = "PLN"
+
+    save_portfolio(entries)
+    return {"fixed_count": len(fixed), "fixed": fixed}
 
 
 @app.delete("/api/portfolio/{entry_id}")
@@ -490,10 +626,20 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     config = horizon_config.get(request.horizon, horizon_config["sredni"])
 
     current_price = get_current_price(ticker)
-    cost = entry["quantity"] * entry["buy_price"]
-    value = entry["quantity"] * current_price if current_price is not None else None
-    profit = (value - cost) if value is not None else None
-    profit_pct = (profit / cost * 100) if profit is not None and cost > 0 else None
+    buy_currency = entry.get("currency") or "PLN"
+    quote_currency = get_currency(ticker) or buy_currency
+    fx_cache = {}
+    fx_buy = get_fx_rate(buy_currency, fx_cache)
+    fx_quote = get_fx_rate(quote_currency, fx_cache)
+
+    cost_pln = entry["quantity"] * entry["buy_price"] * fx_buy if fx_buy is not None else None
+    value_pln = (
+        entry["quantity"] * current_price * fx_quote
+        if current_price is not None and fx_quote is not None
+        else None
+    )
+    profit_pln = (value_pln - cost_pln) if (value_pln is not None and cost_pln is not None) else None
+    profit_pct = (profit_pln / cost_pln * 100) if profit_pln is not None and cost_pln else None
 
     # Trend dopasowany do horyzontu - krótki termin patrzy na 1mo, długi na 2y
     trend_summary = "brak danych o trendzie"
@@ -511,8 +657,8 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
             recent_volume = float(hist["Volume"].iloc[-5:].mean()) if len(hist) >= 5 else avg_volume
             trend_summary = (
                 f"Okres {config['period']}: zmiana {change_pct:+.1f}% "
-                f"(od {start_price:.2f} do {end_price:.2f} PLN), "
-                f"zakres {min_price:.2f}-{max_price:.2f} PLN, "
+                f"(od {start_price:.2f} do {end_price:.2f} {quote_currency}), "
+                f"zakres {min_price:.2f}-{max_price:.2f} {quote_currency}, "
                 f"śr. wolumen dzienny {avg_volume:,.0f} "
                 f"(ostatnio: {recent_volume:,.0f})."
             )
@@ -524,9 +670,11 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     # Wspólny blok danych o pozycji - używany zarówno w pełnej analizie, jak i w follow-upie
     position_facts = (
         f"Spółka: {entry.get('name') or ticker} ({ticker})\n"
-        f"- Ilość: {entry['quantity']}, cena zakupu: {entry['buy_price']} PLN (data zakupu: {entry['buy_date']})\n"
-        f"- Aktualna cena: {current_price if current_price is not None else 'brak danych'} PLN\n"
-        f"- Aktualny zysk/strata: {safe_round(profit) if profit is not None else 'brak danych'} PLN "
+        f"- Ilość: {entry['quantity']}, cena zakupu: {entry['buy_price']} {buy_currency} "
+        f"(data zakupu: {entry['buy_date']})\n"
+        f"- Aktualna cena: {current_price if current_price is not None else 'brak danych'} {quote_currency}\n"
+        f"- Aktualny zysk/strata (przeliczone na PLN): "
+        f"{safe_round(profit_pln) if profit_pln is not None else 'brak danych'} PLN "
         f"({safe_round(profit_pct) if profit_pct is not None else '?'}%)\n"
         f"- Trend: {trend_summary}\n"
         f"- Najbliższy raport finansowy / wydarzenie: {earnings_info}\n"
@@ -601,111 +749,169 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     }
 
 
-@app.get("/api/portfolio/report")
-def portfolio_report():
-    """
-    Generuje pełny raport AI dla całego portfela: dla każdej pozycji rekomendację
-    (sprzedaj / trzymaj / dokup), szacowane prawdopodobieństwo dalszego ruchu
-    oraz informację o nadchodzących wydarzeniach (raporty finansowe, konferencje).
-    """
-    portfolio_data = get_portfolio()
-    positions = portfolio_data["positions"]
+def get_sector_info(ticker):
+    """Próbuje pobrać sektor/branżę/kraj notowania spółki - potrzebne do oceny dywersyfikacji."""
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        return {
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "country": info.get("country"),
+        }
+    except Exception:
+        logger.warning("Nie udało się pobrać sektora/kraju dla %s", ticker)
+        return {"sector": None, "industry": None, "country": None}
 
-    if not positions:
-        raise HTTPException(
-            status_code=400,
-            detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję, żeby wygenerować raport."
-        )
 
-    position_blocks = []
-    for pos in positions:
-        ticker = pos["ticker"]
-
-        # Krótkie podsumowanie trendu z ostatnich 3 miesięcy (żeby nie wysyłać setek wierszy do AI)
-        trend_summary = "brak danych o trendzie"
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="3mo")
-            if not hist.empty:
-                hist = hist.dropna()
-                start_price = float(hist["Close"].iloc[0])
-                end_price = float(hist["Close"].iloc[-1])
-                min_price = float(hist["Close"].min())
-                max_price = float(hist["Close"].max())
-                change_pct = ((end_price - start_price) / start_price * 100) if start_price else 0
-                avg_volume = float(hist["Volume"].mean())
-                trend_summary = (
-                    f"Ostatnie 3 miesiące: zmiana {change_pct:+.1f}% "
-                    f"(od {start_price:.2f} do {end_price:.2f} PLN), "
-                    f"zakres {min_price:.2f}-{max_price:.2f} PLN, "
-                    f"śr. wolumen dzienny {avg_volume:,.0f}."
-                )
-        except Exception:
-            logger.exception("Nie udało się pobrać trendu 3mo dla %s", ticker)
-
-        earnings_info = get_next_earnings_date(ticker) or "brak dostępnych danych o terminie najbliższego raportu"
-
-        block = (
-            f"### {ticker}\n"
-            f"- Ilość: {pos['quantity']}, cena zakupu: {pos['buy_price']} PLN, data zakupu: {pos['buy_date']}\n"
-            f"- Aktualna cena: {pos['current_price']} PLN\n"
-            f"- Aktualny zysk/strata: {pos['profit']} PLN ({pos['profit_pct']}%)\n"
-            f"- Trend: {trend_summary}\n"
-            f"- Najbliższy raport finansowy / wydarzenie: {earnings_info}\n"
-        )
-        if pos.get("note"):
-            block += f"- Notatka użytkownika: {pos['note']}\n"
-        position_blocks.append(block)
-
-    summary = portfolio_data["summary"]
-    portfolio_summary_text = (
-        f"Łączny koszt portfela: {summary['total_cost']} PLN, "
-        f"łączna wartość: {summary['total_value']} PLN, "
-        f"łączny zysk/strata: {summary['total_profit']} PLN ({summary['total_profit_pct']}%)."
-    )
-
-    prompt = (
-        "Jesteś doświadczonym analitykiem giełdowym. Poniżej masz szczegóły portfela inwestora "
-        "z Giełdy Papierów Wartościowych w Warszawie. Dla KAŻDEJ pozycji z osobna podaj:\n"
-        "1. Rekomendację: SPRZEDAJ / TRZYMAJ / DOKUP.\n"
-        "2. Szacowane prawdopodobieństwo dalszego wzrostu vs spadku w najbliższych tygodniach "
-        "(np. \"~60% szans na wzrost\") wraz z krótkim uzasadnieniem opartym na trendzie i wolumenie.\n"
-        "3. Czy zbliża się istotne wydarzenie (raport finansowy, konferencja, publikacja wyników) "
-        "mogące wpłynąć na kurs, i jak inwestor mógłby się do niego ustawić. Jeśli nie masz danych "
-        "o dacie, napisz to wprost zamiast zgadywać.\n"
-        "Na końcu dodaj krótkie podsumowanie całego portfela (2-3 zdania) oraz jedno zdanie zastrzeżenia, "
-        "że to nie jest porada inwestycyjna, tylko analiza edukacyjna.\n\n"
-        f"PODSUMOWANIE PORTFELA:\n{portfolio_summary_text}\n\n"
-        "POZYCJE:\n" + "\n".join(position_blocks)
-    )
-
+def call_gemini(prompt, timeout=60):
+    """Wspólna funkcja wywołania Gemini - używana przez dywersyfikację i pytania o portfel."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     try:
-        resp = requests.post(url, json=payload, timeout=60)
+        resp = requests.post(url, json=payload, timeout=timeout)
     except requests.exceptions.RequestException as e:
-        logger.exception("Błąd sieci przy wywołaniu Gemini (raport portfela)")
+        logger.exception("Błąd sieci przy wywołaniu Gemini")
         raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
 
     try:
         data = resp.json()
     except ValueError:
-        logger.error("Gemini zwrócił nie-JSON (raport portfela): %s", resp.text[:500])
+        logger.error("Gemini zwrócił nie-JSON: %s", resp.text[:500])
         raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
 
     if resp.status_code != 200:
         err = data.get("error", {}).get("message", "Nieznany błąd API")
-        logger.error("BŁĄD Z GOOGLE (raport portfela, status %s): %s", resp.status_code, err)
+        logger.error("BŁĄD Z GOOGLE (status %s): %s", resp.status_code, err)
         raise HTTPException(status_code=502, detail=err)
 
     try:
-        report_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
-        logger.error("Nieoczekiwany kształt odpowiedzi Gemini (raport portfela): %s", data)
-        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści raportu.")
+        logger.error("Nieoczekiwany kształt odpowiedzi Gemini: %s", data)
+        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści odpowiedzi.")
 
-    return {"report": report_text, "positions_analyzed": len(positions)}
+
+def build_portfolio_context(portfolio_data):
+    """Buduje tekstowy opis całego portfela - używany zarówno w dywersyfikacji, jak i w pytaniach."""
+    positions = portfolio_data["positions"]
+    summary = portfolio_data["summary"]
+
+    lines = []
+    for pos in positions:
+        line = (
+            f"- {pos.get('name') or pos['ticker']} ({pos['ticker']}): {pos['quantity']} szt., "
+            f"kupione po {pos['buy_price']} {pos.get('currency', 'PLN')}, "
+            f"aktualnie {pos['current_price']} {pos.get('quote_currency', pos.get('currency', 'PLN'))}, "
+            f"wartość {pos['value']} PLN, zysk/strata {pos['profit']} PLN ({pos['profit_pct']}%)"
+        )
+        if pos.get("note"):
+            line += f", notatka: {pos['note']}"
+        lines.append(line)
+
+    return (
+        f"Łączny koszt portfela: {summary['total_cost']} PLN, "
+        f"wartość: {summary['total_value']} PLN, "
+        f"zysk/strata: {summary['total_profit']} PLN ({summary['total_profit_pct']}%).\n\n"
+        "POZYCJE:\n" + "\n".join(lines)
+    )
+
+
+@app.get("/api/portfolio/diversification")
+def portfolio_diversification():
+    """
+    Analiza dywersyfikacji całego portfela: koncentracja w sektorach/krajach/walutach,
+    luki w portfelu, i konkretne sugestie rebalansowania.
+    """
+    portfolio_data = get_portfolio()
+    positions = portfolio_data["positions"]
+    summary = portfolio_data["summary"]
+
+    if not positions:
+        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
+
+    total_value = summary["total_value"] or 0
+    sector_cache = {}
+    blocks = []
+
+    for pos in positions:
+        ticker = pos["ticker"]
+        if ticker not in sector_cache:
+            sector_cache[ticker] = get_sector_info(ticker)
+        info = sector_cache[ticker]
+
+        weight_pct = (pos["value"] / total_value * 100) if pos["value"] and total_value else None
+
+        blocks.append(
+            f"- {pos.get('name') or ticker} ({ticker}): waga {safe_round(weight_pct)}% portfela, "
+            f"wartość {pos['value']} PLN, waluta {pos.get('currency', 'PLN')}, "
+            f"sektor: {info['sector'] or 'brak danych'}, branża: {info['industry'] or 'brak danych'}, "
+            f"kraj: {info['country'] or 'brak danych'}"
+        )
+
+    prompt = (
+        "Jesteś analitykiem zarządzania ryzykiem portfela inwestycyjnego. Poniżej masz skład portfela "
+        "inwestora (waga każdej pozycji, sektor, branża, kraj, waluta). Oceń:\n"
+        "1. KONCENTRACJA: czy portfel jest nadmiernie skoncentrowany w jednym sektorze, kraju, walucie "
+        "lub pojedynczej spółce - podaj konkretne przybliżone %.\n"
+        "2. LUKI: jakich ważnych klas aktywów/sektorów/regionów wyraźnie brakuje, biorąc pod uwagę to co już jest.\n"
+        "3. REBALANSOWANIE: 2-3 konkretne, praktyczne sugestie co przegrupować lub jakiego typu instrument "
+        "dokupić, żeby poprawić dywersyfikację (możesz wskazać typ instrumentu np. 'szerszy ETF na rynek "
+        "europejski', nie musisz wskazywać konkretnego tickera).\n"
+        "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna.\n\n"
+        f"Łączna wartość portfela: {summary['total_value']} PLN.\n\n"
+        "SKŁAD PORTFELA:\n" + "\n".join(blocks)
+    )
+
+    report_text = call_gemini(prompt)
+    return {"report": report_text}
+
+
+class PortfolioQuestionRequest(BaseModel):
+    question: str
+    previous_analysis: str = ""  # kontekst z poprzednich pytań/odpowiedzi w tej samej rozmowie
+
+
+@app.post("/api/portfolio/ask")
+def portfolio_ask(request: PortfolioQuestionRequest):
+    """
+    Otwarte pytanie o cały portfel, np. 'w co zainwestować dodatkowe 5k na IKE -
+    dokupić coś co już mam, czy szukać czegoś nowego?'. Odpowiedź opiera się na
+    realnych, aktualnych danych portfela (wagi, waluty, zyski), z pamięcią
+    poprzednich pytań w tej samej rozmowie.
+    """
+    portfolio_data = get_portfolio()
+    if not portfolio_data["positions"]:
+        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
+
+    portfolio_context = build_portfolio_context(portfolio_data)
+
+    if request.previous_analysis:
+        prompt = (
+            "Jesteś doświadczonym doradcą inwestycyjnym prowadzącym dalszą rozmowę z inwestorem "
+            "o jego portfelu.\n\n"
+            f"AKTUALNY STAN PORTFELA:\n{portfolio_context}\n\n"
+            f"Wcześniej w tej rozmowie napisałeś:\n\n{request.previous_analysis}\n\n"
+            f"Inwestor pyta teraz: \"{request.question}\"\n\n"
+            "Odpowiedz konkretnie, odwołując się do realnych danych portfela powyżej (wagi, waluty, zyski), "
+            "nie powtarzaj całej wcześniejszej treści. Jeśli pytanie dotyczy nowych środków do zainwestowania, "
+            "rozważ zarówno dokupienie istniejących pozycji jak i nowe kierunki, biorąc pod uwagę dywersyfikację. "
+            "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+        )
+    else:
+        prompt = (
+            "Jesteś doświadczonym doradcą inwestycyjnym. Oto aktualny portfel inwestora:\n\n"
+            f"{portfolio_context}\n\n"
+            f"Inwestor pyta: \"{request.question}\"\n\n"
+            "Odpowiedz konkretnie i praktycznie, odwołując się do realnych danych portfela powyżej "
+            "(wagi pozycji, waluty, zyski/straty). Jeśli pytanie dotyczy nowych środków do zainwestowania, "
+            "rozważ zarówno dokupienie istniejących pozycji jak i nowe kierunki, biorąc pod uwagę dywersyfikację "
+            "portfela. Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+        )
+
+    answer_text = call_gemini(prompt)
+    return {"answer": answer_text}
 
 
 @app.get("/api/portfolio/news")

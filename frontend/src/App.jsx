@@ -111,7 +111,7 @@ function App() {
           onClick={() => setActiveTab('rekomendacje')}
           style={{ padding: '8px 16px', background: activeTab === 'rekomendacje' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
         >
-          🧠 Rekomendacje
+          📊 Analiza i pytania
         </button>
         <button
           onClick={() => setActiveTab('newsy')}
