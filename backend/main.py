@@ -33,6 +33,10 @@ MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 # Plik, w którym trzymamy pozycje portfela (prosty JSON, bez bazy danych)
 PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio.json")
 
+# Plik z watchlistą - spółki obserwowane pod kątem nadchodzących wydarzeń/raportów,
+# NIEZALEŻNIE od tego, czy są w portfelu (np. Nvidia, o której inwestor myśli, ale jej nie ma)
+WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
+
 app = FastAPI(title="GPW Analyst API")
 
 app.add_middleware(
@@ -186,6 +190,29 @@ def load_portfolio():
 def save_portfolio(entries):
     with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
         json.dump(entries, f, ensure_ascii=False, indent=2)
+
+
+def load_watchlist():
+    """
+    Wczytuje watchlistę spółek do obserwowania pod kątem katalizatorów.
+    Przy pierwszym uruchomieniu tworzy przykładową listę znanych, zmiennych
+    spółek (można ją dowolnie edytować/wyczyścić w interfejsie).
+    """
+    if not os.path.exists(WATCHLIST_FILE):
+        default = ["NVDA", "TSLA", "AMD", "CDR.WA", "CRI.WA", "RVU.WA"]
+        save_watchlist(default)
+        return default
+    try:
+        with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać watchlist.json - traktuję jako pustą listę")
+        return []
+
+
+def save_watchlist(tickers):
+    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(tickers, f, ensure_ascii=False, indent=2)
 
 
 def safe_round(value, digits=2):
@@ -914,76 +941,88 @@ def portfolio_ask(request: PortfolioQuestionRequest):
     return {"answer": answer_text}
 
 
-@app.get("/api/portfolio/news")
-def portfolio_news():
+class WatchlistAddRequest(BaseModel):
+    ticker: str
+
+
+@app.get("/api/watchlist")
+def get_watchlist():
+    """Zwraca aktualną watchlistę tickerów obserwowanych pod kątem katalizatorów."""
+    return {"tickers": load_watchlist()}
+
+
+@app.post("/api/watchlist")
+def add_watchlist_ticker(request: WatchlistAddRequest):
+    """Dodaje ticker do watchlisty (niezależnej od portfela)."""
+    ticker = request.ticker.upper().strip()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Podaj ticker.")
+    tickers = load_watchlist()
+    if ticker not in tickers:
+        tickers.append(ticker)
+        save_watchlist(tickers)
+    return {"tickers": tickers}
+
+
+@app.delete("/api/watchlist/{ticker}")
+def remove_watchlist_ticker(ticker: str):
+    """Usuwa ticker z watchlisty."""
+    ticker = ticker.upper().strip()
+    tickers = load_watchlist()
+    tickers = [t for t in tickers if t != ticker]
+    save_watchlist(tickers)
+    return {"tickers": tickers}
+
+
+@app.get("/api/watchlist/catalysts")
+def watchlist_catalysts():
     """
-    Pobiera świeże nagłówki newsów (Google News RSS) dla każdej unikalnej spółki
-    w portfelu i prosi AI o ocenę, czy coś z tego wygląda na realny katalizator
-    ruchu kursu (pozytywny lub negatywny), a nie o sztuczne dorabianie sensacji.
+    Buduje 'radar katalizatorów' dla spółek z watchlisty (niezależnie od portfela):
+    najbliższe raporty finansowe + świeże newsy, z oceną priorytetu uwagi pod kątem
+    agresywnego, krótkoterminowego inwestowania pod nadchodzące wydarzenia.
     """
-    entries = load_portfolio()
-    if not entries:
-        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
+    tickers = load_watchlist()
+    if not tickers:
+        raise HTTPException(
+            status_code=400,
+            detail="Watchlista jest pusta — dodaj przynajmniej jeden ticker do obserwowania."
+        )
 
-    seen_tickers = set()
-    news_blocks = []
-    checked = []
+    blocks = []
+    for ticker in tickers:
+        name = get_company_name(ticker) or ticker
+        earnings = get_next_earnings_date(ticker) or "brak danych o terminie najbliższego raportu"
+        headlines = get_news_headlines(name, max_items=4)
 
-    for entry in entries:
-        ticker = entry["ticker"]
-        if ticker in seen_tickers:
-            continue
-        seen_tickers.add(ticker)
-        checked.append(ticker)
-
-        name = entry.get("name") or ticker
-        headlines = get_news_headlines(name)
-
+        block = f"### {name} ({ticker})\nNajbliższy raport finansowy: {earnings}\n"
         if headlines:
-            news_blocks.append(f"### {name} ({ticker})\n" + "\n".join(headlines))
+            block += "Świeże nagłówki:\n" + "\n".join(headlines)
         else:
-            news_blocks.append(f"### {name} ({ticker})\nBrak świeżych newsów w wyszukiwaniu.")
+            block += "Brak świeżych nagłówków w wyszukiwaniu."
+        blocks.append(block)
 
     prompt = (
-        "Jesteś analitykiem rynkowym monitorującym newsy pod kątem inwestora giełdowego. "
-        "Poniżej masz najświeższe nagłówki newsów dla spółek z jego portfela. Dla KAŻDEJ spółki:\n"
-        "1. Krótko podsumuj o czym mówią newsy (2-3 zdania) - jeśli newsów brak, napisz to wprost.\n"
-        "2. Oceń, czy coś z tego wygląda na realny katalizator ruchu kursu (pozytywny lub negatywny) "
-        "- np. wzmianka ważnej osoby/instytucji, zapowiedź konferencji, wyniki finansowe, plotki rynkowe, "
-        "zmiana otoczenia regulacyjnego.\n"
-        "3. Jeśli nic istotnego się nie dzieje, napisz to wprost zamiast naciągać newsy na sensację - "
-        "fałszywy alarm jest gorszy niż brak alarmu.\n\n"
-        + "\n\n".join(news_blocks)
-        + "\n\nZakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+        "Jesteś analitykiem rynkowym budującym 'radar katalizatorów' dla agresywnego, "
+        "krótkoterminowego inwestora, który chce wiedzieć o nadchodzących raportach finansowych "
+        "i dużych wydarzeniach (konferencje, premiery produktów, prezentacje wyników) mogących "
+        "wywołać gwałtowny ruch kursu w najbliższych tygodniach. Poniżej masz dane obserwowanych "
+        "spółek - niezależnie od tego, czy inwestor je aktualnie posiada.\n\n"
+        "Dla KAŻDEJ spółki oceń:\n"
+        "1. Czy zbliża się raport finansowy lub inne wydarzenie w ciągu najbliższych ~30 dni - "
+        "podaj konkretną datę, jeśli jest znana, albo napisz wprost że brak danych.\n"
+        "2. Czy coś w nagłówkach sugeruje nadchodzącą konferencję, premierę produktu lub inny "
+        "potencjalny katalizator.\n"
+        "3. PRIORYTET UWAGI: WYSOKI / ŚREDNI / NISKI - im bliżej wydarzenia i im większy "
+        "potencjalny wpływ na kurs, tym wyższy priorytet.\n"
+        "Posortuj spółki od najwyższego priorytetu do najniższego. Jeśli dla danej spółki nic "
+        "istotnego się nie dzieje, napisz to wprost - fałszywy alarm jest gorszy niż jego brak.\n"
+        "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna, "
+        "oraz że granie pod eventy w krótkim terminie niesie wysokie ryzyko.\n\n"
+        + "\n\n".join(blocks)
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        resp = requests.post(url, json=payload, timeout=60)
-    except requests.exceptions.RequestException as e:
-        logger.exception("Błąd sieci przy wywołaniu Gemini (newsy portfela)")
-        raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
-
-    try:
-        data = resp.json()
-    except ValueError:
-        logger.error("Gemini zwrócił nie-JSON (newsy portfela): %s", resp.text[:500])
-        raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
-
-    if resp.status_code != 200:
-        err = data.get("error", {}).get("message", "Nieznany błąd API")
-        logger.error("BŁĄD Z GOOGLE (newsy portfela, status %s): %s", resp.status_code, err)
-        raise HTTPException(status_code=502, detail=err)
-
-    try:
-        news_report = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        logger.error("Nieoczekiwany kształt odpowiedzi Gemini (newsy portfela): %s", data)
-        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści raportu newsów.")
-
-    return {"report": news_report, "tickers_checked": checked}
+    report_text = call_gemini(prompt, timeout=90)
+    return {"report": report_text, "tickers_checked": tickers}
 
 
 @app.post("/api/analyze")

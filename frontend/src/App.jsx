@@ -117,7 +117,7 @@ function App() {
           onClick={() => setActiveTab('newsy')}
           style={{ padding: '8px 16px', background: activeTab === 'newsy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
         >
-          🔥 Newsy
+          🔥 Radar
         </button>
       </div>
 
