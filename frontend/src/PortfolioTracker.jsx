@@ -11,6 +11,50 @@ const inputStyle = {
   backgroundColor: '#333',
 }
 
+const horizonLabels = {
+  krotki: 'Krótkoterminowo',
+  sredni: 'Średnioterminowo',
+  dlugi: 'Długoterminowo',
+}
+
+/** Grupuje płaską listę transakcji po tickerze i liczy zsumowane/uśrednione wartości nagłówka grupy. */
+function groupByTicker(positions) {
+  const groups = {}
+  positions.forEach((pos) => {
+    if (!groups[pos.ticker]) {
+      groups[pos.ticker] = {
+        ticker: pos.ticker,
+        name: pos.name || pos.ticker,
+        currency: pos.currency,
+        quote_currency: pos.quote_currency,
+        current_price: pos.current_price,
+        lots: [],
+        totalQuantity: 0,
+        totalCost: 0,
+        totalValue: 0,
+        hasNulls: false,
+      }
+    }
+    const g = groups[pos.ticker]
+    g.lots.push(pos)
+    g.totalQuantity += pos.quantity
+    if (pos.cost !== null) g.totalCost += pos.cost
+    if (pos.value !== null) {
+      g.totalValue += pos.value
+    } else {
+      g.hasNulls = true
+    }
+  })
+
+  return Object.values(groups).map((g) => {
+    const weightedAvgBuyPrice =
+      g.lots.reduce((sum, p) => sum + p.buy_price * p.quantity, 0) / g.totalQuantity
+    const totalProfit = g.hasNulls ? null : g.totalValue - g.totalCost
+    const totalProfitPct = totalProfit !== null && g.totalCost ? (totalProfit / g.totalCost) * 100 : null
+    return { ...g, weightedAvgBuyPrice, totalProfit, totalProfitPct }
+  })
+}
+
 function PortfolioTracker() {
   const [positions, setPositions] = useState([])
   const [summary, setSummary] = useState(null)
@@ -21,23 +65,37 @@ function PortfolioTracker() {
     ticker: '',
     quantity: '',
     buy_price: '',
+    currency: '', // puste = backend sam wykryje walutę po tickerze
     buy_date: '',
     note: '',
   })
 
-  // Stan analizy "co z tym zrobić" dla pojedynczej pozycji
+  // Które grupy tickerów są rozwinięte (pokazują poszczególne transakcje)
+  const [expandedTickers, setExpandedTickers] = useState({})
+
+  // Stan analizy "co z tym zrobić" dla POJEDYNCZEJ TRANSAKCJI (lotu)
   const [openAnalysisId, setOpenAnalysisId] = useState(null)
   const [horizon, setHorizon] = useState('sredni')
   const [customNote, setCustomNote] = useState('')
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
   const [analysisResult, setAnalysisResult] = useState(null)
-
-  // Wątek pytań uzupełniających pod główną analizą
   const [followUps, setFollowUps] = useState([]) // [{question, answer}]
   const [followUpQuestion, setFollowUpQuestion] = useState('')
   const [followUpLoading, setFollowUpLoading] = useState(false)
   const [followUpError, setFollowUpError] = useState('')
+
+  // Stan analizy dla CAŁEGO TICKERA (suma wszystkich transakcji tej spółki)
+  const [openTickerAnalysisFor, setOpenTickerAnalysisFor] = useState(null)
+  const [tickerHorizon, setTickerHorizon] = useState('sredni')
+  const [tickerCustomNote, setTickerCustomNote] = useState('')
+  const [tickerAnalysisLoading, setTickerAnalysisLoading] = useState(false)
+  const [tickerAnalysisError, setTickerAnalysisError] = useState('')
+  const [tickerAnalysisResult, setTickerAnalysisResult] = useState(null)
+  const [tickerFollowUps, setTickerFollowUps] = useState([])
+  const [tickerFollowUpQuestion, setTickerFollowUpQuestion] = useState('')
+  const [tickerFollowUpLoading, setTickerFollowUpLoading] = useState(false)
+  const [tickerFollowUpError, setTickerFollowUpError] = useState('')
 
   // Import z pliku CSV
   const [importLoading, setImportLoading] = useState(false)
@@ -82,12 +140,13 @@ function PortfolioTracker() {
           ticker: form.ticker,
           quantity: parseFloat(form.quantity),
           buy_price: parseFloat(form.buy_price),
+          currency: form.currency,
           buy_date: form.buy_date,
           note: form.note,
         }),
       })
       if (!res.ok) throw new Error('Nie udało się dodać pozycji.')
-      setForm({ ticker: '', quantity: '', buy_price: '', buy_date: '', note: '' })
+      setForm({ ticker: '', quantity: '', buy_price: '', currency: '', buy_date: '', note: '' })
       fetchPortfolio()
     } catch (err) {
       setError(err.message)
@@ -120,7 +179,7 @@ function PortfolioTracker() {
       setError(err.message)
     } finally {
       setImportLoading(false)
-      e.target.value = '' // pozwala wybrać ten sam plik ponownie, jeśli trzeba
+      e.target.value = ''
     }
   }
 
@@ -134,6 +193,11 @@ function PortfolioTracker() {
     }
   }
 
+  const toggleExpanded = (ticker) => {
+    setExpandedTickers({ ...expandedTickers, [ticker]: !expandedTickers[ticker] })
+  }
+
+  // --- Analiza pojedynczej transakcji (lotu) ---
   const openAnalysis = (id) => {
     if (openAnalysisId === id) {
       setOpenAnalysisId(null)
@@ -177,12 +241,9 @@ function PortfolioTracker() {
     if (!followUpQuestion.trim()) return
     setFollowUpLoading(true)
     setFollowUpError('')
-
-    // Kontekst dla AI: główna analiza + wszystkie dotychczasowe pytania/odpowiedzi w wątku
     const contextText =
       analysisResult.analysis +
       followUps.map((f) => `\n\nPytanie: ${f.question}\nOdpowiedź: ${f.answer}`).join('')
-
     try {
       const res = await fetch(`${API_URL}/api/portfolio/${id}/analyze`, {
         method: 'POST',
@@ -207,11 +268,78 @@ function PortfolioTracker() {
     }
   }
 
-  const horizonLabels = {
-    krotki: 'Krótkoterminowo',
-    sredni: 'Średnioterminowo',
-    dlugi: 'Długoterminowo',
+  // --- Analiza całego tickera (suma transakcji) ---
+  const openTickerAnalysis = (ticker) => {
+    if (openTickerAnalysisFor === ticker) {
+      setOpenTickerAnalysisFor(null)
+      return
+    }
+    setOpenTickerAnalysisFor(ticker)
+    setTickerAnalysisResult(null)
+    setTickerAnalysisError('')
+    setTickerHorizon('sredni')
+    setTickerCustomNote('')
+    setTickerFollowUps([])
+    setTickerFollowUpQuestion('')
+    setTickerFollowUpError('')
   }
+
+  const runTickerAnalysis = async (ticker) => {
+    setTickerAnalysisLoading(true)
+    setTickerAnalysisError('')
+    setTickerAnalysisResult(null)
+    setTickerFollowUps([])
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/ticker/${ticker}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horizon: tickerHorizon, custom_note: tickerCustomNote }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się wygenerować analizy.')
+      }
+      const data = await res.json()
+      setTickerAnalysisResult(data)
+    } catch (err) {
+      setTickerAnalysisError(err.message)
+    } finally {
+      setTickerAnalysisLoading(false)
+    }
+  }
+
+  const askTickerFollowUp = async (ticker) => {
+    if (!tickerFollowUpQuestion.trim()) return
+    setTickerFollowUpLoading(true)
+    setTickerFollowUpError('')
+    const contextText =
+      tickerAnalysisResult.analysis +
+      tickerFollowUps.map((f) => `\n\nPytanie: ${f.question}\nOdpowiedź: ${f.answer}`).join('')
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/ticker/${ticker}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          horizon: tickerHorizon,
+          previous_analysis: contextText,
+          follow_up_question: tickerFollowUpQuestion,
+        }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się uzyskać odpowiedzi.')
+      }
+      const data = await res.json()
+      setTickerFollowUps([...tickerFollowUps, { question: tickerFollowUpQuestion, answer: data.analysis }])
+      setTickerFollowUpQuestion('')
+    } catch (err) {
+      setTickerFollowUpError(err.message)
+    } finally {
+      setTickerFollowUpLoading(false)
+    }
+  }
+
+  const grouped = groupByTicker(positions)
 
   return (
     <div style={{ color: '#fff' }}>
@@ -246,6 +374,18 @@ function PortfolioTracker() {
           onChange={handleChange}
           style={{ ...inputStyle, width: '120px' }}
         />
+        <select
+          name="currency"
+          value={form.currency}
+          onChange={handleChange}
+          style={{ ...inputStyle, width: '100px' }}
+        >
+          <option value="">Auto</option>
+          <option value="PLN">PLN</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+        </select>
         <input
           name="buy_date"
           type="date"
@@ -346,7 +486,7 @@ function PortfolioTracker() {
         </div>
       )}
 
-      {positions.length === 0 && !loading ? (
+      {grouped.length === 0 && !loading ? (
         <div style={{ color: '#aaa' }}>Portfel jest pusty — dodaj pierwszą pozycję powyżej.</div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -354,197 +494,402 @@ function PortfolioTracker() {
             <tr style={{ borderBottom: '1px solid #555', textAlign: 'left' }}>
               <th style={{ padding: '8px' }}>Spółka</th>
               <th style={{ padding: '8px' }}>Ilość</th>
-              <th style={{ padding: '8px' }}>Cena zakupu</th>
+              <th style={{ padding: '8px' }}>Śr. cena zakupu</th>
               <th style={{ padding: '8px' }}>Cena aktualna</th>
               <th style={{ padding: '8px' }}>Wartość</th>
               <th style={{ padding: '8px' }}>Zysk/Strata</th>
-              <th style={{ padding: '8px' }}>Data zakupu</th>
               <th style={{ padding: '8px' }}></th>
               <th style={{ padding: '8px' }}></th>
             </tr>
           </thead>
           <tbody>
-            {positions.map((pos) => (
-              <Fragment key={pos.id}>
-              <tr style={{ borderBottom: openAnalysisId === pos.id ? 'none' : '1px solid #444' }}>
-                <td style={{ padding: '8px' }}>
-                  <div style={{ fontWeight: 'bold' }}>{pos.name || pos.ticker}</div>
-                  <div style={{ fontSize: '12px', color: '#999' }}>{pos.ticker}</div>
-                  {pos.note && (
-                    <div style={{ fontSize: '12px', color: '#888', fontStyle: 'italic', marginTop: '2px' }}>
-                      📝 {pos.note}
-                    </div>
-                  )}
-                </td>
-                <td style={{ padding: '8px' }}>{pos.quantity}</td>
-                <td style={{ padding: '8px' }}>{pos.buy_price} PLN</td>
-                <td style={{ padding: '8px' }}>
-                  {pos.current_price !== null ? `${pos.current_price} PLN` : '—'}
-                </td>
-                <td style={{ padding: '8px' }}>{pos.value !== null ? `${pos.value} PLN` : '—'}</td>
-                <td
-                  style={{
-                    padding: '8px',
-                    color: pos.profit >= 0 ? '#4CAF50' : '#FF5252',
-                  }}
-                >
-                  {pos.profit !== null ? `${pos.profit} PLN (${pos.profit_pct}%)` : '—'}
-                </td>
-                <td style={{ padding: '8px' }}>{pos.buy_date}</td>
-                <td style={{ padding: '8px' }}>
-                  <button
-                    onClick={() => openAnalysis(pos.id)}
+            {grouped.map((g) => {
+              const isExpanded = !!expandedTickers[g.ticker]
+              const isMulti = g.lots.length > 1
+
+              return (
+                <Fragment key={g.ticker}>
+                  {/* --- Wiersz nagłówkowy grupy (jedna spółka, zsumowane wartości) --- */}
+                  <tr
                     style={{
-                      background: openAnalysisId === pos.id ? '#007BFF' : '#444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '5px',
-                      padding: '5px 10px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
+                      borderBottom: isExpanded || openTickerAnalysisFor === g.ticker ? 'none' : '1px solid #444',
+                      background: isMulti ? '#2a2a2a' : 'transparent',
                     }}
                   >
-                    🔍 Co z tym?
-                  </button>
-                </td>
-                <td style={{ padding: '8px' }}>
-                  <button
-                    onClick={() => handleDelete(pos.id)}
-                    style={{
-                      background: '#FF5252',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '5px',
-                      padding: '5px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Usuń
-                  </button>
-                </td>
-              </tr>
-              {openAnalysisId === pos.id && (
-                <tr style={{ borderBottom: '1px solid #444' }}>
-                  <td colSpan={9} style={{ padding: '15px', background: '#2a2a2a' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <strong>Horyzont analizy dla {pos.ticker}:</strong>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                        {Object.entries(horizonLabels).map(([key, label]) => (
+                    <td style={{ padding: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isMulti && (
                           <button
-                            key={key}
-                            onClick={() => setHorizon(key)}
+                            onClick={() => toggleExpanded(g.ticker)}
                             style={{
-                              padding: '6px 14px',
-                              background: horizon === key ? '#007BFF' : '#444',
-                              color: 'white',
+                              background: 'none',
                               border: 'none',
-                              borderRadius: '5px',
+                              color: '#aaa',
                               cursor: 'pointer',
+                              fontSize: '12px',
+                              padding: 0,
                             }}
                           >
-                            {label}
+                            {isExpanded ? '▼' : '▶'}
                           </button>
-                        ))}
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 'bold' }}>{g.name}</div>
+                          <div style={{ fontSize: '12px', color: '#999' }}>
+                            {g.ticker}
+                            {isMulti && ` · ${g.lots.length} transakcje`}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-
-                    <input
-                      placeholder='Dodatkowy kontekst (opcjonalnie), np. "rozważam czasowe wyjście pod konferencję X"'
-                      value={customNote}
-                      onChange={(e) => setCustomNote(e.target.value)}
-                      style={{ ...inputStyle, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
-                    />
-
-                    <button
-                      onClick={() => runAnalysis(pos.id)}
-                      disabled={analysisLoading}
+                    </td>
+                    <td style={{ padding: '8px' }}>{g.totalQuantity}</td>
+                    <td style={{ padding: '8px' }}>
+                      {g.weightedAvgBuyPrice.toFixed(2)} {g.currency || 'PLN'}
+                      {isMulti && <span style={{ color: '#777', fontSize: '11px' }}> (średnia)</span>}
+                    </td>
+                    <td style={{ padding: '8px' }}>
+                      {g.current_price !== null
+                        ? `${g.current_price} ${g.quote_currency || g.currency || 'PLN'}`
+                        : '—'}
+                    </td>
+                    <td style={{ padding: '8px' }}>
+                      {!g.hasNulls ? `${g.totalValue.toFixed(2)} PLN` : '—'}
+                    </td>
+                    <td
                       style={{
-                        padding: '10px 20px',
-                        background: '#007BFF',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px',
-                        cursor: analysisLoading ? 'not-allowed' : 'pointer',
-                        marginBottom: '12px',
+                        padding: '8px',
+                        color: g.totalProfit >= 0 ? '#4CAF50' : '#FF5252',
                       }}
                     >
-                      {analysisLoading ? 'Analizuję... (do minuty)' : 'Generuj analizę'}
-                    </button>
+                      {g.totalProfit !== null
+                        ? `${g.totalProfit.toFixed(2)} PLN (${g.totalProfitPct.toFixed(2)}%)`
+                        : '—'}
+                    </td>
+                    <td style={{ padding: '8px' }}>
+                      <button
+                        onClick={() => openTickerAnalysis(g.ticker)}
+                        style={{
+                          background: openTickerAnalysisFor === g.ticker ? '#007BFF' : '#444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '5px',
+                          padding: '5px 10px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        🔍 {isMulti ? 'Analiza całej pozycji' : 'Co z tym?'}
+                      </button>
+                    </td>
+                    <td style={{ padding: '8px' }}></td>
+                  </tr>
 
-                    {analysisError && (
-                      <div style={{ color: '#FF5252', marginBottom: '12px' }}>{analysisError}</div>
-                    )}
+                  {/* --- Panel analizy dla całego tickera (suma transakcji) --- */}
+                  {openTickerAnalysisFor === g.ticker && (
+                    <tr style={{ borderBottom: '1px solid #444' }}>
+                      <td colSpan={8} style={{ padding: '15px', background: '#242424' }}>
+                        <div style={{ marginBottom: '12px' }}>
+                          <strong>Horyzont analizy dla całej pozycji {g.ticker}:</strong>
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            {Object.entries(horizonLabels).map(([key, label]) => (
+                              <button
+                                key={key}
+                                onClick={() => setTickerHorizon(key)}
+                                style={{
+                                  padding: '6px 14px',
+                                  background: tickerHorizon === key ? '#007BFF' : '#444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-                    {analysisResult && (
-                      <>
-                        <div
+                        <input
+                          placeholder='Dodatkowy kontekst (opcjonalnie), np. "rozważam czasowe wyjście pod konferencję X"'
+                          value={tickerCustomNote}
+                          onChange={(e) => setTickerCustomNote(e.target.value)}
+                          style={{ ...inputStyle, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
+                        />
+
+                        <button
+                          onClick={() => runTickerAnalysis(g.ticker)}
+                          disabled={tickerAnalysisLoading}
                           style={{
-                            background: '#333',
-                            padding: '15px',
-                            borderRadius: '8px',
-                            borderLeft: '4px solid #007BFF',
+                            padding: '10px 20px',
+                            background: '#007BFF',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: tickerAnalysisLoading ? 'not-allowed' : 'pointer',
                             marginBottom: '12px',
                           }}
                         >
-                          <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                            {analysisResult.analysis}
-                          </p>
-                        </div>
+                          {tickerAnalysisLoading ? 'Analizuję... (do minuty)' : 'Generuj analizę'}
+                        </button>
 
-                        {followUps.map((f, idx) => (
-                          <div key={idx} style={{ marginBottom: '12px' }}>
-                            <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '4px' }}>
-                              ❓ {f.question}
-                            </div>
+                        {tickerAnalysisError && (
+                          <div style={{ color: '#FF5252', marginBottom: '12px' }}>{tickerAnalysisError}</div>
+                        )}
+
+                        {tickerAnalysisResult && (
+                          <>
                             <div
                               style={{
-                                background: '#2f2f2f',
-                                padding: '12px',
+                                background: '#333',
+                                padding: '15px',
                                 borderRadius: '8px',
-                                borderLeft: '4px solid #555',
+                                borderLeft: '4px solid #007BFF',
+                                marginBottom: '12px',
                               }}
                             >
                               <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                                {f.answer}
+                                {tickerAnalysisResult.analysis}
                               </p>
                             </div>
-                          </div>
-                        ))}
 
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                          <input
-                            placeholder='Pytanie uzupełniające, np. "czy dokupić za nowe 5k?"'
-                            value={followUpQuestion}
-                            onChange={(e) => setFollowUpQuestion(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && askFollowUp(pos.id)}
-                            style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
-                          />
-                          <button
-                            onClick={() => askFollowUp(pos.id)}
-                            disabled={followUpLoading || !followUpQuestion.trim()}
-                            style={{
-                              padding: '10px 18px',
-                              background: '#007BFF',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '5px',
-                              cursor: followUpLoading ? 'not-allowed' : 'pointer',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {followUpLoading ? 'Pytam...' : 'Zapytaj'}
-                          </button>
-                        </div>
-                        {followUpError && (
-                          <div style={{ color: '#FF5252', marginTop: '8px' }}>{followUpError}</div>
+                            {tickerFollowUps.map((f, idx) => (
+                              <div key={idx} style={{ marginBottom: '12px' }}>
+                                <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '4px' }}>
+                                  ❓ {f.question}
+                                </div>
+                                <div
+                                  style={{
+                                    background: '#2f2f2f',
+                                    padding: '12px',
+                                    borderRadius: '8px',
+                                    borderLeft: '4px solid #555',
+                                  }}
+                                >
+                                  <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
+                                    {f.answer}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                              <input
+                                placeholder='Pytanie uzupełniające, np. "czy dokupić za nowe 5k?"'
+                                value={tickerFollowUpQuestion}
+                                onChange={(e) => setTickerFollowUpQuestion(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && askTickerFollowUp(g.ticker)}
+                                style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
+                              />
+                              <button
+                                onClick={() => askTickerFollowUp(g.ticker)}
+                                disabled={tickerFollowUpLoading || !tickerFollowUpQuestion.trim()}
+                                style={{
+                                  padding: '10px 18px',
+                                  background: '#007BFF',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  cursor: tickerFollowUpLoading ? 'not-allowed' : 'pointer',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {tickerFollowUpLoading ? 'Pytam...' : 'Zapytaj'}
+                              </button>
+                            </div>
+                            {tickerFollowUpError && (
+                              <div style={{ color: '#FF5252', marginTop: '8px' }}>{tickerFollowUpError}</div>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              )}
-              </Fragment>
-            ))}
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* --- Rozwinięte poszczególne transakcje (loty) --- */}
+                  {isExpanded &&
+                    g.lots.map((pos) => (
+                      <Fragment key={pos.id}>
+                        <tr style={{ borderBottom: openAnalysisId === pos.id ? 'none' : '1px solid #3a3a3a', background: '#1c1c1c' }}>
+                          <td style={{ padding: '8px 8px 8px 30px' }}>
+                            <div style={{ fontSize: '13px', color: '#ccc' }}>{pos.buy_date}</div>
+                            {pos.note && (
+                              <div style={{ fontSize: '12px', color: '#888', fontStyle: 'italic', marginTop: '2px' }}>
+                                📝 {pos.note}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px' }}>{pos.quantity}</td>
+                          <td style={{ padding: '8px' }}>{pos.buy_price} {pos.currency || 'PLN'}</td>
+                          <td style={{ padding: '8px' }}>
+                            {pos.current_price !== null
+                              ? `${pos.current_price} ${pos.quote_currency || pos.currency || 'PLN'}`
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '8px' }}>{pos.value !== null ? `${pos.value} PLN` : '—'}</td>
+                          <td style={{ padding: '8px', color: pos.profit >= 0 ? '#4CAF50' : '#FF5252' }}>
+                            {pos.profit !== null ? `${pos.profit} PLN (${pos.profit_pct}%)` : '—'}
+                          </td>
+                          <td style={{ padding: '8px' }}>
+                            <button
+                              onClick={() => openAnalysis(pos.id)}
+                              style={{
+                                background: openAnalysisId === pos.id ? '#007BFF' : '#444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                padding: '5px 10px',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                fontSize: '12px',
+                              }}
+                            >
+                              🔍 Co z tym?
+                            </button>
+                          </td>
+                          <td style={{ padding: '8px' }}>
+                            <button
+                              onClick={() => handleDelete(pos.id)}
+                              style={{
+                                background: '#FF5252',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                padding: '5px 10px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                              }}
+                            >
+                              Usuń
+                            </button>
+                          </td>
+                        </tr>
+
+                        {openAnalysisId === pos.id && (
+                          <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
+                            <td colSpan={8} style={{ padding: '15px', background: '#2a2a2a' }}>
+                              <div style={{ marginBottom: '12px' }}>
+                                <strong>Horyzont analizy tej transakcji ({pos.ticker}, {pos.buy_date}):</strong>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                  {Object.entries(horizonLabels).map(([key, label]) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => setHorizon(key)}
+                                      style={{
+                                        padding: '6px 14px',
+                                        background: horizon === key ? '#007BFF' : '#444',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '5px',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <input
+                                placeholder='Dodatkowy kontekst (opcjonalnie)'
+                                value={customNote}
+                                onChange={(e) => setCustomNote(e.target.value)}
+                                style={{ ...inputStyle, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
+                              />
+
+                              <button
+                                onClick={() => runAnalysis(pos.id)}
+                                disabled={analysisLoading}
+                                style={{
+                                  padding: '10px 20px',
+                                  background: '#007BFF',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  cursor: analysisLoading ? 'not-allowed' : 'pointer',
+                                  marginBottom: '12px',
+                                }}
+                              >
+                                {analysisLoading ? 'Analizuję... (do minuty)' : 'Generuj analizę'}
+                              </button>
+
+                              {analysisError && (
+                                <div style={{ color: '#FF5252', marginBottom: '12px' }}>{analysisError}</div>
+                              )}
+
+                              {analysisResult && (
+                                <>
+                                  <div
+                                    style={{
+                                      background: '#333',
+                                      padding: '15px',
+                                      borderRadius: '8px',
+                                      borderLeft: '4px solid #007BFF',
+                                      marginBottom: '12px',
+                                    }}
+                                  >
+                                    <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
+                                      {analysisResult.analysis}
+                                    </p>
+                                  </div>
+
+                                  {followUps.map((f, idx) => (
+                                    <div key={idx} style={{ marginBottom: '12px' }}>
+                                      <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '4px' }}>
+                                        ❓ {f.question}
+                                      </div>
+                                      <div
+                                        style={{
+                                          background: '#2f2f2f',
+                                          padding: '12px',
+                                          borderRadius: '8px',
+                                          borderLeft: '4px solid #555',
+                                        }}
+                                      >
+                                        <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
+                                          {f.answer}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                    <input
+                                      placeholder='Pytanie uzupełniające'
+                                      value={followUpQuestion}
+                                      onChange={(e) => setFollowUpQuestion(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && askFollowUp(pos.id)}
+                                      style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
+                                    />
+                                    <button
+                                      onClick={() => askFollowUp(pos.id)}
+                                      disabled={followUpLoading || !followUpQuestion.trim()}
+                                      style={{
+                                        padding: '10px 18px',
+                                        background: '#007BFF',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '5px',
+                                        cursor: followUpLoading ? 'not-allowed' : 'pointer',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {followUpLoading ? 'Pytam...' : 'Zapytaj'}
+                                    </button>
+                                  </div>
+                                  {followUpError && (
+                                    <div style={{ color: '#FF5252', marginTop: '8px' }}>{followUpError}</div>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       )}

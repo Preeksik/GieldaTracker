@@ -621,13 +621,97 @@ def delete_portfolio_entry(entry_id: str):
     return {"deleted": entry_id}
 
 
+HORIZON_CONFIG = {
+    "krotki": {
+        "opis": "krótkoterminową (najbliższe kilka dni do dwóch tygodni)",
+        "period": "1mo",
+    },
+    "sredni": {
+        "opis": "średnioterminową (najbliższe 3-6 miesięcy)",
+        "period": "6mo",
+    },
+    "dlugi": {
+        "opis": "długoterminową (najbliższy rok lub dłużej)",
+        "period": "2y",
+    },
+}
+
+
+def run_horizon_analysis(position_facts, horizon, custom_note, previous_analysis, follow_up_question):
+    """
+    Wspólna logika budowy prompta i wywołania Gemini dla analizy 'co z tym zrobić' -
+    używana zarówno dla pojedynczej transakcji, jak i zagregowanej pozycji na cały ticker.
+    """
+    config = HORIZON_CONFIG.get(horizon, HORIZON_CONFIG["sredni"])
+
+    if follow_up_question:
+        prompt = (
+            "Jesteś doświadczonym analitykiem giełdowym prowadzącym dalszą rozmowę z inwestorem "
+            "o jego pozycji. Oto aktualne dane pozycji:\n\n"
+            f"{position_facts}\n"
+            f"Wcześniej przygotowałeś dla tej pozycji następującą analizę ({config['opis']}):\n\n"
+            f"{previous_analysis}\n\n"
+            f"Inwestor ma teraz dodatkowe pytanie: \"{follow_up_question}\"\n\n"
+            "Odpowiedz konkretnie i zwięźle na to pytanie, odwołując się do powyższego kontekstu "
+            "(nie powtarzaj całej wcześniejszej analizy). Jeśli pytanie dotyczy decyzji finansowej "
+            "(np. dokupienia akcji za nowe środki), podaj jasne rozumowanie za i przeciw. "
+            "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+        )
+    else:
+        prompt = (
+            "Jesteś doświadczonym analitykiem giełdowym. Inwestor ma pozycję opisaną poniżej:\n\n"
+            f"{position_facts}"
+        )
+        if custom_note:
+            prompt += f"- Dodatkowy kontekst od inwestora teraz: {custom_note}\n"
+
+        prompt += (
+            f"\nZrób analizę {config['opis']} tej pozycji. Odpowiedz w tej strukturze:\n"
+            "1. WYCENA: czy akcja wygląda na niedowartościowaną, sprawiedliwie wycenioną, czy przewartościowaną "
+            "na podstawie dostępnego trendu i wolumenu (bez zmyślania wskaźników fundamentalnych, których nie masz).\n"
+            "2. REKOMENDACJA na wskazany horyzont: SPRZEDAJ / TRZYMAJ / DOKUP - z konkretnym uzasadnieniem.\n"
+            "3. PRAWDOPODOBIEŃSTWO: przybliżone szanse na zysk vs stratę w tym horyzoncie "
+            "(np. \"~55% szans na wzrost\") z krótkim uzasadnieniem.\n"
+            "4. ELASTYCZNOŚĆ KAPITAŁU: czy to sensowny moment, żeby czasowo wycofać kapitał z tej pozycji "
+            "(np. pod inną okazję inwestycyjną) i wrócić później, czy lepiej trzymać nieprzerwanie - i dlaczego.\n"
+            "Na końcu jedno zdanie zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+        )
+
+    return call_gemini(prompt, timeout=45)
+
+
+def build_trend_summary(ticker, period, quote_currency):
+    """Buduje krótkie podsumowanie trendu dla danego okresu - współdzielone przez oba typy analiz."""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        if not hist.empty:
+            hist = hist.dropna()
+            start_price = float(hist["Close"].iloc[0])
+            end_price = float(hist["Close"].iloc[-1])
+            min_price = float(hist["Close"].min())
+            max_price = float(hist["Close"].max())
+            change_pct = ((end_price - start_price) / start_price * 100) if start_price else 0
+            avg_volume = float(hist["Volume"].mean())
+            recent_volume = float(hist["Volume"].iloc[-5:].mean()) if len(hist) >= 5 else avg_volume
+            return (
+                f"Okres {period}: zmiana {change_pct:+.1f}% "
+                f"(od {start_price:.2f} do {end_price:.2f} {quote_currency}), "
+                f"zakres {min_price:.2f}-{max_price:.2f} {quote_currency}, "
+                f"śr. wolumen dzienny {avg_volume:,.0f} "
+                f"(ostatnio: {recent_volume:,.0f})."
+            )
+    except Exception:
+        logger.exception("Nie udało się pobrać trendu (%s) dla %s", period, ticker)
+    return "brak danych o trendzie"
+
+
 @app.post("/api/portfolio/{entry_id}/analyze")
 def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     """
-    Analiza AI pojedynczej pozycji z portfela, dopasowana do wybranego horyzontu
-    czasowego: krótko-, średnio- lub długoterminowego. Pomaga odpowiedzieć na
-    pytanie "co z tym zrobić" - trzymać, sprzedać, dokupić, czy np. czasowo
-    wyjść pod inną okazję i wrócić później.
+    Analiza AI POJEDYNCZEJ TRANSAKCJI z portfela (jednego wiersza/lotu), dopasowana
+    do wybranego horyzontu czasowego. Jeśli masz kilka transakcji tego samego tickera
+    i chcesz oceny całej łącznej pozycji, użyj /api/portfolio/ticker/{ticker}/analyze.
     """
     entries = load_portfolio()
     entry = next((e for e in entries if e["id"] == entry_id), None)
@@ -635,22 +719,7 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
         raise HTTPException(status_code=404, detail="Nie znaleziono pozycji o podanym id")
 
     ticker = entry["ticker"]
-
-    horizon_config = {
-        "krotki": {
-            "opis": "krótkoterminową (najbliższe kilka dni do dwóch tygodni)",
-            "period": "1mo",
-        },
-        "sredni": {
-            "opis": "średnioterminową (najbliższe 3-6 miesięcy)",
-            "period": "6mo",
-        },
-        "dlugi": {
-            "opis": "długoterminową (najbliższy rok lub dłużej)",
-            "period": "2y",
-        },
-    }
-    config = horizon_config.get(request.horizon, horizon_config["sredni"])
+    config = HORIZON_CONFIG.get(request.horizon, HORIZON_CONFIG["sredni"])
 
     current_price = get_current_price(ticker)
     buy_currency = entry.get("currency") or "PLN"
@@ -668,33 +737,9 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     profit_pln = (value_pln - cost_pln) if (value_pln is not None and cost_pln is not None) else None
     profit_pct = (profit_pln / cost_pln * 100) if profit_pln is not None and cost_pln else None
 
-    # Trend dopasowany do horyzontu - krótki termin patrzy na 1mo, długi na 2y
-    trend_summary = "brak danych o trendzie"
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=config["period"])
-        if not hist.empty:
-            hist = hist.dropna()
-            start_price = float(hist["Close"].iloc[0])
-            end_price = float(hist["Close"].iloc[-1])
-            min_price = float(hist["Close"].min())
-            max_price = float(hist["Close"].max())
-            change_pct = ((end_price - start_price) / start_price * 100) if start_price else 0
-            avg_volume = float(hist["Volume"].mean())
-            recent_volume = float(hist["Volume"].iloc[-5:].mean()) if len(hist) >= 5 else avg_volume
-            trend_summary = (
-                f"Okres {config['period']}: zmiana {change_pct:+.1f}% "
-                f"(od {start_price:.2f} do {end_price:.2f} {quote_currency}), "
-                f"zakres {min_price:.2f}-{max_price:.2f} {quote_currency}, "
-                f"śr. wolumen dzienny {avg_volume:,.0f} "
-                f"(ostatnio: {recent_volume:,.0f})."
-            )
-    except Exception:
-        logger.exception("Nie udało się pobrać trendu (%s) dla %s", config["period"], ticker)
-
+    trend_summary = build_trend_summary(ticker, config["period"], quote_currency)
     earnings_info = get_next_earnings_date(ticker) or "brak dostępnych danych o terminie najbliższego raportu"
 
-    # Wspólny blok danych o pozycji - używany zarówno w pełnej analizie, jak i w follow-upie
     position_facts = (
         f"Spółka: {entry.get('name') or ticker} ({ticker})\n"
         f"- Ilość: {entry['quantity']}, cena zakupu: {entry['buy_price']} {buy_currency} "
@@ -709,70 +754,90 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
     if entry.get("note"):
         position_facts += f"- Notatka użytkownika przy zakupie: {entry['note']}\n"
 
-    if request.follow_up_question:
-        # Tryb pytania uzupełniającego - odwołujemy się do wcześniejszej analizy zamiast pisać ją od nowa
-        prompt = (
-            "Jesteś doświadczonym analitykiem giełdowym prowadzącym dalszą rozmowę z inwestorem "
-            "o jego pozycji. Oto aktualne dane pozycji:\n\n"
-            f"{position_facts}\n"
-            f"Wcześniej przygotowałeś dla tej pozycji następującą analizę ({config['opis']}):\n\n"
-            f"{request.previous_analysis}\n\n"
-            f"Inwestor ma teraz dodatkowe pytanie: \"{request.follow_up_question}\"\n\n"
-            "Odpowiedz konkretnie i zwięźle na to pytanie, odwołując się do powyższego kontekstu "
-            "(nie powtarzaj całej wcześniejszej analizy). Jeśli pytanie dotyczy decyzji finansowej "
-            "(np. dokupienia akcji za nowe środki), podaj jasne rozumowanie za i przeciw. "
-            "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
-        )
-    else:
-        prompt = (
-            "Jesteś doświadczonym analitykiem giełdowym. Inwestor ma pozycję opisaną poniżej:\n\n"
-            f"{position_facts}"
-        )
-        if request.custom_note:
-            prompt += f"- Dodatkowy kontekst od inwestora teraz: {request.custom_note}\n"
-
-        prompt += (
-            f"\nZrób analizę {config['opis']} tej pozycji. Odpowiedz w tej strukturze:\n"
-            "1. WYCENA: czy akcja wygląda na niedowartościowaną, sprawiedliwie wycenioną, czy przewartościowaną "
-            "na podstawie dostępnego trendu i wolumenu (bez zmyślania wskaźników fundamentalnych, których nie masz).\n"
-            "2. REKOMENDACJA na wskazany horyzont: SPRZEDAJ / TRZYMAJ / DOKUP - z konkretnym uzasadnieniem.\n"
-            "3. PRAWDOPODOBIEŃSTWO: przybliżone szanse na zysk vs stratę w tym horyzoncie "
-            "(np. \"~55% szans na wzrost\") z krótkim uzasadnieniem.\n"
-            "4. ELASTYCZNOŚĆ KAPITAŁU: czy to sensowny moment, żeby czasowo wycofać kapitał z tej pozycji "
-            "(np. pod inną okazję inwestycyjną) i wrócić później, czy lepiej trzymać nieprzerwanie - i dlaczego.\n"
-            "Na końcu jedno zdanie zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
-        )
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        resp = requests.post(url, json=payload, timeout=45)
-    except requests.exceptions.RequestException as e:
-        logger.exception("Błąd sieci przy wywołaniu Gemini (analiza pozycji)")
-        raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
-
-    try:
-        data = resp.json()
-    except ValueError:
-        logger.error("Gemini zwrócił nie-JSON (analiza pozycji): %s", resp.text[:500])
-        raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
-
-    if resp.status_code != 200:
-        err = data.get("error", {}).get("message", "Nieznany błąd API")
-        logger.error("BŁĄD Z GOOGLE (analiza pozycji, status %s): %s", resp.status_code, err)
-        raise HTTPException(status_code=502, detail=err)
-
-    try:
-        analysis_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        logger.error("Nieoczekiwany kształt odpowiedzi Gemini (analiza pozycji): %s", data)
-        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści analizy.")
+    analysis_text = run_horizon_analysis(
+        position_facts, request.horizon, request.custom_note,
+        request.previous_analysis, request.follow_up_question
+    )
 
     return {
         "ticker": ticker,
         "horizon": request.horizon,
         "analysis": analysis_text,
+    }
+
+
+@app.post("/api/portfolio/ticker/{ticker}/analyze")
+def analyze_ticker(ticker: str, request: PositionAnalysisRequest):
+    """
+    Analiza AI dla CAŁEGO TICKERA, czyli sumy wszystkich transakcji tej samej spółki
+    (np. dwóch osobnych zakupów VOX.WA po różnych cenach) traktowanych jako jedna
+    pozycja ze średnią ważoną ceną zakupu. Sensowniejsze niż osobna, powtarzalna
+    rekomendacja dla każdej pojedynczej transakcji z osobna.
+    """
+    ticker = ticker.upper().strip()
+    entries = load_portfolio()
+    ticker_entries = [e for e in entries if e["ticker"] == ticker]
+    if not ticker_entries:
+        raise HTTPException(status_code=404, detail=f"Nie znaleziono żadnej pozycji dla tickera {ticker}")
+
+    config = HORIZON_CONFIG.get(request.horizon, HORIZON_CONFIG["sredni"])
+
+    total_qty = sum(e["quantity"] for e in ticker_entries)
+    buy_currency = ticker_entries[0].get("currency") or "PLN"
+    # Średnia ważona ceny zakupu (zakładamy, że wszystkie transakcje tego samego tickera
+    # są w tej samej walucie - w praktyce tak jest, bo to ta sama spółka/instrument)
+    total_cost_native = sum(e["quantity"] * e["buy_price"] for e in ticker_entries)
+    weighted_avg_price = total_cost_native / total_qty if total_qty else 0
+    earliest_date = min(e["buy_date"] for e in ticker_entries)
+    latest_date = max(e["buy_date"] for e in ticker_entries)
+    notes = "; ".join(e["note"] for e in ticker_entries if e.get("note"))
+    company_name = ticker_entries[0].get("name") or ticker
+
+    current_price = get_current_price(ticker)
+    quote_currency = get_currency(ticker) or buy_currency
+    fx_cache = {}
+    fx_buy = get_fx_rate(buy_currency, fx_cache)
+    fx_quote = get_fx_rate(quote_currency, fx_cache)
+
+    cost_pln = total_qty * weighted_avg_price * fx_buy if fx_buy is not None else None
+    value_pln = (
+        total_qty * current_price * fx_quote
+        if current_price is not None and fx_quote is not None
+        else None
+    )
+    profit_pln = (value_pln - cost_pln) if (value_pln is not None and cost_pln is not None) else None
+    profit_pct = (profit_pln / cost_pln * 100) if profit_pln is not None and cost_pln else None
+
+    trend_summary = build_trend_summary(ticker, config["period"], quote_currency)
+    earnings_info = get_next_earnings_date(ticker) or "brak dostępnych danych o terminie najbliższego raportu"
+
+    date_range = earliest_date if earliest_date == latest_date else f"{earliest_date} do {latest_date}"
+
+    position_facts = (
+        f"Spółka: {company_name} ({ticker})\n"
+        f"- Łączna ilość (suma {len(ticker_entries)} transakcji): {total_qty}\n"
+        f"- Średnia ważona cena zakupu: {round(weighted_avg_price, 2)} {buy_currency} "
+        f"(zakupy w okresie: {date_range})\n"
+        f"- Aktualna cena: {current_price if current_price is not None else 'brak danych'} {quote_currency}\n"
+        f"- Łączny zysk/strata (przeliczone na PLN): "
+        f"{safe_round(profit_pln) if profit_pln is not None else 'brak danych'} PLN "
+        f"({safe_round(profit_pct) if profit_pct is not None else '?'}%)\n"
+        f"- Trend: {trend_summary}\n"
+        f"- Najbliższy raport finansowy / wydarzenie: {earnings_info}\n"
+    )
+    if notes:
+        position_facts += f"- Notatki użytkownika przy zakupach: {notes}\n"
+
+    analysis_text = run_horizon_analysis(
+        position_facts, request.horizon, request.custom_note,
+        request.previous_analysis, request.follow_up_question
+    )
+
+    return {
+        "ticker": ticker,
+        "horizon": request.horizon,
+        "analysis": analysis_text,
+        "lots_analyzed": len(ticker_entries),
     }
 
 
