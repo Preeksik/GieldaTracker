@@ -4,6 +4,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import PortfolioTracker from './PortfolioTracker'
 import PortfolioReport from './PortfolioReport'
 import PortfolioNews from './PortfolioNews'
+import DividendCalendar from './DividendCalendar'
 import './App.css'
 
 function App() {
@@ -91,7 +92,7 @@ function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'system-ui', maxWidth: '900px', margin: '0 auto', color: '#fff' }}>
-      <h1 style={{ color: '#fff', marginBottom: '40px' }}>📈 GPW + Google GeminiAI</h1>
+      <h1 style={{ color: '#fff', marginBottom: '20px' }}>📈 GPW + DeepSeek AI</h1>
 
       {/* Przełącznik zakładek */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
@@ -118,6 +119,12 @@ function App() {
           style={{ padding: '8px 16px', background: activeTab === 'newsy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
         >
           🔥 Radar
+        </button>
+        <button
+          onClick={() => setActiveTab('dywidendy')}
+          style={{ padding: '8px 16px', background: activeTab === 'dywidendy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+        >
+          📅 Dywidendy
         </button>
       </div>
 
@@ -171,6 +178,9 @@ function App() {
 
       {/* Zawartość zakładki "Newsy" - renderuje się TYLKO gdy activeTab === 'newsy' */}
       {activeTab === 'newsy' && <PortfolioNews />}
+
+      {/* Zawartość zakładki "Dywidendy" - renderuje się TYLKO gdy activeTab === 'dywidendy' */}
+      {activeTab === 'dywidendy' && <DividendCalendar />}
     </div>
   )
 }

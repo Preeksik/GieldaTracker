@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yfinance as yf
 import requests
+import pandas as pd
 import os
 import json
 import uuid
@@ -301,6 +302,52 @@ def get_next_earnings_date(ticker):
     return None
 
 
+def get_dividend_data(ticker):
+    """
+    Zwraca dane o dywidendach dla tickera, rozdzielone na:
+    - 'history': REALNIE wypłacone dywidendy z ostatnich 12 miesięcy (twarde dane z Yahoo).
+    - 'next_ex_date' / 'next_amount_estimate': SZACOWANA najbliższa dywidenda - Yahoo czasem
+      podaje zapowiedzianą datę odcięcia, a kwotę szacujemy na podstawie ostatniej wypłaty.
+    - 'annual_rate': szacowana roczna stawka dywidendy na akcję wg Yahoo (też estymacja, nie gwarancja).
+    Spółka może w ogóle nie wypłacać dywidendy - wtedy wszystko będzie puste/None, co nie jest błędem.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        div_series = stock.dividends
+        info = stock.info
+    except Exception:
+        logger.warning("Nie udało się pobrać danych o dywidendach dla %s", ticker)
+        return {"history": [], "next_ex_date": None, "next_amount_estimate": None, "annual_rate": None}
+
+    history = []
+    if div_series is not None and not div_series.empty:
+        try:
+            cutoff = pd.Timestamp.now(tz=div_series.index.tz) - pd.Timedelta(days=365)
+            recent = div_series[div_series.index >= cutoff]
+            for date, amount in recent.items():
+                history.append({"date": str(date.date()), "amount_per_share": float(amount)})
+        except Exception:
+            logger.warning("Nie udało się przefiltrować historii dywidend dla %s", ticker)
+
+    next_ex_date = None
+    try:
+        ts = info.get("exDividendDate")
+        if ts:
+            next_ex_date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+
+    annual_rate = info.get("dividendRate")
+    last_amount = float(div_series.iloc[-1]) if div_series is not None and not div_series.empty else None
+
+    return {
+        "history": history,
+        "next_ex_date": next_ex_date,
+        "next_amount_estimate": last_amount,
+        "annual_rate": annual_rate,
+    }
+
+
 @app.get("/api/models")
 def list_models():
     """Pomocniczy endpoint: pokazuje jakie modele Gemini są dostępne dla Twojego klucza."""
@@ -390,6 +437,100 @@ def get_portfolio():
     }
 
     return {"positions": enriched, "summary": summary}
+
+
+@app.get("/api/portfolio/dividends")
+def portfolio_dividends():
+    """
+    Kalendarz dywidend dla spółek w portfelu (grupowanych po tickerze, sumaryczna ilość
+    posiadanych akcji). Zwraca osobno REALNE wypłaty z ostatnich 12 miesięcy i SZACOWANE
+    nadchodzące dywidendy/roczny dochód - to dwie różne rzeczy i traktujemy je osobno,
+    żeby nie sugerować pewności tam, gdzie jest tylko estymacja.
+    """
+    entries = load_portfolio()
+    if not entries:
+        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
+
+    # Grupujemy po tickerze - potrzebujemy łącznej ilości i najwcześniejszej daty zakupu
+    tickers_info = {}
+    for e in entries:
+        t = e["ticker"]
+        if t not in tickers_info:
+            tickers_info[t] = {
+                "quantity": 0,
+                "name": e.get("name") or t,
+                "currency": e.get("currency") or "PLN",
+                "earliest_buy": e["buy_date"],
+            }
+        tickers_info[t]["quantity"] += e["quantity"]
+        if e["buy_date"] < tickers_info[t]["earliest_buy"]:
+            tickers_info[t]["earliest_buy"] = e["buy_date"]
+
+    fx_cache = {}
+    results = []
+    total_realized_pln = 0.0
+    total_annual_estimate_pln = 0.0
+
+    for ticker, info in tickers_info.items():
+        div_data = get_dividend_data(ticker)
+        quote_currency = get_currency(ticker) or info["currency"]
+        fx = get_fx_rate(quote_currency, fx_cache)
+
+        # REALNE: liczymy tylko wypłaty po dacie pierwszego zakupu tego tickera.
+        # Uproszczenie: jeśli dokupowałeś w kilku transzach, liczymy całą aktualną ilość
+        # dla każdej wypłaty (nie odtwarzamy dokładnie ile akcji miałeś w danym dniu).
+        realized = []
+        realized_total_native = 0.0
+        for item in div_data["history"]:
+            if item["date"] >= info["earliest_buy"]:
+                received = item["amount_per_share"] * info["quantity"]
+                realized_total_native += received
+                realized.append({**item, "total_received": safe_round(received)})
+
+        realized_total_pln = realized_total_native * fx if fx is not None else None
+        if realized_total_pln is not None:
+            total_realized_pln += realized_total_pln
+
+        annual_rate = div_data["annual_rate"]
+        annual_estimate_native = (annual_rate or 0) * info["quantity"]
+        annual_estimate_pln = annual_estimate_native * fx if (fx is not None and annual_rate) else None
+        if annual_estimate_pln is not None:
+            total_annual_estimate_pln += annual_estimate_pln
+
+        next_amount_estimate = div_data["next_amount_estimate"]
+        next_amount_total = (
+            next_amount_estimate * info["quantity"] if next_amount_estimate is not None else None
+        )
+
+        results.append({
+            "ticker": ticker,
+            "name": info["name"],
+            "quantity": info["quantity"],
+            "currency": quote_currency,
+            "has_dividend_history": len(div_data["history"]) > 0 or annual_rate is not None,
+            # Realne, wypłacone
+            "realized_dividends": realized,
+            "realized_total_native": safe_round(realized_total_native),
+            "realized_total_pln": safe_round(realized_total_pln),
+            # Szacowane, nadchodzące
+            "next_ex_date": div_data["next_ex_date"],
+            "next_amount_estimate_per_share": safe_round(next_amount_estimate),
+            "next_amount_estimate_total": safe_round(next_amount_total),
+            "annual_rate_per_share": safe_round(annual_rate),
+            "annual_estimate_total_native": safe_round(annual_estimate_native) if annual_rate else None,
+            "annual_estimate_total_pln": safe_round(annual_estimate_pln),
+        })
+
+    # Spółki z najbliższą znaną datą odcięcia na górze, potem reszta
+    results.sort(key=lambda r: (r["next_ex_date"] is None, r["next_ex_date"] or ""))
+
+    return {
+        "positions": results,
+        "summary": {
+            "total_realized_last_12mo_pln": safe_round(total_realized_pln) or 0.0,
+            "total_annual_estimate_pln": safe_round(total_annual_estimate_pln) or 0.0,
+        },
+    }
 
 
 @app.post("/api/portfolio")
