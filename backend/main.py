@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
 import yfinance as yf
 import requests
 import pandas as pd
@@ -12,6 +13,8 @@ import csv
 import io
 import re
 import logging
+import smtplib
+from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from datetime import datetime
@@ -38,6 +41,18 @@ PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portf
 # NIEZALEŻNIE od tego, czy są w portfelu (np. Nvidia, o której inwestor myśli, ale jej nie ma)
 WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
 
+# Plik z alertami cenowymi
+ALERTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.json")
+
+# Konfiguracja e-mail (opcjonalna) - jeśli nie ustawisz tych zmiennych w .env,
+# alerty nadal będą działać, ale tylko w apce, bez wysyłki maila.
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_TO = os.environ.get("SMTP_TO", "")  # adres, na który mają przychodzić powiadomienia
+EMAIL_ENABLED = bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD and SMTP_TO)
+
 app = FastAPI(title="GPW Analyst API")
 
 app.add_middleware(
@@ -62,6 +77,11 @@ class PortfolioEntryCreate(BaseModel):
     buy_date: str  # format "YYYY-MM-DD"
     note: str = ""
     currency: str = ""  # "PLN"/"USD"/"EUR"/"GBP"... puste = autodetekcja po tickerze
+    account: str = "zwykle"  # "zwykle" | "ike" | "ikze" - decyduje o podatku Belki
+
+
+class AccountUpdateRequest(BaseModel):
+    account: str
 
 
 class PositionAnalysisRequest(BaseModel):
@@ -214,6 +234,107 @@ def load_watchlist():
 def save_watchlist(tickers):
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         json.dump(tickers, f, ensure_ascii=False, indent=2)
+
+
+def load_alerts():
+    if not os.path.exists(ALERTS_FILE):
+        return []
+    try:
+        with open(ALERTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać alerts.json - traktuję jako pustą listę")
+        return []
+
+
+def save_alerts(alerts):
+    with open(ALERTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(alerts, f, ensure_ascii=False, indent=2)
+
+
+def send_alert_email(subject, body):
+    """Wysyła e-mail o wyzwolonym alercie. Jeśli SMTP nie jest skonfigurowane w .env, po cichu pomija."""
+    if not EMAIL_ENABLED:
+        return False
+    try:
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["Subject"] = subject
+        msg["From"] = SMTP_USER
+        msg["To"] = SMTP_TO
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception:
+        logger.exception("Nie udało się wysłać e-maila z alertem")
+        return False
+
+
+def check_price_alerts():
+    """
+    Uruchamiane cyklicznie w tle (co 15 minut) przez scheduler. Sprawdza wszystkie
+    aktywne, jeszcze nie wyzwolone alerty i porównuje aktualną cenę z progiem.
+    Działa TYLKO gdy backend jest uruchomiony - to nie jest usługa w chmurze.
+    """
+    alerts = load_alerts()
+    changed = False
+
+    for alert in alerts:
+        if alert.get("triggered"):
+            continue
+
+        ticker = alert["ticker"]
+        current_price = get_current_price(ticker)
+        if current_price is None:
+            continue
+
+        condition = alert["condition"]
+        target = alert["target_price"]
+        hit = (condition == "below" and current_price <= target) or (
+            condition == "above" and current_price >= target
+        )
+
+        if hit:
+            alert["triggered"] = True
+            alert["triggered_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            alert["triggered_price"] = current_price
+            changed = True
+
+            direction = "spadła poniżej" if condition == "below" else "wzrosła powyżej"
+            subject = f"🔔 Alert cenowy: {ticker} {direction} {target}"
+            body = (
+                f"Cena {alert.get('name') or ticker} ({ticker}) {direction} ustawionego progu.\n\n"
+                f"Aktualna cena: {current_price} {alert.get('currency', '')}\n"
+                f"Ustawiony próg: {target} {alert.get('currency', '')}\n"
+                f"Czas: {alert['triggered_at']}"
+            )
+            email_sent = send_alert_email(subject, body)
+            logger.info(
+                "Alert wyzwolony: %s %s %s (e-mail wysłany: %s)",
+                ticker, direction, target, email_sent
+            )
+
+    if changed:
+        save_alerts(alerts)
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(check_price_alerts, "interval", minutes=15, id="check_price_alerts")
+
+
+@app.on_event("startup")
+def start_scheduler():
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("Scheduler alertów cenowych uruchomiony (sprawdzanie co 15 minut).")
+
+
+@app.on_event("shutdown")
+def stop_scheduler():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 
 
 def safe_round(value, digits=2):
@@ -369,12 +490,21 @@ def health():
     return {"status": "ok"}
 
 
+BELKA_TAX_RATE = 0.19  # 19% podatku od zysków kapitałowych na zwykłym koncie maklerskim w Polsce
+VALID_ACCOUNTS = {"zwykle", "ike", "ikze"}
+
+
 @app.get("/api/portfolio")
 def get_portfolio():
     """
     Zwraca wszystkie pozycje portfela wraz z aktualną wyceną i zyskiem/stratą.
     Koszt/wartość/zysk-strata są ZAWSZE przeliczone na PLN, niezależnie od tego,
     w jakiej walucie notowany jest dany instrument (np. ETF w USD).
+
+    Dodatkowo liczy SZACOWANY podatek Belki (19%) od zysku dla pozycji na koncie
+    'zwykle' - IKE i IKZE są (przy spełnieniu warunków) zwolnione z tego podatku.
+    To jest podatek liczony od zysku NIEZREALIZOWANEGO, czyli 'ile zapłaciłbyś,
+    gdybyś sprzedał dziś' - nie realne zobowiązanie podatkowe dopóki nie sprzedasz.
     """
     entries = load_portfolio()
     enriched = []
@@ -383,6 +513,12 @@ def get_portfolio():
     price_cache = {}
     currency_cache = {}
     fx_cache = {}
+
+    # Podsumowania per konto (zwykle/ike/ikze)
+    by_account = {
+        acc: {"total_cost": 0.0, "total_value": 0.0, "total_profit": 0.0, "total_tax": 0.0}
+        for acc in VALID_ACCOUNTS
+    }
 
     for entry in entries:
         ticker = entry["ticker"]
@@ -412,21 +548,40 @@ def get_portfolio():
         profit = (value - cost) if (value is not None and cost is not None) else None
         profit_pct = (profit / cost * 100) if profit is not None and cost else None
 
+        account = entry.get("account") or "zwykle"
+        if account not in VALID_ACCOUNTS:
+            account = "zwykle"
+
+        # Podatek Belki tylko na koncie zwykłym, tylko od zysku (strata nie generuje "ujemnego podatku")
+        if account == "zwykle" and profit is not None and profit > 0:
+            tax_estimate = profit * BELKA_TAX_RATE
+        else:
+            tax_estimate = 0.0
+        profit_after_tax = (profit - tax_estimate) if profit is not None else None
+
         if cost is not None:
             total_cost += cost
+            by_account[account]["total_cost"] += cost
         if value is not None:
             total_value += value
+            by_account[account]["total_value"] += value
+        if profit is not None:
+            by_account[account]["total_profit"] += profit
+            by_account[account]["total_tax"] += tax_estimate
 
         enriched.append({
             **entry,
             "name": entry.get("name") or ticker,
             "currency": buy_currency,
             "quote_currency": quote_currency,
+            "account": account,
             "current_price": safe_round(current_price),
             "cost": safe_round(cost),
             "value": safe_round(value),
             "profit": safe_round(profit),
             "profit_pct": safe_round(profit_pct),
+            "tax_estimate": safe_round(tax_estimate),
+            "profit_after_tax": safe_round(profit_after_tax),
         })
 
     summary = {
@@ -436,7 +591,17 @@ def get_portfolio():
         "total_profit_pct": safe_round((total_value - total_cost) / total_cost * 100) if total_cost > 0 else 0.0,
     }
 
-    return {"positions": enriched, "summary": summary}
+    accounts_summary = {}
+    for acc, vals in by_account.items():
+        accounts_summary[acc] = {
+            "total_cost": safe_round(vals["total_cost"]) or 0.0,
+            "total_value": safe_round(vals["total_value"]) or 0.0,
+            "total_profit": safe_round(vals["total_profit"]) or 0.0,
+            "total_tax_estimate": safe_round(vals["total_tax"]) or 0.0,
+            "total_profit_after_tax": safe_round(vals["total_profit"] - vals["total_tax"]) or 0.0,
+        }
+
+    return {"positions": enriched, "summary": summary, "accounts_summary": accounts_summary}
 
 
 @app.get("/api/portfolio/dividends")
@@ -539,6 +704,9 @@ def add_portfolio_entry(entry: PortfolioEntryCreate):
     entries = load_portfolio()
     ticker = entry.ticker.upper().strip()
     currency = entry.currency.strip().upper() if entry.currency else (get_currency(ticker) or "PLN")
+    account = entry.account.strip().lower() if entry.account else "zwykle"
+    if account not in VALID_ACCOUNTS:
+        account = "zwykle"
     new_entry = {
         "id": str(uuid.uuid4()),
         "ticker": ticker,
@@ -546,12 +714,33 @@ def add_portfolio_entry(entry: PortfolioEntryCreate):
         "quantity": entry.quantity,
         "buy_price": entry.buy_price,
         "currency": currency,
+        "account": account,
         "buy_date": entry.buy_date,
         "note": entry.note,
     }
     entries.append(new_entry)
     save_portfolio(entries)
     return new_entry
+
+
+@app.patch("/api/portfolio/{entry_id}/account")
+def update_entry_account(entry_id: str, request: AccountUpdateRequest):
+    """
+    Szybka zmiana konta (zwykle/ike/ikze) dla ISTNIEJĄCEJ pozycji - przydatne dla
+    wpisów dodanych przed wprowadzeniem tej funkcji, które domyślnie wpadły do 'zwykle'.
+    """
+    account = request.account.strip().lower()
+    if account not in VALID_ACCOUNTS:
+        raise HTTPException(status_code=400, detail=f"Konto musi być jednym z: {', '.join(VALID_ACCOUNTS)}")
+
+    entries = load_portfolio()
+    entry = next((e for e in entries if e["id"] == entry_id), None)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono pozycji o podanym id")
+
+    entry["account"] = account
+    save_portfolio(entries)
+    return entry
 
 
 def extract_name_and_ticker(raw_value):
@@ -649,6 +838,7 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
     col_price = find_col(["cena", "price"])
     col_date = find_col(["data", "date"])
     col_note = find_col(["notatka", "note", "uwagi", "komentarz", "status"])
+    col_account = find_col(["konto", "account"])
 
     if not all([col_instrument, col_qty, col_price, col_date]):
         raise HTTPException(
@@ -691,6 +881,17 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
 
             note = (row.get(col_note) or "").strip() if col_note else ""
 
+            # Wykrywamy konto z osobnej kolumny (jeśli jest) albo z tekstu notatki -
+            # np. jeśli ktoś wpisał 'IKE' jako komentarz przy transakcji.
+            account_text = ((row.get(col_account) or "") if col_account else "") + " " + note
+            account_text = account_text.lower()
+            if "ikze" in account_text:
+                account = "ikze"
+            elif "ike" in account_text:
+                account = "ike"
+            else:
+                account = "zwykle"
+
             if header_currency:
                 currency = header_currency
             else:
@@ -705,6 +906,7 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
                 "quantity": quantity,
                 "buy_price": buy_price,
                 "currency": currency,
+                "account": account,
                 "buy_date": buy_date,
                 "note": note,
             }
@@ -1149,6 +1351,84 @@ def portfolio_ask(request: PortfolioQuestionRequest):
 
 class WatchlistAddRequest(BaseModel):
     ticker: str
+
+
+class AlertCreateRequest(BaseModel):
+    ticker: str
+    condition: str  # "below" (poniżej) | "above" (powyżej)
+    target_price: float
+
+
+@app.get("/api/alerts")
+def get_alerts():
+    """
+    Zwraca wszystkie alerty cenowe wraz z aktualną ceną (żeby w interfejsie było widać
+    jak daleko jest do progu). Alerty wyzwolone (triggered) zostają na liście, żeby
+    użytkownik mógł je zobaczyć - dopiero 'dismiss' je czyści/resetuje.
+    """
+    alerts = load_alerts()
+    price_cache = {}
+    for alert in alerts:
+        ticker = alert["ticker"]
+        if ticker not in price_cache:
+            price_cache[ticker] = get_current_price(ticker)
+        alert["current_price"] = safe_round(price_cache[ticker])
+    return {"alerts": alerts}
+
+
+@app.post("/api/alerts")
+def add_alert(request: AlertCreateRequest):
+    """Dodaje nowy alert cenowy."""
+    ticker = request.ticker.upper().strip()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Podaj ticker.")
+    if request.condition not in ("below", "above"):
+        raise HTTPException(status_code=400, detail="condition musi być 'below' albo 'above'.")
+
+    name = get_company_name(ticker) or ticker
+    currency = get_currency(ticker) or "PLN"
+
+    alerts = load_alerts()
+    new_alert = {
+        "id": str(uuid.uuid4()),
+        "ticker": ticker,
+        "name": name,
+        "currency": currency,
+        "condition": request.condition,
+        "target_price": request.target_price,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "triggered": False,
+        "triggered_at": None,
+        "triggered_price": None,
+    }
+    alerts.append(new_alert)
+    save_alerts(alerts)
+    return new_alert
+
+
+@app.delete("/api/alerts/{alert_id}")
+def delete_alert(alert_id: str):
+    """Usuwa alert cenowy."""
+    alerts = load_alerts()
+    filtered = [a for a in alerts if a["id"] != alert_id]
+    if len(filtered) == len(alerts):
+        raise HTTPException(status_code=404, detail="Nie znaleziono alertu o podanym id")
+    save_alerts(filtered)
+    return {"deleted": alert_id}
+
+
+@app.post("/api/alerts/{alert_id}/reset")
+def reset_alert(alert_id: str):
+    """Resetuje wyzwolony alert z powrotem do stanu aktywnego (np. żeby znów zadziałał)."""
+    alerts = load_alerts()
+    alert = next((a for a in alerts if a["id"] == alert_id), None)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono alertu o podanym id")
+    alert["triggered"] = False
+    alert["triggered_at"] = None
+    alert["triggered_price"] = None
+    save_alerts(alerts)
+    return alert
 
 
 @app.get("/api/watchlist")

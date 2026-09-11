@@ -5,6 +5,7 @@ import PortfolioTracker from './PortfolioTracker'
 import PortfolioReport from './PortfolioReport'
 import PortfolioNews from './PortfolioNews'
 import DividendCalendar from './DividendCalendar'
+import PriceAlerts from './PriceAlerts'
 import './App.css'
 
 function App() {
@@ -92,7 +93,7 @@ function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'system-ui', maxWidth: '900px', margin: '0 auto', color: '#fff' }}>
-      <h1 style={{ color: '#fff', marginBottom: '20px' }}>📈 GPW + DeepSeek AI</h1>
+      <h1 style={{ color: '#fff', marginBottom: '60px' }}>📈 GPW + Google GeminiAI</h1>
 
       {/* Przełącznik zakładek */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
@@ -125,6 +126,12 @@ function App() {
           style={{ padding: '8px 16px', background: activeTab === 'dywidendy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
         >
           📅 Dywidendy
+        </button>
+        <button
+          onClick={() => setActiveTab('alerty')}
+          style={{ padding: '8px 16px', background: activeTab === 'alerty' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+        >
+          🔔 Alerty
         </button>
       </div>
 
@@ -181,6 +188,9 @@ function App() {
 
       {/* Zawartość zakładki "Dywidendy" - renderuje się TYLKO gdy activeTab === 'dywidendy' */}
       {activeTab === 'dywidendy' && <DividendCalendar />}
+
+      {/* Zawartość zakładki "Alerty" - renderuje się TYLKO gdy activeTab === 'alerty' */}
+      {activeTab === 'alerty' && <PriceAlerts />}
     </div>
   )
 }

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "d8d9270b-2651-43c0-a2e1-4fde593b02da",
+    "ticker": "1AT.WA",
+    "name": "Atal S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 55.0,
+    "created_at": "2026-09-12 00:17",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  },
+  {
+    "id": "d871192e-3a23-4098-8647-6d165c12edff",
+    "ticker": "XTB.WA",
+    "name": "XTB S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 120.0,
+    "created_at": "2026-09-12 00:18",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  },
+  {
+    "id": "e9f826cd-3207-4ef5-b37a-f4fb79423e69",
+    "ticker": "PKN.WA",
+    "name": "Orlen S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 120.0,
+    "created_at": "2026-09-12 00:18",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  },
+  {
+    "id": "95b36620-15ef-4544-87ee-33f35578738c",
+    "ticker": "DNP.WA",
+    "name": "Dino Polska S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 31.0,
+    "created_at": "2026-09-12 00:19",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  },
+  {
+    "id": "963b531c-fab1-4654-ac23-8a5c868f0516",
+    "ticker": "KTY.WA",
+    "name": "Grupa Kety S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 1100.0,
+    "created_at": "2026-09-12 00:22",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  }
+]

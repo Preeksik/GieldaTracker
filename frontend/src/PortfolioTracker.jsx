@@ -58,6 +58,8 @@ function groupByTicker(positions) {
 function PortfolioTracker() {
   const [positions, setPositions] = useState([])
   const [summary, setSummary] = useState(null)
+  const [accountsSummary, setAccountsSummary] = useState(null)
+  const [accountFilter, setAccountFilter] = useState('wszystkie') // 'wszystkie' | 'zwykle' | 'ike' | 'ikze'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -66,6 +68,7 @@ function PortfolioTracker() {
     quantity: '',
     buy_price: '',
     currency: '', // puste = backend sam wykryje walutę po tickerze
+    account: 'zwykle',
     buy_date: '',
     note: '',
   })
@@ -110,6 +113,7 @@ function PortfolioTracker() {
       const data = await res.json()
       setPositions(data.positions)
       setSummary(data.summary)
+      setAccountsSummary(data.accounts_summary)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -141,12 +145,13 @@ function PortfolioTracker() {
           quantity: parseFloat(form.quantity),
           buy_price: parseFloat(form.buy_price),
           currency: form.currency,
+          account: form.account,
           buy_date: form.buy_date,
           note: form.note,
         }),
       })
       if (!res.ok) throw new Error('Nie udało się dodać pozycji.')
-      setForm({ ticker: '', quantity: '', buy_price: '', currency: '', buy_date: '', note: '' })
+      setForm({ ticker: '', quantity: '', buy_price: '', currency: '', account: 'zwykle', buy_date: '', note: '' })
       fetchPortfolio()
     } catch (err) {
       setError(err.message)
@@ -195,6 +200,20 @@ function PortfolioTracker() {
 
   const toggleExpanded = (ticker) => {
     setExpandedTickers({ ...expandedTickers, [ticker]: !expandedTickers[ticker] })
+  }
+
+  const handleAccountChange = async (id, newAccount) => {
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/${id}/account`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: newAccount }),
+      })
+      if (!res.ok) throw new Error('Nie udało się zmienić konta.')
+      fetchPortfolio()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // --- Analiza pojedynczej transakcji (lotu) ---
@@ -339,7 +358,11 @@ function PortfolioTracker() {
     }
   }
 
-  const grouped = groupByTicker(positions)
+  const filteredPositions =
+    accountFilter === 'wszystkie' ? positions : positions.filter((p) => p.account === accountFilter)
+  const grouped = groupByTicker(filteredPositions)
+
+  const accountLabels = { zwykle: 'Zwykłe', ike: 'IKE', ikze: 'IKZE' }
 
   return (
     <div style={{ color: '#fff' }}>
@@ -385,6 +408,16 @@ function PortfolioTracker() {
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
           <option value="GBP">GBP</option>
+        </select>
+        <select
+          name="account"
+          value={form.account}
+          onChange={handleChange}
+          style={{ ...inputStyle, width: '110px' }}
+        >
+          <option value="zwykle">Zwykłe</option>
+          <option value="ike">IKE</option>
+          <option value="ikze">IKZE</option>
         </select>
         <input
           name="buy_date"
@@ -464,7 +497,7 @@ function PortfolioTracker() {
           style={{
             display: 'flex',
             gap: '25px',
-            marginBottom: '20px',
+            marginBottom: '15px',
             background: '#333',
             padding: '15px',
             borderRadius: '8px',
@@ -483,6 +516,65 @@ function PortfolioTracker() {
               {summary.total_profit.toFixed(2)} PLN ({summary.total_profit_pct.toFixed(2)}%)
             </strong>
           </div>
+        </div>
+      )}
+
+      {/* Filtr kont + rozbicie z podatkiem Belki */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
+        {['wszystkie', 'zwykle', 'ike', 'ikze'].map((acc) => (
+          <button
+            key={acc}
+            onClick={() => setAccountFilter(acc)}
+            style={{
+              padding: '8px 16px',
+              background: accountFilter === acc ? '#007BFF' : '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            {acc === 'wszystkie' ? 'Wszystkie konta' : accountLabels[acc]}
+          </button>
+        ))}
+      </div>
+
+      {accountsSummary && (
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {['zwykle', 'ike', 'ikze'].map((acc) => {
+            const a = accountsSummary[acc]
+            if (!a || a.total_cost === 0) return null
+            return (
+              <div
+                key={acc}
+                style={{
+                  background: '#2a2a2a',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  minWidth: '220px',
+                }}
+              >
+                <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>{accountLabels[acc]}</div>
+                <div>Wartość: {a.total_value.toFixed(2)} PLN</div>
+                <div style={{ color: a.total_profit >= 0 ? '#4CAF50' : '#FF5252' }}>
+                  Zysk brutto: {a.total_profit.toFixed(2)} PLN
+                </div>
+                {acc === 'zwykle' ? (
+                  <>
+                    <div style={{ color: '#FFA726' }}>
+                      Szac. podatek Belki (19%): {a.total_tax_estimate.toFixed(2)} PLN
+                    </div>
+                    <div style={{ color: a.total_profit_after_tax >= 0 ? '#4CAF50' : '#FF5252' }}>
+                      Zysk po podatku: {a.total_profit_after_tax.toFixed(2)} PLN
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ color: '#4CAF50', fontSize: '12px' }}>✓ zwolnione z podatku Belki</div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -545,7 +637,7 @@ function PortfolioTracker() {
                     <td style={{ padding: '8px' }}>{g.totalQuantity}</td>
                     <td style={{ padding: '8px' }}>
                       {g.weightedAvgBuyPrice.toFixed(2)} {g.currency || 'PLN'}
-                      {isMulti && <span style={{ color: '#777', fontSize: '11px' }}> (średnia)</span>}
+                      {isMulti && <span style={{ color: '#777', fontSize: '11px' }}> (śr. ważona)</span>}
                     </td>
                     <td style={{ padding: '8px' }}>
                       {g.current_price !== null
@@ -718,6 +810,23 @@ function PortfolioTracker() {
                                 📝 {pos.note}
                               </div>
                             )}
+                            <select
+                              value={pos.account || 'zwykle'}
+                              onChange={(e) => handleAccountChange(pos.id, e.target.value)}
+                              style={{
+                                marginTop: '4px',
+                                background: '#333',
+                                color: '#ccc',
+                                border: '1px solid #555',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                padding: '2px 4px',
+                              }}
+                            >
+                              <option value="zwykle">Zwykłe</option>
+                              <option value="ike">IKE</option>
+                              <option value="ikze">IKZE</option>
+                            </select>
                           </td>
                           <td style={{ padding: '8px' }}>{pos.quantity}</td>
                           <td style={{ padding: '8px' }}>{pos.buy_price} {pos.currency || 'PLN'}</td>
