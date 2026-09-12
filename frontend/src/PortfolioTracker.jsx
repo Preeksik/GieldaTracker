@@ -610,21 +610,20 @@ function PortfolioTracker() {
                   >
                     <td style={{ padding: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isMulti && (
-                          <button
-                            onClick={() => toggleExpanded(g.ticker)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#aaa',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              padding: 0,
-                            }}
-                          >
-                            {isExpanded ? '▼' : '▶'}
-                          </button>
-                        )}
+                        <button
+                          onClick={() => toggleExpanded(g.ticker)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#aaa',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            padding: 0,
+                          }}
+                          title={isExpanded ? 'Zwiń szczegóły transakcji' : 'Pokaż szczegóły transakcji (konto, usuwanie)'}
+                        >
+                          {isExpanded ? '▼' : '▶'}
+                        </button>
                         <div>
                           <div style={{ fontWeight: 'bold' }}>{g.name}</div>
                           <div style={{ fontSize: '12px', color: '#999' }}>
