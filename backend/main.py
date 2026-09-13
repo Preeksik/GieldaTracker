@@ -379,8 +379,14 @@ def scheduled_portfolio_snapshot():
 
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(check_price_alerts, "interval", minutes=15, id="check_price_alerts")
-scheduler.add_job(scheduled_portfolio_snapshot, "interval", minutes=30, id="portfolio_snapshot")
+scheduler.add_job(
+    check_price_alerts, "interval", minutes=15, id="check_price_alerts",
+    next_run_time=datetime.now()  # sprawdź od razu przy starcie, nie dopiero po 15 min
+)
+scheduler.add_job(
+    scheduled_portfolio_snapshot, "interval", minutes=30, id="portfolio_snapshot",
+    next_run_time=datetime.now()  # tak samo - pierwszy snapshot od razu
+)
 
 
 @app.on_event("startup")
@@ -1448,6 +1454,13 @@ def get_alerts():
             price_cache[ticker] = get_current_price(ticker)
         alert["current_price"] = safe_round(price_cache[ticker])
     return {"alerts": alerts}
+
+
+@app.post("/api/alerts/check-now")
+def check_alerts_now():
+    """Wymusza natychmiastowe sprawdzenie wszystkich alertów, bez czekania na scheduler (do testów)."""
+    check_price_alerts()
+    return get_alerts()
 
 
 @app.post("/api/alerts")

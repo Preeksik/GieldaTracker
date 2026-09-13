@@ -9,6 +9,7 @@ function PriceAlerts() {
 
   const [form, setForm] = useState({ ticker: '', condition: 'below', target_price: '' })
   const [adding, setAdding] = useState(false)
+  const [checkingNow, setCheckingNow] = useState(false)
 
   const fetchAlerts = async () => {
     setLoading(true)
@@ -22,6 +23,21 @@ function PriceAlerts() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkNow = async () => {
+    setCheckingNow(true)
+    setError('')
+    try {
+      const res = await fetch(`${API_URL}/api/alerts/check-now`, { method: 'POST' })
+      if (!res.ok) throw new Error('Nie udało się sprawdzić alertów.')
+      const data = await res.json()
+      setAlerts(data.alerts)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCheckingNow(false)
     }
   }
 
@@ -191,7 +207,24 @@ function PriceAlerts() {
         </>
       )}
 
-      <h3 style={{ marginBottom: '10px' }}>Aktywne ({active.length})</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <h3 style={{ margin: 0 }}>Aktywne ({active.length})</h3>
+        <button
+          onClick={checkNow}
+          disabled={checkingNow}
+          style={{
+            padding: '8px 16px',
+            background: '#444',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: checkingNow ? 'not-allowed' : 'pointer',
+            fontSize: '13px',
+          }}
+        >
+          {checkingNow ? 'Sprawdzam...' : '🔄 Sprawdź teraz'}
+        </button>
+      </div>
       {active.length === 0 ? (
         <div style={{ color: '#aaa' }}>Brak aktywnych alertów.</div>
       ) : (
