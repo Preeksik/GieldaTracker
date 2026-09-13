@@ -44,6 +44,9 @@ WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watch
 # Plik z alertami cenowymi
 ALERTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.json")
 
+# Plik z historią wartości portfela w czasie (snapshoty co ~30 min, gdy backend działa)
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_history.json")
+
 # Konfiguracja e-mail (opcjonalna) - jeśli nie ustawisz tych zmiennych w .env,
 # alerty nadal będą działać, ale tylko w apce, bez wysyłki maila.
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
@@ -320,8 +323,64 @@ def check_price_alerts():
         save_alerts(alerts)
 
 
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać portfolio_history.json - traktuję jako pustą historię")
+        return []
+
+
+def save_history(history):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+def maybe_snapshot_portfolio(summary, force=False):
+    """
+    Dopisuje punkt do historii wartości portfela, jeśli minęło wystarczająco czasu
+    od ostatniego zapisu (domyślnie 30 minut) - żeby plik nie rósł w nieskończoność
+    przy każdym odświeżeniu strony. `force=True` pomija ten limit (np. przy ręcznym
+    wymuszeniu pierwszego punktu na starcie).
+    """
+    if not summary or summary.get("total_cost", 0) == 0:
+        return  # pusty portfel - nie ma czego zapisywać
+
+    history = load_history()
+    now = datetime.now()
+
+    if not force and history:
+        try:
+            last_ts = datetime.strptime(history[-1]["timestamp"], "%Y-%m-%d %H:%M")
+            if (now - last_ts).total_seconds() < 30 * 60:
+                return
+        except Exception:
+            pass
+
+    history.append({
+        "timestamp": now.strftime("%Y-%m-%d %H:%M"),
+        "total_cost": summary["total_cost"],
+        "total_value": summary["total_value"],
+        "total_profit": summary["total_profit"],
+    })
+    save_history(history)
+
+
+def scheduled_portfolio_snapshot():
+    """Wywoływane cyklicznie przez scheduler - działa nawet gdy nikt nie ma otwartej apki (ale backend musi żyć)."""
+    try:
+        data = get_portfolio()
+        maybe_snapshot_portfolio(data["summary"])
+    except Exception:
+        logger.exception("Błąd przy zaplanowanym snapshotcie wartości portfela")
+
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_price_alerts, "interval", minutes=15, id="check_price_alerts")
+scheduler.add_job(scheduled_portfolio_snapshot, "interval", minutes=30, id="portfolio_snapshot")
 
 
 @app.on_event("startup")
@@ -601,7 +660,22 @@ def get_portfolio():
             "total_profit_after_tax": safe_round(vals["total_profit"] - vals["total_tax"]) or 0.0,
         }
 
+    maybe_snapshot_portfolio(summary)
     return {"positions": enriched, "summary": summary, "accounts_summary": accounts_summary}
+
+
+@app.get("/api/portfolio/history")
+def get_portfolio_history():
+    """Zwraca historię snapshotów wartości portfela (do wykresu w czasie)."""
+    return {"history": load_history()}
+
+
+@app.post("/api/portfolio/history/snapshot-now")
+def force_portfolio_snapshot():
+    """Wymusza dodanie punktu do historii od razu, z pominięciem 30-minutowego limitu."""
+    data = get_portfolio()
+    maybe_snapshot_portfolio(data["summary"], force=True)
+    return {"history": load_history()}
 
 
 @app.get("/api/portfolio/dividends")

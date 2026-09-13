@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
+import PortfolioHistoryChart from './PortfolioHistoryChart'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -366,6 +367,8 @@ function PortfolioTracker() {
 
   return (
     <div style={{ color: '#fff' }}>
+      <PortfolioHistoryChart />
+
       <h2 style={{ marginBottom: '15px' }}>💼 Mój Portfel</h2>
 
       <form
