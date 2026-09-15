@@ -217,6 +217,52 @@ function PortfolioTracker() {
     }
   }
 
+  // --- Sprzedaż (całości lub części) pojedynczej transakcji ---
+  const [sellFormFor, setSellFormFor] = useState(null)
+  const [sellForm, setSellForm] = useState({ quantity: '', sell_price: '', sell_date: '' })
+  const [sellLoading, setSellLoading] = useState(false)
+  const [sellError, setSellError] = useState('')
+
+  const openSellForm = (pos) => {
+    if (sellFormFor === pos.id) {
+      setSellFormFor(null)
+      return
+    }
+    setSellFormFor(pos.id)
+    setSellForm({ quantity: String(pos.quantity), sell_price: '', sell_date: '' })
+    setSellError('')
+  }
+
+  const submitSell = async (id) => {
+    if (!sellForm.quantity || !sellForm.sell_price || !sellForm.sell_date) {
+      setSellError('Uzupełnij ilość, cenę sprzedaży i datę.')
+      return
+    }
+    setSellLoading(true)
+    setSellError('')
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/${id}/sell`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantity: parseFloat(sellForm.quantity),
+          sell_price: parseFloat(sellForm.sell_price),
+          sell_date: sellForm.sell_date,
+        }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się zapisać sprzedaży.')
+      }
+      setSellFormFor(null)
+      fetchPortfolio()
+    } catch (err) {
+      setSellError(err.message)
+    } finally {
+      setSellLoading(false)
+    }
+  }
+
   // --- Analiza pojedynczej transakcji (lotu) ---
   const openAnalysis = (id) => {
     if (openAnalysisId === id) {
@@ -595,6 +641,7 @@ function PortfolioTracker() {
               <th style={{ padding: '8px' }}>Zysk/Strata</th>
               <th style={{ padding: '8px' }}></th>
               <th style={{ padding: '8px' }}></th>
+              <th style={{ padding: '8px' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -676,12 +723,13 @@ function PortfolioTracker() {
                       </button>
                     </td>
                     <td style={{ padding: '8px' }}></td>
+                    <td style={{ padding: '8px' }}></td>
                   </tr>
 
                   {/* --- Panel analizy dla całego tickera (suma transakcji) --- */}
                   {openTickerAnalysisFor === g.ticker && (
                     <tr style={{ borderBottom: '1px solid #444' }}>
-                      <td colSpan={8} style={{ padding: '15px', background: '#242424' }}>
+                      <td colSpan={9} style={{ padding: '15px', background: '#242424' }}>
                         <div style={{ marginBottom: '12px' }}>
                           <strong>Horyzont analizy dla całej pozycji {g.ticker}:</strong>
                           <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -860,6 +908,23 @@ function PortfolioTracker() {
                           </td>
                           <td style={{ padding: '8px' }}>
                             <button
+                              onClick={() => openSellForm(pos)}
+                              style={{
+                                background: sellFormFor === pos.id ? '#007BFF' : '#2E7D32',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                padding: '5px 10px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              💰 Sprzedaj
+                            </button>
+                          </td>
+                          <td style={{ padding: '8px' }}>
+                            <button
                               onClick={() => handleDelete(pos.id)}
                               style={{
                                 background: '#FF5252',
@@ -876,9 +941,60 @@ function PortfolioTracker() {
                           </td>
                         </tr>
 
+                        {sellFormFor === pos.id && (
+                          <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
+                            <td colSpan={9} style={{ padding: '15px', background: '#1f2e1f' }}>
+                              <strong>Sprzedaż {pos.ticker} (masz {pos.quantity} szt., kupione po {pos.buy_price} {pos.currency}):</strong>
+                              <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input
+                                  placeholder="Ilość"
+                                  type="number"
+                                  step="any"
+                                  value={sellForm.quantity}
+                                  onChange={(e) => setSellForm({ ...sellForm, quantity: e.target.value })}
+                                  style={{ ...inputStyle, width: '100px' }}
+                                />
+                                <input
+                                  placeholder={`Cena sprzedaży (${pos.currency})`}
+                                  type="number"
+                                  step="any"
+                                  value={sellForm.sell_price}
+                                  onChange={(e) => setSellForm({ ...sellForm, sell_price: e.target.value })}
+                                  style={{ ...inputStyle, width: '160px' }}
+                                />
+                                <input
+                                  type="date"
+                                  value={sellForm.sell_date}
+                                  onChange={(e) => setSellForm({ ...sellForm, sell_date: e.target.value })}
+                                  style={{ ...inputStyle, width: '150px' }}
+                                />
+                                <button
+                                  onClick={() => submitSell(pos.id)}
+                                  disabled={sellLoading}
+                                  style={{
+                                    padding: '10px 20px',
+                                    background: '#2E7D32',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    cursor: sellLoading ? 'not-allowed' : 'pointer',
+                                  }}
+                                >
+                                  {sellLoading ? 'Zapisuję...' : 'Potwierdź sprzedaż'}
+                                </button>
+                              </div>
+                              {sellError && <div style={{ color: '#FF5252', marginTop: '10px' }}>{sellError}</div>}
+                              <p style={{ color: '#888', fontSize: '11px', marginTop: '8px' }}>
+                                Sprzedaż mniejszej ilości niż posiadasz zmniejszy tę pozycję (częściowe zamknięcie).
+                                Realny zysk/strata i podatek zobaczysz w zakładce "Sprzedaże".
+                              </p>
+                            </td>
+                          </tr>
+                        )}
+
                         {openAnalysisId === pos.id && (
                           <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
-                            <td colSpan={8} style={{ padding: '15px', background: '#2a2a2a' }}>
+                            <td colSpan={9} style={{ padding: '15px', background: '#2a2a2a' }}>
                               <div style={{ marginBottom: '12px' }}>
                                 <strong>Horyzont analizy tej transakcji ({pos.ticker}, {pos.buy_date}):</strong>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>

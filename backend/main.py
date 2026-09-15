@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from datetime import datetime
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()  # wczytuje zmienne z pliku .env leżącego obok main.py
@@ -36,6 +37,9 @@ MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Plik, w którym trzymamy pozycje portfela (prosty JSON, bez bazy danych)
 PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio.json")
+
+# Plik z historią ZREALIZOWANYCH sprzedaży (do liczenia realnego zysku i PIT-38)
+SALES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sales.json")
 
 # Plik z watchlistą - spółki obserwowane pod kątem nadchodzących wydarzeń/raportów,
 # NIEZALEŻNIE od tego, czy są w portfelu (np. Nvidia, o której inwestor myśli, ale jej nie ma)
@@ -85,6 +89,13 @@ class PortfolioEntryCreate(BaseModel):
 
 class AccountUpdateRequest(BaseModel):
     account: str
+
+
+class SellRequest(BaseModel):
+    quantity: float
+    sell_price: float
+    sell_date: str  # format "YYYY-MM-DD"
+    sell_currency: str = ""  # puste = ta sama waluta co przy zakupie
 
 
 class PositionAnalysisRequest(BaseModel):
@@ -163,6 +174,197 @@ def get_fx_rate(currency, cache=None):
     return rate
 
 
+def _normalize_date_index(series):
+    """Sprowadza indeks pandas Series (daty z yfinance, czasem tz-aware) do samych dat bez strefy czasowej."""
+    if series is None or series.empty:
+        return series
+    if series.index.tz is not None:
+        series = series.copy()
+        series.index = series.index.tz_localize(None)
+    series.index = series.index.normalize()
+    return series
+
+
+def get_historical_price_series(ticker, start_date):
+    """Zwraca pandas Series (indeks: data, wartość: cena zamknięcia) od start_date do dziś."""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(start=start_date)
+        if hist.empty:
+            return None
+        return _normalize_date_index(hist["Close"])
+    except Exception:
+        logger.exception("Nie udało się pobrać historycznych cen dla %s (rekonstrukcja wykresu)", ticker)
+        return None
+
+
+def get_historical_fx_series(currency, start_date):
+    """Zwraca pandas Series historycznego kursu danej waluty do PLN od start_date do dziś."""
+    if currency == "PLN":
+        return None  # nie potrzebujemy - traktujemy jako stałe 1.0
+    try:
+        fx_ticker = yf.Ticker(f"{currency}PLN=X")
+        hist = fx_ticker.history(start=start_date)
+        if hist.empty:
+            return None
+        return _normalize_date_index(hist["Close"])
+    except Exception:
+        logger.exception("Nie udało się pobrać historycznego kursu %sPLN (rekonstrukcja wykresu)", currency)
+        return None
+
+
+def get_fx_rate_on_date(currency, date_str):
+    """Zwraca kurs danej waluty do PLN na konkretny dzień historyczny (do liczenia zrealizowanego zysku)."""
+    currency = (currency or "PLN").upper()
+    if currency == "PLN":
+        return 1.0
+    series = get_historical_fx_series(currency, date_str)
+    if series is None or series.empty:
+        return get_fx_rate(currency)  # fallback: dzisiejszy kurs, gdy brak historii
+    target = pd.Timestamp(date_str)
+    s_upto = series[series.index <= target]
+    if s_upto.empty:
+        return get_fx_rate(currency)
+    return float(s_upto.iloc[-1])
+
+
+_reconstructed_history_cache = {"data": None, "computed_at": None}
+
+
+def reconstruct_portfolio_history():
+    """
+    Odtwarza wartość CAŁEGO portfela dzień po dniu, od daty NAJWCZEŚNIEJSZEGO zakupu
+    do dziś - a nie tylko od momentu włączenia tej funkcji. Dla każdego dnia liczy,
+    ile akcji każdego tickera było już wtedy kupionych, mnoży przez historyczną cenę
+    zamknięcia z tego dnia i przelicza po historycznym kursie waluty z tego dnia.
+
+    Zwraca też osobno 'total_cost' per dzień (ile realnie wpłaciłeś do tego dnia,
+    licząc kursem waluty Z DNIA ZAKUPU, więc to NIE rośnie/spada z wahaniami FX -
+    tylko skokowo przy nowych zakupach) oraz listę 'events' (daty i tickery zakupów),
+    żeby na wykresie dało się wizualnie odróżnić "skok od zakupu" od "skoku od wzrostu ceny".
+
+    Wynik jest cache'owany na 15 minut w pamięci procesu, żeby nie odpytywać Yahoo
+    Finance przy każdym wejściu w zakładkę.
+    """
+    now = datetime.now()
+    if (
+        _reconstructed_history_cache["data"] is not None
+        and _reconstructed_history_cache["computed_at"] is not None
+        and (now - _reconstructed_history_cache["computed_at"]).total_seconds() < 15 * 60
+    ):
+        return _reconstructed_history_cache["data"]
+
+    entries = load_portfolio()
+    if not entries:
+        empty = {"history": [], "events": []}
+        _reconstructed_history_cache.update(data=empty, computed_at=now)
+        return empty
+
+    earliest_date = min(e["buy_date"] for e in entries)
+
+    lots_by_ticker = {}
+    currency_by_ticker = {}
+    for e in entries:
+        lots_by_ticker.setdefault(e["ticker"], []).append(e)
+
+    price_series = {}
+    for ticker in lots_by_ticker:
+        series = get_historical_price_series(ticker, earliest_date)
+        if series is not None:
+            price_series[ticker] = series
+        currency_by_ticker[ticker] = get_currency(ticker) or (lots_by_ticker[ticker][0].get("currency") or "PLN")
+
+    if not price_series:
+        empty = {"history": [], "events": []}
+        _reconstructed_history_cache.update(data=empty, computed_at=now)
+        return empty
+
+    fx_series = {}
+    for currency in set(currency_by_ticker.values()):
+        if currency == "PLN":
+            continue
+        series = get_historical_fx_series(currency, earliest_date)
+        if series is not None:
+            fx_series[currency] = series
+
+    all_dates = sorted(set().union(*(s.index for s in price_series.values())))
+
+    def price_on(ticker, date):
+        s = price_series.get(ticker)
+        if s is None:
+            return None
+        s_upto = s[s.index <= date]
+        return float(s_upto.iloc[-1]) if not s_upto.empty else None
+
+    def fx_on(currency, date):
+        if currency == "PLN":
+            return 1.0
+        s = fx_series.get(currency)
+        if s is None:
+            return None
+        s_upto = s[s.index <= date]
+        return float(s_upto.iloc[-1]) if not s_upto.empty else None
+
+    # Koszt każdej transakcji liczony RAZ, kursem waluty z dnia zakupu (nie dzisiejszym) -
+    # dzięki temu linia kosztu nie faluje z kursem, tylko skacze wyłącznie przy nowych zakupach.
+    purchases = []  # [(buy_date_str, ticker, cost_pln, quantity)]
+    for ticker, lots in lots_by_ticker.items():
+        currency = currency_by_ticker[ticker]
+        for lot in lots:
+            buy_ts = pd.Timestamp(lot["buy_date"])
+            fx_at_buy = fx_on(currency, buy_ts)
+            if fx_at_buy is None:
+                fx_at_buy = get_fx_rate(currency)  # fallback: dzisiejszy kurs, gdyby brakło historii
+            cost_pln = lot["quantity"] * lot["buy_price"] * (fx_at_buy or 1.0)
+            purchases.append((lot["buy_date"], ticker, round(cost_pln, 2), lot["quantity"]))
+    purchases.sort(key=lambda p: p[0])
+
+    events = [
+        {"date": p[0], "ticker": p[1], "cost_pln": p[2], "quantity": p[3]}
+        for p in purchases
+    ]
+
+    result = []
+    purchase_idx = 0
+    running_cost = 0.0
+
+    for date in all_dates:
+        date_str = date.strftime("%Y-%m-%d")
+        if date_str < earliest_date:
+            continue
+
+        # Doliczamy koszt wszystkich zakupów, które "weszły w życie" do tego dnia włącznie
+        while purchase_idx < len(purchases) and purchases[purchase_idx][0] <= date_str:
+            running_cost += purchases[purchase_idx][2]
+            purchase_idx += 1
+
+        total_value = 0.0
+        got_any = False
+        for ticker, lots in lots_by_ticker.items():
+            qty_held = sum(l["quantity"] for l in lots if l["buy_date"] <= date_str)
+            if qty_held <= 0:
+                continue
+            price = price_on(ticker, date)
+            if price is None:
+                continue
+            fx = fx_on(currency_by_ticker[ticker], date)
+            if fx is None:
+                continue
+            total_value += qty_held * price * fx
+            got_any = True
+
+        if got_any:
+            result.append({
+                "date": date_str,
+                "total_value": round(total_value, 2),
+                "total_cost": round(running_cost, 2),
+            })
+
+    output = {"history": result, "events": events}
+    _reconstructed_history_cache.update(data=output, computed_at=now)
+    return output
+
+
 def normalize_date(raw):
     """Próbuje sprowadzić różne formaty dat z CSV do YYYY-MM-DD."""
     raw = raw.strip()
@@ -214,6 +416,22 @@ def load_portfolio():
 def save_portfolio(entries):
     with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
         json.dump(entries, f, ensure_ascii=False, indent=2)
+
+
+def load_sales():
+    if not os.path.exists(SALES_FILE):
+        return []
+    try:
+        with open(SALES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać sales.json - traktuję jako pustą historię sprzedaży")
+        return []
+
+
+def save_sales(sales):
+    with open(SALES_FILE, "w", encoding="utf-8") as f:
+        json.dump(sales, f, ensure_ascii=False, indent=2)
 
 
 def load_watchlist():
@@ -672,7 +890,7 @@ def get_portfolio():
 
 @app.get("/api/portfolio/history")
 def get_portfolio_history():
-    """Zwraca historię snapshotów wartości portfela (do wykresu w czasie)."""
+    """Zwraca historię LIVE snapshotów wartości portfela (co ~30 min, tylko od kiedy backend działa)."""
     return {"history": load_history()}
 
 
@@ -682,6 +900,23 @@ def force_portfolio_snapshot():
     data = get_portfolio()
     maybe_snapshot_portfolio(data["summary"], force=True)
     return {"history": load_history()}
+
+
+@app.get("/api/portfolio/history/full")
+def get_portfolio_history_full():
+    """
+    Zwraca ODTWORZONĄ historię wartości portfela od daty NAJWCZEŚNIEJSZEGO zakupu do dziś
+    (dzienna rozdzielczość, ceny historyczne z Yahoo Finance), razem z linią kosztu
+    (ile realnie wpłaciłeś) i listą zdarzeń zakupu (do zaznaczenia na wykresie) - żeby dało
+    się odróżnić skok od nowego zakupu od skoku spowodowanego wzrostem cen.
+    """
+    data = reconstruct_portfolio_history()
+    if not data["history"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Portfel jest pusty albo nie udało się pobrać danych historycznych dla żadnej pozycji."
+        )
+    return data
 
 
 @app.get("/api/portfolio/dividends")
@@ -821,6 +1056,137 @@ def update_entry_account(entry_id: str, request: AccountUpdateRequest):
     entry["account"] = account
     save_portfolio(entries)
     return entry
+
+
+@app.post("/api/portfolio/{entry_id}/sell")
+def sell_portfolio_entry(entry_id: str, request: SellRequest):
+    """
+    Rejestruje SPRZEDAŻ (całości lub części) danej transakcji zakupu. Zmniejsza
+    (lub usuwa, jeśli sprzedano wszystko) pozycję w portfelu i zapisuje zrealizowany
+    zysk/stratę do historii sprzedaży - to jest podstawa do liczenia REALNEGO podatku
+    Belki (a nie tylko szacunku 'gdybyś sprzedał dziś') i do rocznego zestawienia PIT-38.
+
+    Koszt liczony jest historycznym kursem waluty z dnia ZAKUPU, przychód - historycznym
+    kursem z dnia SPRZEDAŻY, żeby wynik był rzetelny nawet dla pozycji w obcej walucie.
+    """
+    if request.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Ilość do sprzedaży musi być większa od zera.")
+
+    entries = load_portfolio()
+    entry = next((e for e in entries if e["id"] == entry_id), None)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono pozycji o podanym id")
+
+    if request.quantity > entry["quantity"] + 1e-9:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nie możesz sprzedać {request.quantity} szt. - posiadasz tylko {entry['quantity']} szt."
+        )
+
+    buy_currency = entry.get("currency") or "PLN"
+    sell_currency = (request.sell_currency or buy_currency).upper()
+
+    fx_at_buy = get_fx_rate_on_date(buy_currency, entry["buy_date"])
+    fx_at_sell = get_fx_rate_on_date(sell_currency, request.sell_date)
+
+    cost_pln = request.quantity * entry["buy_price"] * (fx_at_buy or 1.0)
+    proceeds_pln = request.quantity * request.sell_price * (fx_at_sell or 1.0)
+    realized_profit_pln = proceeds_pln - cost_pln
+
+    sale_record = {
+        "id": str(uuid.uuid4()),
+        "ticker": entry["ticker"],
+        "name": entry.get("name") or entry["ticker"],
+        "account": entry.get("account") or "zwykle",
+        "quantity": request.quantity,
+        "buy_date": entry["buy_date"],
+        "buy_price": entry["buy_price"],
+        "buy_currency": buy_currency,
+        "sell_date": request.sell_date,
+        "sell_price": request.sell_price,
+        "sell_currency": sell_currency,
+        "cost_pln": round(cost_pln, 2),
+        "proceeds_pln": round(proceeds_pln, 2),
+        "realized_profit_pln": round(realized_profit_pln, 2),
+        "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }
+
+    sales = load_sales()
+    sales.append(sale_record)
+    save_sales(sales)
+
+    remaining = entry["quantity"] - request.quantity
+    if remaining <= 1e-9:
+        entries = [e for e in entries if e["id"] != entry_id]
+    else:
+        entry["quantity"] = remaining
+    save_portfolio(entries)
+
+    return sale_record
+
+
+@app.get("/api/sales")
+def get_sales():
+    """Zwraca historię wszystkich zrealizowanych sprzedaży."""
+    return {"sales": load_sales()}
+
+
+@app.delete("/api/sales/{sale_id}")
+def delete_sale(sale_id: str):
+    """
+    Usuwa zapis sprzedaży (np. jeśli dodany pomyłkowo). UWAGA: to NIE przywraca
+    automatycznie ilości w portfelu - jeśli chcesz cofnąć pomyłkę, dodaj pozycję
+    ręcznie z powrotem przez formularz.
+    """
+    sales = load_sales()
+    filtered = [s for s in sales if s["id"] != sale_id]
+    if len(filtered) == len(sales):
+        raise HTTPException(status_code=404, detail="Nie znaleziono sprzedaży o podanym id")
+    save_sales(filtered)
+    return {"deleted": sale_id}
+
+
+@app.get("/api/sales/pit38-summary")
+def pit38_summary(year: Optional[int] = None):
+    """
+    Roczne podsumowanie zrealizowanych transakcji pod PIT-38. Podatek liczony jest
+    od NETTO wyniku rocznego (suma zysków minus suma strat w danym roku na koncie
+    zwykłym) - zgodnie z tym, jak faktycznie działa rozliczenie, a nie od każdej
+    transakcji z osobna. Pozycje z IKE/IKZE pokazane osobno, informacyjnie -
+    są zwolnione z podatku Belki.
+    """
+    if year is None:
+        year = datetime.now().year
+
+    sales = load_sales()
+    year_sales = [s for s in sales if s["sell_date"].startswith(str(year))]
+
+    zwykle = [s for s in year_sales if s.get("account", "zwykle") == "zwykle"]
+    other = [s for s in year_sales if s.get("account", "zwykle") != "zwykle"]
+
+    def aggregate(items):
+        total_proceeds = sum(i["proceeds_pln"] for i in items)
+        total_cost = sum(i["cost_pln"] for i in items)
+        return {
+            "total_proceeds_pln": round(total_proceeds, 2),
+            "total_cost_pln": round(total_cost, 2),
+            "total_profit_pln": round(total_proceeds - total_cost, 2),
+            "transactions_count": len(items),
+        }
+
+    zwykle_summary = aggregate(zwykle)
+    zwykle_summary["total_tax_pln"] = round(max(0.0, zwykle_summary["total_profit_pln"]) * BELKA_TAX_RATE, 2)
+    zwykle_summary["total_profit_after_tax_pln"] = round(
+        zwykle_summary["total_profit_pln"] - zwykle_summary["total_tax_pln"], 2
+    )
+
+    other_summary = aggregate(other)
+
+    return {
+        "year": year,
+        "zwykle": zwykle_summary,
+        "ike_ikze": other_summary,
+    }
 
 
 def extract_name_and_ticker(raw_value):
@@ -1645,7 +2011,7 @@ def analyze_stock(request: AnalyzeRequest):
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     try:
-        resp = requests.post(url, json=payload, timeout=30)
+        resp = requests.post(url, json=payload, timeout=120)
     except requests.exceptions.RequestException as e:
         logger.exception("Błąd sieci przy wywołaniu Gemini")
         raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")

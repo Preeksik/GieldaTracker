@@ -6,6 +6,7 @@ import PortfolioReport from './PortfolioReport'
 import PortfolioNews from './PortfolioNews'
 import DividendCalendar from './DividendCalendar'
 import PriceAlerts from './PriceAlerts'
+import SalesHistory from './SalesHistory'
 import './App.css'
 
 function App() {
@@ -133,6 +134,12 @@ function App() {
         >
           🔔 Alerty
         </button>
+        <button
+          onClick={() => setActiveTab('sprzedaze')}
+          style={{ padding: '8px 16px', background: activeTab === 'sprzedaze' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+        >
+          💰 Sprzedaże
+        </button>
       </div>
 
       {/* Zawartość zakładki "Analiza" - renderuje się TYLKO gdy activeTab === 'analiza' */}
@@ -191,6 +198,9 @@ function App() {
 
       {/* Zawartość zakładki "Alerty" - renderuje się TYLKO gdy activeTab === 'alerty' */}
       {activeTab === 'alerty' && <PriceAlerts />}
+
+      {/* Zawartość zakładki "Sprzedaże" - renderuje się TYLKO gdy activeTab === 'sprzedaze' */}
+      {activeTab === 'sprzedaze' && <SalesHistory />}
     </div>
   )
 }
