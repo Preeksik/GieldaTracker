@@ -1,4 +1,4 @@
-// Zaktualizowany App.jsx - z poprawioną widocznością tekstu i działającymi zakładkami
+// Zaktualizowany App.jsx - z brandingiem HossaLab i działającymi zakładkami
 import { useState, useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import PortfolioTracker from './PortfolioTracker'
@@ -84,7 +84,7 @@ function App() {
       try {
         chart.remove()
       } catch (e) {
-        // wykres mógł już zostać usunięty (np. przez React StrictMode w dev) - ignorujemy
+        // Ignorujemy błąd podwójnego czyszczenia wykresu w React StrictMode
       }
       if (chartInstanceRef.current === chart) {
         chartInstanceRef.current = null
@@ -93,115 +93,132 @@ function App() {
   }, [chartData])
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'system-ui', maxWidth: '900px', margin: '0 auto', color: '#fff' }}>
-      <h1 style={{ color: '#fff', marginBottom: '60px' }}>📈 GPW + Google GeminiAI</h1>
+    <div style={{ padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: '950px', margin: '0 auto', color: '#fff' }}>
+      
+      {/* Nagłówek HossaLab z logo */}
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px', paddingBottom: '15px', borderBottom: '1px solid #2d3748' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <img src="/Logo.svg" alt="HossaLab Logo" style={{ width: '46px', height: '46px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 900, fontSize: '1.6rem', color: '#fff', letterSpacing: '0.5px', lineHeight: '1.1' }}>
+              HOSSA<span style={{ color: '#10B981' }}>LAB</span>
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#94A3B8', letterSpacing: '2px', fontWeight: 600 }}>
+              AI QUANT RESEARCH
+            </span>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '0.85rem', color: '#64748B', background: '#111827', padding: '6px 12px', borderRadius: '6px', border: '1px solid #1F2937' }}>
+          GPW & Global ETF Tracker
+        </div>
+      </header>
 
       {/* Przełącznik zakładek */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '25px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveTab('analiza')}
-          style={{ padding: '8px 16px', background: activeTab === 'analiza' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'analiza' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           📊 Analiza
         </button>
         <button
           onClick={() => setActiveTab('portfel')}
-          style={{ padding: '8px 16px', background: activeTab === 'portfel' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'portfel' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           💼 Portfel
         </button>
         <button
           onClick={() => setActiveTab('rekomendacje')}
-          style={{ padding: '8px 16px', background: activeTab === 'rekomendacje' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'rekomendacje' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
-          📊 Analiza i pytania
+          📈 Raport AI
         </button>
         <button
           onClick={() => setActiveTab('newsy')}
-          style={{ padding: '8px 16px', background: activeTab === 'newsy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'newsy' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           🔥 Radar
         </button>
         <button
           onClick={() => setActiveTab('dywidendy')}
-          style={{ padding: '8px 16px', background: activeTab === 'dywidendy' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'dywidendy' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           📅 Dywidendy
         </button>
         <button
           onClick={() => setActiveTab('alerty')}
-          style={{ padding: '8px 16px', background: activeTab === 'alerty' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'alerty' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           🔔 Alerty
         </button>
         <button
           onClick={() => setActiveTab('sprzedaze')}
-          style={{ padding: '8px 16px', background: activeTab === 'sprzedaze' ? '#007BFF' : '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: activeTab === 'sprzedaze' ? '#10B981' : '#1E293B', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
           💰 Sprzedaże
         </button>
       </div>
 
-      {/* Zawartość zakładki "Analiza" - renderuje się TYLKO gdy activeTab === 'analiza' */}
+      {/* Zawartość zakładki "Analiza" */}
       {activeTab === 'analiza' && (
         <>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
             <input
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
-              style={{ padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc', color: '#fff', backgroundColor: '#333' }}
+              placeholder="np. CDR.WA"
+              style={{ width: '130px', padding: '10px 14px', fontSize: '15px', borderRadius: '6px', border: '1px solid #334155', color: '#fff', backgroundColor: '#0F172A' }}
             />
             <input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              style={{ flex: 1, padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc', color: '#fff', backgroundColor: '#333' }}
+              placeholder="Zadaj pytanie analityczne..."
+              style={{ flex: 1, padding: '10px 14px', fontSize: '15px', borderRadius: '6px', border: '1px solid #334155', color: '#fff', backgroundColor: '#0F172A' }}
             />
             <button
               onClick={analyzeStock}
               disabled={loading}
-              style={{ padding: '10px 20px', background: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+              style={{ padding: '10px 22px', background: loading ? '#047857' : '#10B981', color: '#04130C', fontWeight: 700, border: 'none', borderRadius: '6px', cursor: loading ? 'not-allowed' : 'pointer', transition: '0.2s' }}
             >
-              {loading ? 'Myślę...' : 'Analizuj'}
+              {loading ? 'Analizuję...' : 'Analizuj'}
             </button>
           </div>
 
-          {error && <div style={{ color: 'red', marginBottom: '20px' }}>{error}</div>}
+          {error && (
+            <div style={{ color: '#F87171', background: '#450A0A', padding: '12px', borderRadius: '6px', marginBottom: '20px', border: '1px solid #991B1B' }}>
+              {error}
+            </div>
+          )}
 
-          <div ref={chartContainerRef} style={{ width: '100%', height: '400px', marginBottom: '20px', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#1E1E2F' }}>
+          <div ref={chartContainerRef} style={{ width: '100%', height: '400px', marginBottom: '20px', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', backgroundColor: '#1E1E2F' }}>
             {chartData.length === 0 && !loading && (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2c2c2c', color: '#aaa', padding: '20px', textAlign: 'center' }}>
-                Wpisz ticker (np. CDR.WA, PKN.WA) i kliknij "Analizuj".
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0F172A', color: '#64748B', padding: '20px', textAlign: 'center' }}>
+                Wpisz ticker (np. CDR.WA, PKN.WA, PKO.WA) i kliknij "Analizuj".
               </div>
             )}
           </div>
 
           {aiAnalysis && (
-            <div style={{ background: '#333', padding: '20px', borderRadius: '8px', borderLeft: '4px solid #007BFF', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-              <h3 style={{ marginTop: 0, color: '#007BFF' }}>🤖 Werdykt DeepSeek:</h3>
-              <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>{aiAnalysis}</p>
+            <div style={{ background: '#0F172A', padding: '22px', borderRadius: '8px', borderLeft: '4px solid #10B981', boxShadow: '0 4px 10px rgba(0,0,0,0.25)', border: '1px solid #1E293B', borderLeftWidth: '4px' }}>
+              <h3 style={{ marginTop: 0, color: '#10B981', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem' }}>
+                ⚡ Werdykt HossaLab AI:
+              </h3>
+              <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#E2E8F0', fontSize: '0.95rem' }}>{aiAnalysis}</p>
             </div>
           )}
         </>
       )}
 
-      {/* Zawartość zakładki "Portfel" - renderuje się TYLKO gdy activeTab === 'portfel' */}
+      {/* Pozostałe zakładki */}
       {activeTab === 'portfel' && <PortfolioTracker />}
-
-      {/* Zawartość zakładki "Rekomendacje" - renderuje się TYLKO gdy activeTab === 'rekomendacje' */}
       {activeTab === 'rekomendacje' && <PortfolioReport />}
-
-      {/* Zawartość zakładki "Newsy" - renderuje się TYLKO gdy activeTab === 'newsy' */}
       {activeTab === 'newsy' && <PortfolioNews />}
-
-      {/* Zawartość zakładki "Dywidendy" - renderuje się TYLKO gdy activeTab === 'dywidendy' */}
       {activeTab === 'dywidendy' && <DividendCalendar />}
-
-      {/* Zawartość zakładki "Alerty" - renderuje się TYLKO gdy activeTab === 'alerty' */}
       {activeTab === 'alerty' && <PriceAlerts />}
-
-      {/* Zawartość zakładki "Sprzedaże" - renderuje się TYLKO gdy activeTab === 'sprzedaze' */}
       {activeTab === 'sprzedaze' && <SalesHistory />}
     </div>
   )
 }
+
 export default App
