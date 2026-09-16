@@ -86,10 +86,10 @@ function PortfolioHistoryChart() {
     if (!hasData) return
 
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: 'solid', color: '#151521' }, textColor: '#DDD', attributionLogo: false },
-      grid: { vertLines: { color: '#252538' }, horzLines: { color: '#252538' } },
-      rightPriceScale: { borderColor: '#333' },
-      timeScale: { borderColor: '#333', timeVisible: isIntraday, fixLeftEdge: true, fixRightEdge: true },
+      layout: { background: { type: 'solid', color: 'var(--bg-panel)' }, textColor: 'var(--text-muted)', attributionLogo: false },
+      grid: { vertLines: { color: 'rgba(148,163,184,0.055)' }, horzLines: { color: 'rgba(148,163,184,0.055)' } },
+      rightPriceScale: { borderColor: 'var(--bg-elevated)' },
+      timeScale: { borderColor: 'var(--bg-elevated)', timeVisible: isIntraday, fixLeftEdge: true, fixRightEdge: true },
       crosshair: { mode: 1 },
       width: containerRef.current.clientWidth,
       height: 300,
@@ -99,7 +99,7 @@ function PortfolioHistoryChart() {
     })
 
     const valueSeries = chart.addSeries(LineSeries, {
-      color: '#26C281',
+      color: 'var(--up)',
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
@@ -118,7 +118,7 @@ function PortfolioHistoryChart() {
 
       if (showCost && displayed.some((h) => h.total_cost !== undefined)) {
         const costSeries = chart.addSeries(LineSeries, {
-          color: '#7A7A8C',
+          color: 'var(--text-dim)',
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           priceLineVisible: false,
@@ -139,7 +139,7 @@ function PortfolioHistoryChart() {
           visibleEvents.map((e) => ({
             time: e.date,
             position: e.type === 'sell' ? 'aboveBar' : 'belowBar',
-            color: e.type === 'sell' ? '#FF7043' : '#42A5F5',
+            color: e.type === 'sell' ? 'var(--down)' : 'var(--cyan)',
             shape: e.type === 'sell' ? 'arrowDown' : 'arrowUp',
             text: `${e.type === 'sell' ? '−' : '+'}${e.ticker}`,
           }))
@@ -165,16 +165,16 @@ function PortfolioHistoryChart() {
   }, [displayed, isIntraday, todayLivePoints.length, showCost, events])
 
   if (loading) {
-    return <div style={{ color: '#aaa', marginBottom: '20px' }}>Odtwarzam historię portfela...</div>
+    return <div style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Odtwarzam historię portfela...</div>
   }
 
   if (error) {
-    return <div style={{ color: '#FF5252', marginBottom: '20px' }}>{error}</div>
+    return <div style={{ color: 'var(--down)', marginBottom: '20px' }}>{error}</div>
   }
 
   if (history.length < 2) {
     return (
-      <div style={{ color: '#aaa', background: '#222', padding: '15px 20px', borderRadius: '10px', marginBottom: '25px' }}>
+      <div style={{ color: 'var(--text-muted)', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '10px', marginBottom: '25px' }}>
         📈 Za mało danych historycznych, żeby narysować wykres.
       </div>
     )
@@ -189,33 +189,33 @@ function PortfolioHistoryChart() {
 
   const btnStyle = (active) => ({
     padding: '5px 12px',
-    background: active ? '#007BFF' : 'transparent',
-    color: active ? '#fff' : '#999',
-    border: `1px solid ${active ? '#007BFF' : '#3a3a4a'}`,
+    background: active ? 'var(--accent)' : 'transparent',
+    color: active ? 'var(--text)' : 'var(--text-dim)',
+    border: `1px solid ${active ? 'var(--accent)' : '#3a3a4a'}`,
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '12px',
   })
 
   return (
-    <div style={{ marginBottom: '25px', background: '#1a1a26', padding: '18px', borderRadius: '12px' }}>
+    <div style={{ marginBottom: '25px', background: 'var(--bg-panel)', padding: '18px', borderRadius: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <div style={{ color: '#888', fontSize: '13px', marginBottom: '2px' }}>Wartość portfela</div>
-          <div style={{ color: '#fff', fontSize: '26px', fontWeight: 'bold' }}>
+          <div style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '2px' }}>Wartość portfela</div>
+          <div style={{ color: 'var(--text)', fontSize: '26px', fontWeight: 'bold' }}>
             {last?.toFixed(2)} PLN
           </div>
           {change !== null && (
-            <div style={{ color: positive ? '#26C281' : '#FF5252', fontSize: '14px', marginTop: '2px' }}>
+            <div style={{ color: positive ? 'var(--up)' : 'var(--down)', fontSize: '14px', marginTop: '2px' }}>
               {positive ? '▲' : '▼'} {Math.abs(change).toFixed(2)} PLN ({changePct.toFixed(2)}%)
-              <span style={{ color: '#666' }}> · {RANGES.find((r) => r.key === range)?.label}</span>
+              <span style={{ color: 'var(--text-dim)' }}> · {RANGES.find((r) => r.key === range)?.label}</span>
             </div>
           )}
         </div>
 
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           {RANGES.map((r) => (
-            <button key={r.key} onClick={() => setRange(r.key)} style={btnStyle(range === r.key)}>
+            <button className="hl-btn" key={r.key} onClick={() => setRange(r.key)} style={btnStyle(range === r.key)}>
               {r.label}
             </button>
           ))}
@@ -223,20 +223,20 @@ function PortfolioHistoryChart() {
       </div>
 
       {isIntraday && todayLivePoints.length < 2 ? (
-        <div style={{ color: '#aaa', background: '#222', padding: '25px', borderRadius: '8px', textAlign: 'center' }}>
+        <div style={{ color: 'var(--text-muted)', background: 'var(--bg-panel)', padding: '25px', borderRadius: 'var(--radius)', textAlign: 'center' }}>
           Za mało punktów z dzisiaj — dane wewnątrzdniowe zbierają się co ~30 min, tylko gdy backend działa.
         </div>
       ) : (
-        <div ref={containerRef} style={{ width: '100%', height: '300px', borderRadius: '8px', overflow: 'hidden' }} />
+        <div ref={containerRef} style={{ width: '100%', height: '300px', borderRadius: 'var(--radius)', overflow: 'hidden' }} />
       )}
 
       {!isIntraday && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
-          <label style={{ color: '#888', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+          <label style={{ color: 'var(--text-dim)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
             <input type="checkbox" checked={showCost} onChange={(e) => setShowCost(e.target.checked)} />
             Pokaż linię wpłaconego kapitału
           </label>
-          <div style={{ color: '#666', fontSize: '11px' }}>
+          <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
             🔵 zakup · 🔴 sprzedaż · szara linia = wpłacone
           </div>
         </div>

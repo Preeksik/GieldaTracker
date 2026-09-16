@@ -1,16 +1,17 @@
 import { useState, useEffect, Fragment } from 'react'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
-import MarkdownView from './Markdownview'
+import MarkdownView from './MarkdownView'
+import { StepLoader, TableSkeleton, InlineLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
 
 const inputStyle = {
   padding: '10px',
   fontSize: '14px',
-  borderRadius: '5px',
-  border: '1px solid #ccc',
-  color: '#fff',
-  backgroundColor: '#333',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border)',
+  color: 'var(--text)',
+  backgroundColor: 'var(--bg-elevated)',
 }
 
 const horizonLabels = {
@@ -448,10 +449,10 @@ function PortfolioTracker() {
   const accountLabels = { zwykle: 'Zwykłe', ike: 'IKE', ikze: 'IKZE' }
 
   return (
-    <div style={{ color: '#fff' }}>
+    <div style={{ color: 'var(--text)' }}>
       <PortfolioHistoryChart />
 
-      <h2 style={{ marginBottom: '15px' }}>💼 Mój Portfel</h2>
+      <h2 style={{ marginBottom: '15px', fontSize: '20px', letterSpacing: '-0.3px' }}>💼 Mój Portfel</h2>
 
       <form
         onSubmit={handleAdd}
@@ -519,13 +520,13 @@ function PortfolioTracker() {
           style={{ ...inputStyle, flex: 1, minWidth: '150px' }}
         />
         <button
-          type="submit"
+          type="submit" className="hl-btn hl-btn-primary"
           style={{
             padding: '10px 20px',
-            background: '#007BFF',
+            background: 'var(--accent)',
             color: 'white',
             border: 'none',
-            borderRadius: '5px',
+            borderRadius: 'var(--radius-sm)',
             cursor: 'pointer',
           }}
         >
@@ -539,9 +540,9 @@ function PortfolioTracker() {
             style={{
               display: 'inline-block',
               padding: '10px 20px',
-              background: '#444',
+              background: 'var(--bg-elevated)',
               color: 'white',
-              borderRadius: '5px',
+              borderRadius: 'var(--radius-sm)',
               cursor: importLoading ? 'not-allowed' : 'pointer',
             }}
           >
@@ -559,9 +560,9 @@ function PortfolioTracker() {
             style={{
               display: 'inline-block',
               padding: '10px 20px',
-              background: '#1565C0',
+              background: 'var(--cyan)',
               color: 'white',
-              borderRadius: '5px',
+              borderRadius: 'var(--radius-sm)',
               cursor: xtbLoading ? 'not-allowed' : 'pointer',
             }}
           >
@@ -587,16 +588,16 @@ function PortfolioTracker() {
           </select>
         </div>
 
-        <div style={{ color: '#777', fontSize: '12px', marginTop: '8px' }}>
+        <div style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
           <strong>Zwykły CSV</strong>: tylko otwarte pozycje (ticker, ilość, cena, data). <strong>Historia XTB</strong>:
           pełen eksport z platformy — otwarte pozycje trafią do portfela, zamknięte do zakładki Sprzedaże.
         </div>
 
         {importResult && (
-          <div style={{ marginTop: '10px', color: importResult.errors.length > 0 ? '#FFA726' : '#4CAF50' }}>
+          <div style={{ marginTop: '10px', color: importResult.errors.length > 0 ? 'var(--warn)' : 'var(--up)' }}>
             ✅ Zaimportowano {importResult.added} pozycji.
             {importResult.errors.length > 0 && (
-              <div style={{ color: '#FF5252', marginTop: '5px' }}>
+              <div style={{ color: 'var(--down)', marginTop: '5px' }}>
                 Błędy w {importResult.errors.length} wierszach:
                 <ul style={{ margin: '5px 0 0 20px', padding: 0 }}>
                   {importResult.errors.map((err, i) => (
@@ -609,23 +610,41 @@ function PortfolioTracker() {
         )}
 
         {xtbResult && (
-          <div style={{ marginTop: '10px', color: '#4CAF50' }}>
+          <div style={{ marginTop: '10px', color: 'var(--up)' }}>
             ✅ Zaimportowano z XTB: {xtbResult.imported_open_positions} otwartych pozycji,{' '}
             {xtbResult.imported_closed_positions} zamkniętych (→ zakładka Sprzedaże).
-            <div style={{ color: '#888', fontSize: '12px' }}>Tickery: {xtbResult.tickers.join(', ')}</div>
+            <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Tickery: {xtbResult.tickers.join(', ')}</div>
             {xtbResult.errors.length > 0 && (
-              <div style={{ color: '#FFA726', marginTop: '5px', fontSize: '12px' }}>
+              <div style={{ color: 'var(--warn)', marginTop: '5px', fontSize: '12px' }}>
                 Pominięto {xtbResult.errors.length} wierszy: {xtbResult.errors.slice(0, 3).join(' · ')}
               </div>
             )}
           </div>
         )}
 
-        {xtbError && <div style={{ color: '#FF5252', marginTop: '10px' }}>{xtbError}</div>}
+        {xtbError && <div style={{ color: 'var(--down)', marginTop: '10px' }}>{xtbError}</div>}
       </div>
 
-      {error && <div style={{ color: '#FF5252', marginBottom: '15px' }}>{error}</div>}
-      {loading && <div style={{ color: '#aaa', marginBottom: '15px' }}>Ładowanie...</div>}
+      {importLoading && (
+        <div style={{ marginBottom: '20px' }}>
+          <StepLoader
+            title="Importuję plik CSV"
+            steps={['Wczytuję i wykrywam format pliku', 'Rozpoznaję kolumny i waluty', 'Dociągam nazwy spółek z giełdy', 'Zapisuję pozycje do portfela']}
+          />
+        </div>
+      )}
+
+      {xtbLoading && (
+        <div style={{ marginBottom: '20px' }}>
+          <StepLoader
+            title="Importuję pełną historię XTB"
+            steps={['Skanuję sekcje pliku', 'Rozdzielam pozycje otwarte i zamknięte', 'Przeliczam kursy walut z dni transakcji', 'Liczę zrealizowany zysk', 'Zapisuję portfel i historię sprzedaży']}
+          />
+        </div>
+      )}
+
+      {error && <div style={{ color: 'var(--down)', marginBottom: '15px' }}>{error}</div>}
+      {loading && positions.length === 0 && <div className="hl-panel" style={{ padding: '8px 4px', marginBottom: '15px' }}><TableSkeleton rows={4} cols={6} /></div>}
 
       {summary && (
         <div
@@ -633,9 +652,9 @@ function PortfolioTracker() {
             display: 'flex',
             gap: '25px',
             marginBottom: '15px',
-            background: '#333',
+            background: 'var(--bg-elevated)',
             padding: '15px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius)',
             flexWrap: 'wrap',
           }}
         >
@@ -645,7 +664,7 @@ function PortfolioTracker() {
           <div>
             Wartość: <strong>{summary.total_value.toFixed(2)} PLN</strong>
           </div>
-          <div style={{ color: summary.total_profit >= 0 ? '#4CAF50' : '#FF5252' }}>
+          <div style={{ color: summary.total_profit >= 0 ? 'var(--up)' : 'var(--down)' }}>
             Zysk/Strata:{' '}
             <strong>
               {summary.total_profit.toFixed(2)} PLN ({summary.total_profit_pct.toFixed(2)}%)
@@ -657,15 +676,15 @@ function PortfolioTracker() {
       {/* Filtr kont + rozbicie z podatkiem Belki */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
         {['wszystkie', 'zwykle', 'ike', 'ikze'].map((acc) => (
-          <button
+          <button className="hl-btn"
             key={acc}
             onClick={() => setAccountFilter(acc)}
             style={{
               padding: '8px 16px',
-              background: accountFilter === acc ? '#007BFF' : '#333',
+              background: accountFilter === acc ? 'var(--accent)' : 'var(--bg-elevated)',
               color: 'white',
               border: 'none',
-              borderRadius: '5px',
+              borderRadius: 'var(--radius-sm)',
               cursor: 'pointer',
             }}
           >
@@ -683,29 +702,29 @@ function PortfolioTracker() {
               <div
                 key={acc}
                 style={{
-                  background: '#2a2a2a',
+                  background: 'var(--bg-panel)',
                   padding: '12px 16px',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius)',
                   fontSize: '13px',
                   minWidth: '220px',
                 }}
               >
                 <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>{accountLabels[acc]}</div>
                 <div>Wartość: {a.total_value.toFixed(2)} PLN</div>
-                <div style={{ color: a.total_profit >= 0 ? '#4CAF50' : '#FF5252' }}>
+                <div style={{ color: a.total_profit >= 0 ? 'var(--up)' : 'var(--down)' }}>
                   Zysk brutto: {a.total_profit.toFixed(2)} PLN
                 </div>
                 {acc === 'zwykle' ? (
                   <>
-                    <div style={{ color: '#FFA726' }}>
+                    <div style={{ color: 'var(--warn)' }}>
                       Szac. podatek Belki (19%): {a.total_tax_estimate.toFixed(2)} PLN
                     </div>
-                    <div style={{ color: a.total_profit_after_tax >= 0 ? '#4CAF50' : '#FF5252' }}>
+                    <div style={{ color: a.total_profit_after_tax >= 0 ? 'var(--up)' : 'var(--down)' }}>
                       Zysk po podatku: {a.total_profit_after_tax.toFixed(2)} PLN
                     </div>
                   </>
                 ) : (
-                  <div style={{ color: '#4CAF50', fontSize: '12px' }}>✓ zwolnione z podatku Belki</div>
+                  <div style={{ color: 'var(--up)', fontSize: '12px' }}>✓ zwolnione z podatku Belki</div>
                 )}
               </div>
             )
@@ -714,11 +733,11 @@ function PortfolioTracker() {
       )}
 
       {grouped.length === 0 && !loading ? (
-        <div style={{ color: '#aaa' }}>Portfel jest pusty — dodaj pierwszą pozycję powyżej.</div>
+        <div style={{ color: 'var(--text-muted)' }}>Portfel jest pusty — dodaj pierwszą pozycję powyżej.</div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="hl-table">
           <thead>
-            <tr style={{ borderBottom: '1px solid #555', textAlign: 'left' }}>
+            <tr style={{ borderBottom: '1px solid var(--border-bright)', textAlign: 'left' }}>
               <th style={{ padding: '8px' }}>Spółka</th>
               <th style={{ padding: '8px' }}>Ilość</th>
               <th style={{ padding: '8px' }}>Śr. cena zakupu</th>
@@ -740,18 +759,18 @@ function PortfolioTracker() {
                   {/* --- Wiersz nagłówkowy grupy (jedna spółka, zsumowane wartości) --- */}
                   <tr
                     style={{
-                      borderBottom: isExpanded || openTickerAnalysisFor === g.ticker ? 'none' : '1px solid #444',
-                      background: isMulti ? '#2a2a2a' : 'transparent',
+                      borderBottom: isExpanded || openTickerAnalysisFor === g.ticker ? 'none' : '1px solid var(--border)',
+                      background: isMulti ? 'var(--bg-panel)' : 'transparent',
                     }}
                   >
                     <td style={{ padding: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button
+                        <button className="hl-btn"
                           onClick={() => toggleExpanded(g.ticker)}
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#aaa',
+                            color: 'var(--text-muted)',
                             cursor: 'pointer',
                             fontSize: '12px',
                             padding: 0,
@@ -762,7 +781,7 @@ function PortfolioTracker() {
                         </button>
                         <div>
                           <div style={{ fontWeight: 'bold' }}>{g.name}</div>
-                          <div style={{ fontSize: '12px', color: '#999' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
                             {g.ticker}
                             {isMulti && ` · ${g.lots.length} transakcje`}
                           </div>
@@ -772,7 +791,7 @@ function PortfolioTracker() {
                     <td style={{ padding: '8px' }}>{g.totalQuantity}</td>
                     <td style={{ padding: '8px' }}>
                       {g.weightedAvgBuyPrice.toFixed(2)} {g.currency || 'PLN'}
-                      {isMulti && <span style={{ color: '#777', fontSize: '11px' }}> (śr. ważona)</span>}
+                      {isMulti && <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}> (śr. ważona)</span>}
                     </td>
                     <td style={{ padding: '8px' }}>
                       {g.current_price !== null
@@ -785,7 +804,7 @@ function PortfolioTracker() {
                     <td
                       style={{
                         padding: '8px',
-                        color: g.totalProfit >= 0 ? '#4CAF50' : '#FF5252',
+                        color: g.totalProfit >= 0 ? 'var(--up)' : 'var(--down)',
                       }}
                     >
                       {g.totalProfit !== null
@@ -793,13 +812,13 @@ function PortfolioTracker() {
                         : '—'}
                     </td>
                     <td style={{ padding: '8px' }}>
-                      <button
+                      <button className="hl-btn"
                         onClick={() => openTickerAnalysis(g.ticker)}
                         style={{
-                          background: openTickerAnalysisFor === g.ticker ? '#007BFF' : '#444',
+                          background: openTickerAnalysisFor === g.ticker ? 'var(--accent)' : 'var(--bg-elevated)',
                           color: 'white',
                           border: 'none',
-                          borderRadius: '5px',
+                          borderRadius: 'var(--radius-sm)',
                           padding: '5px 10px',
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
@@ -814,21 +833,21 @@ function PortfolioTracker() {
 
                   {/* --- Panel analizy dla całego tickera (suma transakcji) --- */}
                   {openTickerAnalysisFor === g.ticker && (
-                    <tr style={{ borderBottom: '1px solid #444' }}>
-                      <td colSpan={9} style={{ padding: '15px', background: '#242424' }}>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td colSpan={9} style={{ padding: '15px', background: 'var(--bg-deep)' }}>
                         <div style={{ marginBottom: '12px' }}>
                           <strong>Horyzont analizy dla całej pozycji {g.ticker}:</strong>
                           <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
                             {Object.entries(horizonLabels).map(([key, label]) => (
-                              <button
+                              <button className="hl-btn"
                                 key={key}
                                 onClick={() => setTickerHorizon(key)}
                                 style={{
                                   padding: '6px 14px',
-                                  background: tickerHorizon === key ? '#007BFF' : '#444',
+                                  background: tickerHorizon === key ? 'var(--accent)' : 'var(--bg-elevated)',
                                   color: 'white',
                                   border: 'none',
-                                  borderRadius: '5px',
+                                  borderRadius: 'var(--radius-sm)',
                                   cursor: 'pointer',
                                 }}
                               >
@@ -845,34 +864,34 @@ function PortfolioTracker() {
                           style={{ ...inputStyle, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
                         />
 
-                        <button
+                        <button className="hl-btn"
                           onClick={() => runTickerAnalysis(g.ticker)}
                           disabled={tickerAnalysisLoading}
                           style={{
                             padding: '10px 20px',
-                            background: '#007BFF',
+                            background: 'var(--accent)',
                             color: 'white',
                             border: 'none',
-                            borderRadius: '5px',
+                            borderRadius: 'var(--radius-sm)',
                             cursor: tickerAnalysisLoading ? 'not-allowed' : 'pointer',
                             marginBottom: '12px',
                           }}
                         >
-                          {tickerAnalysisLoading ? 'Analizuję... (do minuty)' : 'Generuj analizę'}
+                          {tickerAnalysisLoading ? 'Analizuję…' : 'Generuj analizę ▸'}
                         </button>
 
                         {tickerAnalysisError && (
-                          <div style={{ color: '#FF5252', marginBottom: '12px' }}>{tickerAnalysisError}</div>
+                          <div style={{ color: 'var(--down)', marginBottom: '12px' }}>{tickerAnalysisError}</div>
                         )}
 
                         {tickerAnalysisResult && (
                           <>
                             <div
                               style={{
-                                background: '#333',
+                                background: 'var(--bg-elevated)',
                                 padding: '15px',
-                                borderRadius: '8px',
-                                borderLeft: '4px solid #007BFF',
+                                borderRadius: 'var(--radius)',
+                                borderLeft: '4px solid var(--accent)',
                                 marginBottom: '12px',
                               }}
                             >
@@ -881,15 +900,15 @@ function PortfolioTracker() {
 
                             {tickerFollowUps.map((f, idx) => (
                               <div key={idx} style={{ marginBottom: '12px' }}>
-                                <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '4px' }}>
+                                <div style={{ color: 'var(--accent)', fontWeight: 'bold', marginBottom: '4px' }}>
                                   ❓ {f.question}
                                 </div>
                                 <div
                                   style={{
-                                    background: '#2f2f2f',
+                                    background: 'var(--bg-elevated)',
                                     padding: '12px',
-                                    borderRadius: '8px',
-                                    borderLeft: '4px solid #555',
+                                    borderRadius: 'var(--radius)',
+                                    borderLeft: '4px solid var(--border-bright)',
                                   }}
                                 >
                                   <MarkdownView>{f.answer}</MarkdownView>
@@ -905,15 +924,15 @@ function PortfolioTracker() {
                                 onKeyDown={(e) => e.key === 'Enter' && askTickerFollowUp(g.ticker)}
                                 style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
                               />
-                              <button
+                              <button className="hl-btn"
                                 onClick={() => askTickerFollowUp(g.ticker)}
                                 disabled={tickerFollowUpLoading || !tickerFollowUpQuestion.trim()}
                                 style={{
                                   padding: '10px 18px',
-                                  background: '#007BFF',
+                                  background: 'var(--accent)',
                                   color: 'white',
                                   border: 'none',
-                                  borderRadius: '5px',
+                                  borderRadius: 'var(--radius-sm)',
                                   cursor: tickerFollowUpLoading ? 'not-allowed' : 'pointer',
                                   whiteSpace: 'nowrap',
                                 }}
@@ -922,7 +941,7 @@ function PortfolioTracker() {
                               </button>
                             </div>
                             {tickerFollowUpError && (
-                              <div style={{ color: '#FF5252', marginTop: '8px' }}>{tickerFollowUpError}</div>
+                              <div style={{ color: 'var(--down)', marginTop: '8px' }}>{tickerFollowUpError}</div>
                             )}
                           </>
                         )}
@@ -934,11 +953,11 @@ function PortfolioTracker() {
                   {isExpanded &&
                     g.lots.map((pos) => (
                       <Fragment key={pos.id}>
-                        <tr style={{ borderBottom: openAnalysisId === pos.id ? 'none' : '1px solid #3a3a3a', background: '#1c1c1c' }}>
+                        <tr style={{ borderBottom: openAnalysisId === pos.id ? 'none' : '1px solid #3a3a3a', background: 'var(--bg-void)' }}>
                           <td style={{ padding: '8px 8px 8px 30px' }}>
-                            <div style={{ fontSize: '13px', color: '#ccc' }}>{pos.buy_date}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{pos.buy_date}</div>
                             {pos.note && (
-                              <div style={{ fontSize: '12px', color: '#888', fontStyle: 'italic', marginTop: '2px' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic', marginTop: '2px' }}>
                                 📝 {pos.note}
                               </div>
                             )}
@@ -947,9 +966,9 @@ function PortfolioTracker() {
                               onChange={(e) => handleAccountChange(pos.id, e.target.value)}
                               style={{
                                 marginTop: '4px',
-                                background: '#333',
-                                color: '#ccc',
-                                border: '1px solid #555',
+                                background: 'var(--bg-elevated)',
+                                color: 'var(--text-muted)',
+                                border: '1px solid var(--border-bright)',
                                 borderRadius: '4px',
                                 fontSize: '11px',
                                 padding: '2px 4px',
@@ -968,17 +987,17 @@ function PortfolioTracker() {
                               : '—'}
                           </td>
                           <td style={{ padding: '8px' }}>{pos.value !== null ? `${pos.value} PLN` : '—'}</td>
-                          <td style={{ padding: '8px', color: pos.profit >= 0 ? '#4CAF50' : '#FF5252' }}>
+                          <td style={{ padding: '8px', color: pos.profit >= 0 ? 'var(--up)' : 'var(--down)' }}>
                             {pos.profit !== null ? `${pos.profit} PLN (${pos.profit_pct}%)` : '—'}
                           </td>
                           <td style={{ padding: '8px' }}>
-                            <button
+                            <button className="hl-btn"
                               onClick={() => openAnalysis(pos.id)}
                               style={{
-                                background: openAnalysisId === pos.id ? '#007BFF' : '#444',
+                                background: openAnalysisId === pos.id ? 'var(--accent)' : 'var(--bg-elevated)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '5px',
+                                borderRadius: 'var(--radius-sm)',
                                 padding: '5px 10px',
                                 cursor: 'pointer',
                                 whiteSpace: 'nowrap',
@@ -989,13 +1008,13 @@ function PortfolioTracker() {
                             </button>
                           </td>
                           <td style={{ padding: '8px' }}>
-                            <button
+                            <button className="hl-btn"
                               onClick={() => openSellForm(pos)}
                               style={{
-                                background: sellFormFor === pos.id ? '#007BFF' : '#2E7D32',
+                                background: sellFormFor === pos.id ? 'var(--accent)' : 'var(--accent-dim)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '5px',
+                                borderRadius: 'var(--radius-sm)',
                                 padding: '5px 10px',
                                 cursor: 'pointer',
                                 fontSize: '12px',
@@ -1006,13 +1025,13 @@ function PortfolioTracker() {
                             </button>
                           </td>
                           <td style={{ padding: '8px' }}>
-                            <button
+                            <button className="hl-btn"
                               onClick={() => handleDelete(pos.id)}
                               style={{
-                                background: '#FF5252',
+                                background: 'var(--down)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '5px',
+                                borderRadius: 'var(--radius-sm)',
                                 padding: '5px 10px',
                                 cursor: 'pointer',
                                 fontSize: '12px',
@@ -1025,7 +1044,7 @@ function PortfolioTracker() {
 
                         {sellFormFor === pos.id && (
                           <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
-                            <td colSpan={9} style={{ padding: '15px', background: '#1f2e1f' }}>
+                            <td colSpan={9} style={{ padding: '15px', background: 'rgba(16,185,129,0.06)' }}>
                               <strong>Sprzedaż {pos.ticker} (masz {pos.quantity} szt., kupione po {pos.buy_price} {pos.currency}):</strong>
                               <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                                 <input
@@ -1050,23 +1069,23 @@ function PortfolioTracker() {
                                   onChange={(e) => setSellForm({ ...sellForm, sell_date: e.target.value })}
                                   style={{ ...inputStyle, width: '150px' }}
                                 />
-                                <button
+                                <button className="hl-btn"
                                   onClick={() => submitSell(pos.id)}
                                   disabled={sellLoading}
                                   style={{
                                     padding: '10px 20px',
-                                    background: '#2E7D32',
+                                    background: 'var(--accent-dim)',
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '5px',
+                                    borderRadius: 'var(--radius-sm)',
                                     cursor: sellLoading ? 'not-allowed' : 'pointer',
                                   }}
                                 >
                                   {sellLoading ? 'Zapisuję...' : 'Potwierdź sprzedaż'}
                                 </button>
                               </div>
-                              {sellError && <div style={{ color: '#FF5252', marginTop: '10px' }}>{sellError}</div>}
-                              <p style={{ color: '#888', fontSize: '11px', marginTop: '8px' }}>
+                              {sellError && <div style={{ color: 'var(--down)', marginTop: '10px' }}>{sellError}</div>}
+                              <p style={{ color: 'var(--text-dim)', fontSize: '11px', marginTop: '8px' }}>
                                 Sprzedaż mniejszej ilości niż posiadasz zmniejszy tę pozycję (częściowe zamknięcie).
                                 Realny zysk/strata i podatek zobaczysz w zakładce "Sprzedaże".
                               </p>
@@ -1076,20 +1095,20 @@ function PortfolioTracker() {
 
                         {openAnalysisId === pos.id && (
                           <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
-                            <td colSpan={9} style={{ padding: '15px', background: '#2a2a2a' }}>
+                            <td colSpan={9} style={{ padding: '15px', background: 'var(--bg-panel)' }}>
                               <div style={{ marginBottom: '12px' }}>
                                 <strong>Horyzont analizy tej transakcji ({pos.ticker}, {pos.buy_date}):</strong>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
                                   {Object.entries(horizonLabels).map(([key, label]) => (
-                                    <button
+                                    <button className="hl-btn"
                                       key={key}
                                       onClick={() => setHorizon(key)}
                                       style={{
                                         padding: '6px 14px',
-                                        background: horizon === key ? '#007BFF' : '#444',
+                                        background: horizon === key ? 'var(--accent)' : 'var(--bg-elevated)',
                                         color: 'white',
                                         border: 'none',
-                                        borderRadius: '5px',
+                                        borderRadius: 'var(--radius-sm)',
                                         cursor: 'pointer',
                                       }}
                                     >
@@ -1106,34 +1125,34 @@ function PortfolioTracker() {
                                 style={{ ...inputStyle, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
                               />
 
-                              <button
+                              <button className="hl-btn"
                                 onClick={() => runAnalysis(pos.id)}
                                 disabled={analysisLoading}
                                 style={{
                                   padding: '10px 20px',
-                                  background: '#007BFF',
+                                  background: 'var(--accent)',
                                   color: 'white',
                                   border: 'none',
-                                  borderRadius: '5px',
+                                  borderRadius: 'var(--radius-sm)',
                                   cursor: analysisLoading ? 'not-allowed' : 'pointer',
                                   marginBottom: '12px',
                                 }}
                               >
-                                {analysisLoading ? 'Analizuję... (do minuty)' : 'Generuj analizę'}
+                                {analysisLoading ? 'Analizuję…' : 'Generuj analizę ▸'}
                               </button>
 
                               {analysisError && (
-                                <div style={{ color: '#FF5252', marginBottom: '12px' }}>{analysisError}</div>
+                                <div style={{ color: 'var(--down)', marginBottom: '12px' }}>{analysisError}</div>
                               )}
 
                               {analysisResult && (
                                 <>
                                   <div
                                     style={{
-                                      background: '#333',
+                                      background: 'var(--bg-elevated)',
                                       padding: '15px',
-                                      borderRadius: '8px',
-                                      borderLeft: '4px solid #007BFF',
+                                      borderRadius: 'var(--radius)',
+                                      borderLeft: '4px solid var(--accent)',
                                       marginBottom: '12px',
                                     }}
                                   >
@@ -1142,15 +1161,15 @@ function PortfolioTracker() {
 
                                   {followUps.map((f, idx) => (
                                     <div key={idx} style={{ marginBottom: '12px' }}>
-                                      <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '4px' }}>
+                                      <div style={{ color: 'var(--accent)', fontWeight: 'bold', marginBottom: '4px' }}>
                                         ❓ {f.question}
                                       </div>
                                       <div
                                         style={{
-                                          background: '#2f2f2f',
+                                          background: 'var(--bg-elevated)',
                                           padding: '12px',
-                                          borderRadius: '8px',
-                                          borderLeft: '4px solid #555',
+                                          borderRadius: 'var(--radius)',
+                                          borderLeft: '4px solid var(--border-bright)',
                                         }}
                                       >
                                         <MarkdownView>{f.answer}</MarkdownView>
@@ -1166,15 +1185,15 @@ function PortfolioTracker() {
                                       onKeyDown={(e) => e.key === 'Enter' && askFollowUp(pos.id)}
                                       style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
                                     />
-                                    <button
+                                    <button className="hl-btn"
                                       onClick={() => askFollowUp(pos.id)}
                                       disabled={followUpLoading || !followUpQuestion.trim()}
                                       style={{
                                         padding: '10px 18px',
-                                        background: '#007BFF',
+                                        background: 'var(--accent)',
                                         color: 'white',
                                         border: 'none',
-                                        borderRadius: '5px',
+                                        borderRadius: 'var(--radius-sm)',
                                         cursor: followUpLoading ? 'not-allowed' : 'pointer',
                                         whiteSpace: 'nowrap',
                                       }}
@@ -1183,7 +1202,7 @@ function PortfolioTracker() {
                                     </button>
                                   </div>
                                   {followUpError && (
-                                    <div style={{ color: '#FF5252', marginTop: '8px' }}>{followUpError}</div>
+                                    <div style={{ color: 'var(--down)', marginTop: '8px' }}>{followUpError}</div>
                                   )}
                                 </>
                               )}

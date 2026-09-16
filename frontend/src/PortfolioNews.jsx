@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import MarkdownView from './Markdownview'
+import MarkdownView from './MarkdownView'
+import { StepLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -80,9 +81,9 @@ function PortfolioNews() {
   }
 
   return (
-    <div style={{ color: '#fff' }}>
-      <h2 style={{ marginBottom: '10px' }}>🔥 Radar katalizatorów</h2>
-      <p style={{ color: '#aaa', marginBottom: '20px', maxWidth: '700px' }}>
+    <div style={{ color: 'var(--text)' }}>
+      <h2 style={{ marginBottom: '10px', fontSize: '20px', letterSpacing: '-0.3px' }}>🔥 Radar katalizatorów</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '700px' }}>
         Watchlista niezależna od portfela - obserwuj spółki pod kątem nadchodzących raportów
         finansowych i dużych wydarzeń, niezależnie czy je posiadasz. Pod agresywne, krótkoterminowe granie.
       </p>
@@ -97,21 +98,21 @@ function PortfolioNews() {
           style={{
             padding: '10px',
             fontSize: '14px',
-            borderRadius: '5px',
-            border: '1px solid #ccc',
-            color: '#fff',
-            backgroundColor: '#333',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            backgroundColor: 'var(--bg-elevated)',
             width: '250px',
           }}
         />
         <button
-          onClick={addTicker}
+          onClick={addTicker} className="hl-btn hl-btn-primary"
           style={{
             padding: '10px 20px',
-            background: '#007BFF',
+            background: 'var(--accent)',
             color: 'white',
             border: 'none',
-            borderRadius: '5px',
+            borderRadius: 'var(--radius-sm)',
             cursor: 'pointer',
           }}
         >
@@ -119,18 +120,18 @@ function PortfolioNews() {
         </button>
       </div>
 
-      {watchlistError && <div style={{ color: '#FF5252', marginBottom: '15px' }}>{watchlistError}</div>}
+      {watchlistError && <div style={{ color: 'var(--down)', marginBottom: '15px' }}>{watchlistError}</div>}
 
       {watchlistLoading ? (
-        <div style={{ color: '#aaa', marginBottom: '20px' }}>Ładowanie watchlisty...</div>
+        <div style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Ładowanie watchlisty...</div>
       ) : (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '25px' }}>
-          {tickers.length === 0 && <span style={{ color: '#777' }}>Watchlista jest pusta.</span>}
+          {tickers.length === 0 && <span style={{ color: 'var(--text-dim)' }}>Watchlista jest pusta.</span>}
           {tickers.map((t) => (
             <span
               key={t}
               style={{
-                background: '#333',
+                background: 'var(--bg-elevated)',
                 padding: '6px 10px',
                 borderRadius: '15px',
                 display: 'flex',
@@ -140,12 +141,12 @@ function PortfolioNews() {
               }}
             >
               {t}
-              <button
+              <button className="hl-btn"
                 onClick={() => removeTicker(t)}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#FF5252',
+                  color: 'var(--down)',
                   cursor: 'pointer',
                   fontWeight: 'bold',
                   padding: 0,
@@ -162,13 +163,13 @@ function PortfolioNews() {
       {/* Radar katalizatorów */}
       <button
         onClick={fetchCatalysts}
-        disabled={reportLoading || tickers.length === 0}
+        disabled={reportLoading || tickers.length === 0} className="hl-btn hl-btn-primary"
         style={{
           padding: '12px 24px',
-          background: '#007BFF',
+          background: 'var(--accent)',
           color: 'white',
           border: 'none',
-          borderRadius: '5px',
+          borderRadius: 'var(--radius-sm)',
           cursor: reportLoading || tickers.length === 0 ? 'not-allowed' : 'pointer',
           fontSize: '15px',
           marginBottom: '20px',
@@ -177,8 +178,18 @@ function PortfolioNews() {
         {reportLoading ? 'Skanuję watchlistę... (może potrwać do minuty)' : '📡 Sprawdź nadchodzące wydarzenia'}
       </button>
 
+      {reportLoading && (
+        <div style={{ marginBottom: '20px' }}>
+          <StepLoader
+            title="Skanuję watchlistę"
+            steps={['Sprawdzam terminy raportów finansowych', 'Pobieram świeże nagłówki z rynku', 'Filtruję szum od realnych katalizatorów', 'Układam radar wg priorytetu']}
+            intervalMs={1100}
+          />
+        </div>
+      )}
+
       {reportError && (
-        <div style={{ color: '#FF5252', marginBottom: '20px', background: '#3a1f1f', padding: '12px', borderRadius: '6px' }}>
+        <div style={{ color: 'var(--down)', marginBottom: '20px', background: 'rgba(255,91,127,0.08)', padding: '12px', borderRadius: '6px' }}>
           {reportError}
         </div>
       )}
@@ -186,17 +197,17 @@ function PortfolioNews() {
       {report && (
         <div
           style={{
-            background: '#333',
+            background: 'var(--bg-elevated)',
             padding: '20px',
-            borderRadius: '8px',
-            borderLeft: '4px solid #007BFF',
+            borderRadius: 'var(--radius)',
+            borderLeft: '4px solid var(--accent)',
           }}
         >
           <MarkdownView>{report}</MarkdownView>
         </div>
       )}
 
-      <p style={{ color: '#777', fontSize: '12px', marginTop: '20px' }}>
+      <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '20px' }}>
         ⚠️ Źródło: Yahoo Finance (raporty) + Google News RSS (newsy), z opóźnieniem względem czasu
         rzeczywistego. To analiza edukacyjna, nie porada inwestycyjna. Agresywne granie pod eventy
         w krótkim terminie niesie wysokie ryzyko.

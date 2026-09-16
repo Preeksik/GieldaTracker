@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import MarkdownView from './Markdownview'
+import MarkdownView from './MarkdownView'
+import { StepLoader, InlineLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -70,23 +71,23 @@ function PortfolioReport() {
   }
 
   return (
-    <div style={{ color: '#fff' }}>
+    <div style={{ color: 'var(--text)' }}>
       {/* Sekcja 1: Dywersyfikacja */}
-      <h2 style={{ marginBottom: '10px' }}>📊 Analiza dywersyfikacji portfela</h2>
-      <p style={{ color: '#aaa', marginBottom: '20px', maxWidth: '700px' }}>
+      <h2 style={{ marginBottom: '10px', fontSize: '20px', letterSpacing: '-0.3px' }}>📊 Analiza dywersyfikacji portfela</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '700px' }}>
         Sprawdza koncentrację w sektorach, krajach i walutach, wskazuje luki i sugeruje
         konkretne kierunki rebalansowania.
       </p>
 
       <button
         onClick={runDiversification}
-        disabled={diversificationLoading}
+        disabled={diversificationLoading} className="hl-btn hl-btn-primary"
         style={{
           padding: '12px 24px',
-          background: '#007BFF',
+          background: 'var(--accent)',
           color: 'white',
           border: 'none',
-          borderRadius: '5px',
+          borderRadius: 'var(--radius-sm)',
           cursor: diversificationLoading ? 'not-allowed' : 'pointer',
           fontSize: '15px',
           marginBottom: '20px',
@@ -95,8 +96,17 @@ function PortfolioReport() {
         {diversificationLoading ? 'Analizuję dywersyfikację...' : '🔍 Sprawdź dywersyfikację'}
       </button>
 
+      {diversificationLoading && (
+        <div style={{ marginBottom: '20px' }}>
+          <StepLoader
+            title="Analizuję strukturę portfela"
+            steps={['Pobieram aktualne wyceny pozycji', 'Ustalam sektory, branże i kraje', 'Liczę wagi i koncentrację ryzyka', 'Gemini szuka luk i układa plan']}
+          />
+        </div>
+      )}
+
       {diversificationError && (
-        <div style={{ color: '#FF5252', marginBottom: '20px', background: '#3a1f1f', padding: '12px', borderRadius: '6px' }}>
+        <div style={{ color: 'var(--down)', marginBottom: '20px', background: 'rgba(255,91,127,0.08)', padding: '12px', borderRadius: '6px' }}>
           {diversificationError}
         </div>
       )}
@@ -104,10 +114,10 @@ function PortfolioReport() {
       {diversification && (
         <div
           style={{
-            background: '#333',
+            background: 'var(--bg-elevated)',
             padding: '20px',
-            borderRadius: '8px',
-            borderLeft: '4px solid #007BFF',
+            borderRadius: 'var(--radius)',
+            borderLeft: '4px solid var(--accent)',
             marginBottom: '30px',
           }}
         >
@@ -115,11 +125,11 @@ function PortfolioReport() {
         </div>
       )}
 
-      <hr style={{ border: 'none', borderTop: '1px solid #444', margin: '30px 0' }} />
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '30px 0' }} />
 
       {/* Sekcja 2: Pytania o portfel */}
-      <h2 style={{ marginBottom: '10px' }}>💬 Zapytaj o swój portfel</h2>
-      <p style={{ color: '#aaa', marginBottom: '20px', maxWidth: '700px' }}>
+      <h2 style={{ marginBottom: '10px', fontSize: '20px', letterSpacing: '-0.3px' }}>💬 Zapytaj o swój portfel</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '700px' }}>
         Np. "w co zainwestować dodatkowe 5k na IKE - dokupić coś co już mam, czy szukać
         czegoś nowego?". Odpowiedzi bazują na realnych danych Twojego portfela i pamiętają
         wcześniejsze pytania w tej rozmowie.
@@ -127,13 +137,13 @@ function PortfolioReport() {
 
       {thread.map((t, idx) => (
         <div key={idx} style={{ marginBottom: '16px' }}>
-          <div style={{ color: '#007BFF', fontWeight: 'bold', marginBottom: '6px' }}>❓ {t.question}</div>
+          <div style={{ color: 'var(--accent)', fontWeight: 'bold', marginBottom: '6px' }}>❓ {t.question}</div>
           <div
             style={{
-              background: '#333',
+              background: 'var(--bg-elevated)',
               padding: '15px',
-              borderRadius: '8px',
-              borderLeft: '4px solid #555',
+              borderRadius: 'var(--radius)',
+              borderLeft: '4px solid var(--border-bright)',
             }}
           >
             <MarkdownView>{t.answer}</MarkdownView>
@@ -151,34 +161,34 @@ function PortfolioReport() {
             flex: 1,
             padding: '12px',
             fontSize: '15px',
-            borderRadius: '5px',
-            border: '1px solid #ccc',
-            color: '#fff',
-            backgroundColor: '#333',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            backgroundColor: 'var(--bg-elevated)',
           }}
         />
         <button
           onClick={askQuestion}
-          disabled={questionLoading || !question.trim()}
+          disabled={questionLoading || !question.trim()} className="hl-btn hl-btn-primary"
           style={{
             padding: '12px 24px',
-            background: '#007BFF',
+            background: 'var(--accent)',
             color: 'white',
             border: 'none',
-            borderRadius: '5px',
+            borderRadius: 'var(--radius-sm)',
             cursor: questionLoading ? 'not-allowed' : 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
-          {questionLoading ? 'Pytam...' : 'Zapytaj'}
+          {questionLoading ? 'Myślę…' : 'Zapytaj ▸'}
         </button>
       </div>
 
       {questionError && (
-        <div style={{ color: '#FF5252', marginTop: '12px' }}>{questionError}</div>
+        <div style={{ color: 'var(--down)', marginTop: '12px' }}>{questionError}</div>
       )}
 
-      <p style={{ color: '#777', fontSize: '12px', marginTop: '25px' }}>
+      <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '25px' }}>
         ⚠️ To automatycznie generowana analiza edukacyjna, nie porada inwestycyjna.
       </p>
     </div>

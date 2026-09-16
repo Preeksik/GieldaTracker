@@ -1,0 +1,372 @@
+/* ============================================================
+   HossaLab — system designu
+   Paleta wyprowadzona wprost z logo: deep navy + emerald + cyan
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* Tła */
+  --bg-void: #030712;
+  --bg-deep: #080D1A;
+  --bg-panel: #0E1524;
+  --bg-elevated: #131C2E;
+  --bg-hover: #1A2438;
+
+  /* Akcenty z logo */
+  --accent: #10B981;
+  --accent-bright: #00F5A0;
+  --accent-dim: #059669;
+  --cyan: #06B6D4;
+  --gradient-hossa: linear-gradient(135deg, #059669 0%, #10B981 45%, #06B6D4 100%);
+  --gradient-glow: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.08));
+
+  /* Semantyka */
+  --up: #00F5A0;
+  --down: #FF5B7F;
+  --warn: #FBBF24;
+
+  /* Tekst */
+  --text: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-dim: #64748B;
+
+  /* Obramowania */
+  --border: #1F2937;
+  --border-bright: #2D3B52;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-glow: 0 0 24px rgba(16, 185, 129, 0.25);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg-void);
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(16,185,129,0.10), transparent 60%),
+    radial-gradient(800px 500px at 88% 0%, rgba(6,182,212,0.08), transparent 60%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Siatka laboratoryjna w tle, jak w logo */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(148,163,184,0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.028) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 100% 65% at 50% 0%, #000 35%, transparent 100%);
+}
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--accent-dim), var(--cyan));
+  border-radius: 8px;
+  border: 3px solid var(--bg-deep);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ===================== ANIMACJE ===================== */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 3000px; } }
+@keyframes shimmer { 0% { background-position: -600px 0; } 100% { background-position: 600px 0; } }
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
+  70% { box-shadow: 0 0 0 14px rgba(16,185,129,0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes bubbleUp {
+  0% { transform: translateY(0) scale(0.7); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-46px) scale(1.15); opacity: 0; }
+}
+@keyframes drawLine { to { stroke-dashoffset: 0; } }
+@keyframes tickerScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+.hl-fade-up { animation: fadeUp 0.45s var(--ease) both; }
+.hl-fade-in { animation: fadeIn 0.35s ease both; }
+.hl-stagger > * { animation: fadeUp 0.45s var(--ease) both; }
+.hl-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.hl-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.hl-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.hl-stagger > *:nth-child(4) { animation-delay: 0.16s; }
+.hl-stagger > *:nth-child(5) { animation-delay: 0.20s; }
+.hl-stagger > *:nth-child(6) { animation-delay: 0.24s; }
+.hl-stagger > *:nth-child(7) { animation-delay: 0.28s; }
+.hl-stagger > *:nth-child(8) { animation-delay: 0.32s; }
+
+/* ===================== KOMPONENTY ===================== */
+.hl-panel {
+  background: linear-gradient(180deg, rgba(19,28,46,0.85), rgba(14,21,36,0.92));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+  position: relative;
+  z-index: 1;
+}
+
+.hl-panel-glow {
+  position: relative;
+  overflow: hidden;
+}
+.hl-panel-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--gradient-hossa);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Przyciski */
+.hl-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.22s var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+.hl-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+.hl-btn:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.hl-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.hl-btn-primary {
+  background: var(--gradient-hossa);
+  color: #04120C;
+  border: none;
+  font-weight: 700;
+}
+.hl-btn-primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow), 0 8px 22px rgba(0,0,0,0.45);
+  filter: brightness(1.08);
+}
+
+.hl-btn-danger { border-color: rgba(255,91,127,0.35); color: #FF8FA8; }
+.hl-btn-danger:hover:not(:disabled) { border-color: var(--down); background: rgba(255,91,127,0.12); color: #fff; }
+
+.hl-btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* Zakładki */
+.hl-tab {
+  position: relative;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 11px 17px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: color 0.22s var(--ease), background 0.22s var(--ease);
+  white-space: nowrap;
+}
+.hl-tab:hover { color: var(--text-muted); background: rgba(255,255,255,0.035); }
+.hl-tab-active { color: var(--text); background: rgba(16,185,129,0.10); }
+.hl-tab-active::after {
+  content: '';
+  position: absolute;
+  left: 17px; right: 17px; bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gradient-hossa);
+  animation: fadeIn 0.3s ease both;
+}
+
+/* Pola formularzy */
+.hl-input, input[type="text"], input[type="number"], input[type="date"], select {
+  font-family: inherit;
+  font-size: 13.5px;
+  padding: 10px 13px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  transition: all 0.2s var(--ease);
+  outline: none;
+}
+.hl-input:focus, input:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.14);
+  background: var(--bg-panel);
+}
+.hl-input::placeholder, input::placeholder { color: var(--text-dim); }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.65); cursor: pointer; }
+
+/* Tabele */
+.hl-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.hl-table thead th {
+  text-align: left;
+  padding: 11px 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.hl-table tbody td { padding: 12px; border-bottom: 1px solid rgba(31,41,55,0.55); }
+.hl-table tbody tr { transition: background 0.18s ease; }
+.hl-table tbody tr:hover { background: rgba(255,255,255,0.022); }
+
+/* Wartości liczbowe monospace — czytelniej przy kolumnach cen */
+.hl-num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+.hl-up { color: var(--up); }
+.hl-down { color: var(--down); }
+
+/* Skeleton przy ładowaniu */
+.hl-skeleton {
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 50%, var(--bg-elevated) 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 8px;
+}
+
+/* Badge */
+.hl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-bright);
+  color: var(--text-muted);
+}
+.hl-badge-accent { border-color: rgba(16,185,129,0.4); color: var(--accent); background: rgba(16,185,129,0.08); }
+
+/* Pasek postępu */
+.hl-progress {
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hl-progress-bar {
+  height: 100%;
+  background: var(--gradient-hossa);
+  border-radius: 4px;
+  transition: width 0.4s var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ===================== ANIMACJA LOGO ===================== */
+.hl-logo-animated svg { overflow: visible; }
+
+/* Linia hossy rysuje się przy wejściu */
+.hl-logo-animated path[stroke^="url(#hossaGrad"] {
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+  animation: drawLine 1.5s var(--ease) 0.25s forwards;
+}
+
+/* Pęcherzyki w kolbie unoszą się w pętli */
+.hl-logo-animated circle[fill="#34D399"],
+.hl-logo-animated circle[fill="#06B6D4"],
+.hl-logo-animated circle[fill="#10B981"] {
+  animation: bubbleUp 3.4s ease-in-out infinite;
+}
+.hl-logo-animated circle[fill="#34D399"]:nth-of-type(2) { animation-delay: 0.9s; }
+.hl-logo-animated circle[fill="#06B6D4"] { animation-delay: 1.7s; }
+.hl-logo-animated circle[fill="#10B981"] { animation-delay: 2.4s; }
+
+/* Świeca breakoutowa pulsuje poświatą */
+.hl-logo-animated rect[fill="#00F5A0"] {
+  animation: candleGlow 2.6s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes candleGlow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; filter: brightness(1.3); }
+}
+
+/* Delikatne unoszenie całego logo przy hoverze headera */
+.hl-brand:hover .hl-logo-animated {
+  transform: translateY(-2px) scale(1.04);
+}
+.hl-logo-animated { transition: transform 0.45s var(--ease); }
+
+/* ===================== LOADER ===================== */
+.hl-loader-flask {
+  width: 46px; height: 46px;
+  position: relative;
+}
+.hl-loader-ring {
+  width: 100%; height: 100%;
+  border: 2.5px solid rgba(16,185,129,0.15);
+  border-top-color: var(--accent-bright);
+  border-right-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+.hl-loader-dot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: 0 0 12px var(--accent-bright);
+  animation: candleGlow 1.3s ease-in-out infinite;
+}
+
+.hl-step {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  transition: color 0.3s var(--ease);
+}
+.hl-step-active { color: var(--text); }
+.hl-step-done { color: var(--accent); }
+.hl-step-icon {
+  width: 19px; height: 19px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  transition: all 0.3s var(--ease);
+}
+.hl-step-active .hl-step-icon {
+  border-color: var(--accent-bright);
+  animation: pulseGlow 1.6s infinite;
+}
+.hl-step-done .hl-step-icon { background: var(--accent); border-color: var(--accent); color: #04120C; }

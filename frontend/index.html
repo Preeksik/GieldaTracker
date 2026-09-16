@@ -1,13 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="pl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/Logo.svg" />
+    <link rel="icon" type="image/svg+xml" href="/hossalab-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HossaLab</title>
+    <meta name="theme-color" content="#030712" />
+    <meta name="description" content="HossaLab — AI Quant Research. Analiza portfela, radar katalizatorów i rekomendacje oparte o Gemini." />
+    <title>HossaLab · AI Quant Research</title>
+    <style>
+      /* Ekran startowy — widoczny zanim React się zamontuje, żeby nie było białego mignięcia */
+      html, body { margin: 0; background: #030712; }
+      #boot {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        background: #030712; z-index: 9999;
+        transition: opacity .5s ease, visibility .5s ease;
+      }
+      #boot.done { opacity: 0; visibility: hidden; }
+      #boot .ring {
+        width: 54px; height: 54px; border-radius: 50%;
+        border: 3px solid rgba(16,185,129,.15);
+        border-top-color: #00F5A0; border-right-color: #06B6D4;
+        animation: bootspin .85s linear infinite;
+      }
+      @keyframes bootspin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
+    <div id="boot"><div class="ring"></div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.addEventListener('load', () => {
+        setTimeout(() => document.getElementById('boot')?.classList.add('done'), 350)
+      })
+    </script>
   </body>
 </html>

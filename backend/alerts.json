@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "13f806e0-10f4-4ef1-9cad-7a86fa669685",
+    "ticker": "1AT.WA",
+    "name": "Atal S.A.",
+    "currency": "PLN",
+    "condition": "below",
+    "target_price": 55.0,
+    "created_at": "2026-09-16 18:27",
+    "triggered": false,
+    "triggered_at": null,
+    "triggered_price": null
+  }
+]
