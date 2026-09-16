@@ -1,5 +1,6 @@
 import { useState, useEffect, Fragment } from 'react'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
+import MarkdownView from './Markdownview'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -875,9 +876,7 @@ function PortfolioTracker() {
                                 marginBottom: '12px',
                               }}
                             >
-                              <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                                {tickerAnalysisResult.analysis}
-                              </p>
+                              <MarkdownView>{tickerAnalysisResult.analysis}</MarkdownView>
                             </div>
 
                             {tickerFollowUps.map((f, idx) => (
@@ -893,9 +892,7 @@ function PortfolioTracker() {
                                     borderLeft: '4px solid #555',
                                   }}
                                 >
-                                  <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                                    {f.answer}
-                                  </p>
+                                  <MarkdownView>{f.answer}</MarkdownView>
                                 </div>
                               </div>
                             ))}
@@ -1140,9 +1137,7 @@ function PortfolioTracker() {
                                       marginBottom: '12px',
                                     }}
                                   >
-                                    <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                                      {analysisResult.analysis}
-                                    </p>
+                                    <MarkdownView>{analysisResult.analysis}</MarkdownView>
                                   </div>
 
                                   {followUps.map((f, idx) => (
@@ -1158,9 +1153,7 @@ function PortfolioTracker() {
                                           borderLeft: '4px solid #555',
                                         }}
                                       >
-                                        <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>
-                                          {f.answer}
-                                        </p>
+                                        <MarkdownView>{f.answer}</MarkdownView>
                                       </div>
                                     </div>
                                   ))}

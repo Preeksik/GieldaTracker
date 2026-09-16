@@ -75,6 +75,7 @@ class AnalyzeRequest(BaseModel):
     ticker: str = "CDR.WA"
     question: str = "Jak oceniasz aktualny trend spółki na podstawie ostatnich dni?"
     days: int = 14
+    horizon: str = "sredni"  # "krotki" | "sredni" | "dlugi"
 
 
 class PortfolioEntryCreate(BaseModel):
@@ -185,11 +186,27 @@ def _normalize_date_index(series):
     return series
 
 
+def _safe_start_date(start_date):
+    """
+    Sprowadza datę startową do formatu, który akceptuje yfinance ('YYYY-MM-DD').
+    Chroni przed wywaleniem całej rekonstrukcji, gdy w danych siedzi data w innym
+    formacie (np. '20251024' z importu XTB).
+    """
+    s = str(start_date).strip()
+    for fmt in ("%Y-%m-%d", "%Y%m%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    logger.warning("Nierozpoznany format daty '%s' - używam domyślnego zakresu 5 lat wstecz", s)
+    return (datetime.now() - pd.Timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+
+
 def get_historical_price_series(ticker, start_date):
     """Zwraca pandas Series (indeks: data, wartość: cena zamknięcia) od start_date do dziś."""
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(start=start_date)
+        hist = stock.history(start=_safe_start_date(start_date))
         if hist.empty:
             return None
         return _normalize_date_index(hist["Close"])
@@ -204,7 +221,7 @@ def get_historical_fx_series(currency, start_date):
         return None  # nie potrzebujemy - traktujemy jako stałe 1.0
     try:
         fx_ticker = yf.Ticker(f"{currency}PLN=X")
-        hist = fx_ticker.history(start=start_date)
+        hist = fx_ticker.history(start=_safe_start_date(start_date))
         if hist.empty:
             return None
         return _normalize_date_index(hist["Close"])
@@ -403,7 +420,7 @@ def _filter_price_outliers(series):
 def normalize_date(raw):
     """Próbuje sprowadzić różne formaty dat z CSV do YYYY-MM-DD."""
     raw = raw.strip()
-    formats = ["%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y"]
+    formats = ["%Y-%m-%d", "%Y%m%d", "%d.%m.%Y", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"]
     for fmt in formats:
         try:
             return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
@@ -810,6 +827,37 @@ def health():
 
 BELKA_TAX_RATE = 0.19  # 19% podatku od zysków kapitałowych na zwykłym koncie maklerskim w Polsce
 VALID_ACCOUNTS = {"zwykle", "ike", "ikze"}
+
+# Wspólna "persona" dla wszystkich zapytań do AI - dzięki temu każda analiza ma ten sam,
+# wysoki poziom konkretu, zamiast ogólników typu "to zależy od Twojej strategii".
+ANALYST_PERSONA = (
+    "Jesteś najlepszym analitykiem giełdowym na świecie - łączysz warsztat analizy technicznej, "
+    "fundamentalnej i makro, a od zwykłych analityków odróżnia Cię to, że NIGDY nie chowasz się "
+    "za ogólnikami. Twoim zadaniem jest doprowadzić inwestora do zysku, więc zawsze podajesz "
+    "konkretne liczby, poziomy cenowe, proporcje alokacji i jasne decyzje. "
+    "Zasady, których przestrzegasz bezwzględnie:\n"
+    "- Zero lania wody i zero zdań typu 'to zależy od Twojej tolerancji ryzyka' - inwestor przychodzi "
+    "do Ciebie PO decyzję, nie po listę możliwości.\n"
+    "- Każdą tezę popierasz konkretnym argumentem z dostarczonych danych (cena, wolumen, trend, waga w portfelu).\n"
+    "- Podajesz konkretne liczby: ile sztuk, za ile, jaki procent portfela, jakie poziomy wejścia/wyjścia.\n"
+    "- Jeśli czegoś nie wiesz lub brakuje danych, mówisz to WPROST zamiast zmyślać - fałszywa pewność "
+    "jest gorsza niż przyznanie się do luki.\n"
+    "- Nie zmyślasz wskaźników fundamentalnych (P/E, EPS itd.), których nie ma w dostarczonych danych.\n"
+)
+
+# Instrukcja formatowania - odpowiedzi renderujemy jako Markdown na froncie
+MARKDOWN_FORMAT_RULES = (
+    "\n\nFORMATOWANIE ODPOWIEDZI (ważne):\n"
+    "- Używaj Markdown: ## do nagłówków sekcji, **pogrubienie** do kluczowych liczb i werdyktów, "
+    "listy punktowane do wyliczeń, tabele Markdown gdy porównujesz kilka opcji.\n"
+    "- Nagłówki krótkie i konkretne. Nie używaj nagłówków głębszych niż ###.\n"
+    "- Nie zaczynaj odpowiedzi od powtarzania pytania - od razu przechodź do treści.\n"
+)
+
+DISCLAIMER_RULE = (
+    "\nNa samym końcu dodaj jedną linię kursywą: "
+    "*Analiza edukacyjna, nie porada inwestycyjna.*"
+)
 
 
 @app.get("/api/portfolio")
@@ -1764,6 +1812,38 @@ def _import_closed_section_as_sales(all_lines, open_header_idx, open_added_entri
     return added_count, row_errors
 
 
+@app.post("/api/portfolio/fix-dates")
+def fix_dates():
+    """
+    Naprawia daty zapisane w złym formacie (np. '20251024' zamiast '2025-10-24'),
+    co zdarzyło się przy imporcie historii XTB i psuło rekonstrukcję wykresu.
+    Przechodzi zarówno po portfelu, jak i po historii sprzedaży.
+    """
+    fixed = []
+
+    entries = load_portfolio()
+    for e in entries:
+        original = e.get("buy_date", "")
+        corrected = normalize_date(original)
+        if corrected != original:
+            e["buy_date"] = corrected
+            fixed.append({"ticker": e["ticker"], "field": "buy_date", "from": original, "to": corrected})
+    save_portfolio(entries)
+
+    sales = load_sales()
+    for s in sales:
+        for field in ("buy_date", "sell_date"):
+            original = s.get(field, "")
+            corrected = normalize_date(original)
+            if corrected != original:
+                s[field] = corrected
+                fixed.append({"ticker": s["ticker"], "field": field, "from": original, "to": corrected})
+    save_sales(sales)
+
+    _reconstructed_history_cache.update(data=None, computed_at=None)
+    return {"fixed_count": len(fixed), "fixed": fixed}
+
+
 @app.post("/api/portfolio/fix-currencies")
 def fix_currencies():
     """
@@ -1834,35 +1914,41 @@ def run_horizon_analysis(position_facts, horizon, custom_note, previous_analysis
 
     if follow_up_question:
         prompt = (
-            "Jesteś doświadczonym analitykiem giełdowym prowadzącym dalszą rozmowę z inwestorem "
-            "o jego pozycji. Oto aktualne dane pozycji:\n\n"
+            ANALYST_PERSONA
+            + "\nProwadzisz dalszą rozmowę z inwestorem o jego pozycji. Aktualne dane:\n\n"
             f"{position_facts}\n"
-            f"Wcześniej przygotowałeś dla tej pozycji następującą analizę ({config['opis']}):\n\n"
-            f"{previous_analysis}\n\n"
-            f"Inwestor ma teraz dodatkowe pytanie: \"{follow_up_question}\"\n\n"
-            "Odpowiedz konkretnie i zwięźle na to pytanie, odwołując się do powyższego kontekstu "
-            "(nie powtarzaj całej wcześniejszej analizy). Jeśli pytanie dotyczy decyzji finansowej "
-            "(np. dokupienia akcji za nowe środki), podaj jasne rozumowanie za i przeciw. "
-            "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+            f"Twoja wcześniejsza analiza ({config['opis']}):\n\n{previous_analysis}\n\n"
+            f"Inwestor pyta teraz: \"{follow_up_question}\"\n\n"
+            "Odpowiedz KONKRETNIE na to pytanie - nie powtarzaj całej wcześniejszej analizy. "
+            "Jeśli pytanie dotyczy decyzji (dokupić / sprzedać / ile), podaj jednoznaczną odpowiedź "
+            "z liczbami, a potem krótko argumenty za i przeciw. Maksymalnie kilka akapitów."
+            + MARKDOWN_FORMAT_RULES
+            + DISCLAIMER_RULE
         )
     else:
-        prompt = (
-            "Jesteś doświadczonym analitykiem giełdowym. Inwestor ma pozycję opisaną poniżej:\n\n"
-            f"{position_facts}"
-        )
+        prompt = ANALYST_PERSONA + "\nDane pozycji inwestora:\n\n" + position_facts
         if custom_note:
-            prompt += f"- Dodatkowy kontekst od inwestora teraz: {custom_note}\n"
+            prompt += f"- Dodatkowy kontekst od inwestora: {custom_note}\n"
 
         prompt += (
-            f"\nZrób analizę {config['opis']} tej pozycji. Odpowiedz w tej strukturze:\n"
-            "1. WYCENA: czy akcja wygląda na niedowartościowaną, sprawiedliwie wycenioną, czy przewartościowaną "
-            "na podstawie dostępnego trendu i wolumenu (bez zmyślania wskaźników fundamentalnych, których nie masz).\n"
-            "2. REKOMENDACJA na wskazany horyzont: SPRZEDAJ / TRZYMAJ / DOKUP - z konkretnym uzasadnieniem.\n"
-            "3. PRAWDOPODOBIEŃSTWO: przybliżone szanse na zysk vs stratę w tym horyzoncie "
-            "(np. \"~55% szans na wzrost\") z krótkim uzasadnieniem.\n"
-            "4. ELASTYCZNOŚĆ KAPITAŁU: czy to sensowny moment, żeby czasowo wycofać kapitał z tej pozycji "
-            "(np. pod inną okazję inwestycyjną) i wrócić później, czy lepiej trzymać nieprzerwanie - i dlaczego.\n"
-            "Na końcu jedno zdanie zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+            f"\nZrób analizę {config['opis']} tej pozycji w dokładnie takiej strukturze:\n\n"
+            "## Werdykt\n"
+            "Zacznij od jednoznacznej decyzji **SPRZEDAJ** / **TRZYMAJ** / **DOKUP** wytłuszczonej, "
+            "plus jedno zdanie dlaczego. To ma być pierwsza rzecz, którą inwestor przeczyta.\n\n"
+            "## Wycena\n"
+            "Niedowartościowana / sprawiedliwie wyceniona / przewartościowana - na podstawie trendu, "
+            "wolumenu i pozycji ceny w zakresie z danego okresu. Podaj konkretne poziomy cenowe.\n\n"
+            "## Prawdopodobieństwo\n"
+            "Konkretny szacunek (np. **~60% szans na wzrost**) w tym horyzoncie + uzasadnienie oparte "
+            "na zachowaniu wolumenu i struktury trendu.\n\n"
+            "## Plan działania\n"
+            "Konkretne poziomy: przy jakiej cenie dokupić, przy jakiej ciąć stratę, przy jakiej realizować zysk. "
+            "Podaj liczby, nie ogólniki.\n\n"
+            "## Elastyczność kapitału\n"
+            "Czy warto czasowo wyjść z tej pozycji pod inną okazję i wrócić później, czy trzymać nieprzerwanie - "
+            "i dlaczego, biorąc pod uwagę zmienność i płynność tego waloru."
+            + MARKDOWN_FORMAT_RULES
+            + DISCLAIMER_RULE
         )
 
     return call_gemini(prompt, timeout=45)
@@ -2131,17 +2217,26 @@ def portfolio_diversification():
         )
 
     prompt = (
-        "Jesteś analitykiem zarządzania ryzykiem portfela inwestycyjnego. Poniżej masz skład portfela "
-        "inwestora (waga każdej pozycji, sektor, branża, kraj, waluta). Oceń:\n"
-        "1. KONCENTRACJA: czy portfel jest nadmiernie skoncentrowany w jednym sektorze, kraju, walucie "
-        "lub pojedynczej spółce - podaj konkretne przybliżone %.\n"
-        "2. LUKI: jakich ważnych klas aktywów/sektorów/regionów wyraźnie brakuje, biorąc pod uwagę to co już jest.\n"
-        "3. REBALANSOWANIE: 2-3 konkretne, praktyczne sugestie co przegrupować lub jakiego typu instrument "
-        "dokupić, żeby poprawić dywersyfikację (możesz wskazać typ instrumentu np. 'szerszy ETF na rynek "
-        "europejski', nie musisz wskazywać konkretnego tickera).\n"
-        "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna.\n\n"
+        ANALYST_PERSONA
+        + "\nOceniasz ryzyko i strukturę portfela inwestora. Dane zawierają wagę każdej pozycji, "
+        "sektor, branżę, kraj i walutę.\n\n"
         f"Łączna wartość portfela: {summary['total_value']} PLN.\n\n"
-        "SKŁAD PORTFELA:\n" + "\n".join(blocks)
+        "SKŁAD PORTFELA:\n" + "\n".join(blocks) + "\n\n"
+        "Napisz analizę w tej strukturze:\n\n"
+        "## Ocena ogólna\n"
+        "Jedno zdanie werdyktu + ocena dywersyfikacji w skali **1-10** z uzasadnieniem.\n\n"
+        "## Koncentracja ryzyka\n"
+        "Konkretne procenty: ile % portfela to jeden kraj, jeden sektor, jedna waluta, największa "
+        "pojedyncza pozycja. Wskaż wprost, które z tych wartości są niebezpiecznie wysokie i dlaczego.\n\n"
+        "## Czego brakuje\n"
+        "Konkretne luki - jakich regionów, sektorów lub klas aktywów nie ma w portfelu, "
+        "i dlaczego ich brak realnie szkodzi przy obecnym składzie.\n\n"
+        "## Plan naprawczy\n"
+        "2-3 konkretne ruchy z liczbami: co zredukować i o ile %, co dokupić i za jaką część nowego kapitału. "
+        "Możesz wskazać typ instrumentu (np. 'szeroki ETF na rynki rozwinięte'), a jeśli znasz konkretny "
+        "popularny ticker pasujący do roli - podaj go jako przykład."
+        + MARKDOWN_FORMAT_RULES
+        + DISCLAIMER_RULE
     )
 
     report_text = call_gemini(prompt)
@@ -2167,27 +2262,43 @@ def portfolio_ask(request: PortfolioQuestionRequest):
 
     portfolio_context = build_portfolio_context(portfolio_data)
 
+    ask_rules = (
+        "\nZASADY ODPOWIEDZI:\n"
+        "- Jeśli pytanie dotyczy zainwestowania konkretnej kwoty, MUSISZ podać konkretny podział tej kwoty "
+        "(ile złotych w co, ile to % nowych środków, ile sztuk mniej więcej za obecną cenę). "
+        "Suma musi się zgadzać z podaną kwotą.\n"
+        "- Zawsze odnoś się do REALNYCH danych portfela powyżej: wag pozycji, aktualnych zysków/strat, walut.\n"
+        "- Wskaż wprost, czego NIE robić i dlaczego - to często cenniejsze niż sama rekomendacja.\n"
+        "- Jeśli pytanie dotyczy IKE/IKZE, uwzględnij że te konta są zwolnione z 19% podatku Belki, "
+        "więc najlepiej trzymać tam aktywa generujące najwięcej opodatkowanego dochodu (dywidendy, częsty obrót).\n"
+        "- Cel nadrzędny: doprowadzić inwestora do zysku możliwie szybko, ale bez hazardu - "
+        "wskazuj ryzyko każdej propozycji, nie ukrywaj go.\n"
+    )
+
     if request.previous_analysis:
         prompt = (
-            "Jesteś doświadczonym doradcą inwestycyjnym prowadzącym dalszą rozmowę z inwestorem "
-            "o jego portfelu.\n\n"
+            ANALYST_PERSONA
+            + "\nProwadzisz dalszą rozmowę z inwestorem o jego portfelu.\n\n"
             f"AKTUALNY STAN PORTFELA:\n{portfolio_context}\n\n"
             f"Wcześniej w tej rozmowie napisałeś:\n\n{request.previous_analysis}\n\n"
             f"Inwestor pyta teraz: \"{request.question}\"\n\n"
-            "Odpowiedz konkretnie, odwołując się do realnych danych portfela powyżej (wagi, waluty, zyski), "
-            "nie powtarzaj całej wcześniejszej treści. Jeśli pytanie dotyczy nowych środków do zainwestowania, "
-            "rozważ zarówno dokupienie istniejących pozycji jak i nowe kierunki, biorąc pod uwagę dywersyfikację. "
-            "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+            "Odpowiedz na to pytanie - NIE powtarzaj wcześniejszej treści, tylko rozwiń lub skoryguj "
+            "swoją wcześniejszą rekomendację w świetle nowego pytania."
+            + ask_rules
+            + MARKDOWN_FORMAT_RULES
+            + DISCLAIMER_RULE
         )
     else:
         prompt = (
-            "Jesteś doświadczonym doradcą inwestycyjnym. Oto aktualny portfel inwestora:\n\n"
+            ANALYST_PERSONA
+            + "\nOto aktualny portfel inwestora:\n\n"
             f"{portfolio_context}\n\n"
             f"Inwestor pyta: \"{request.question}\"\n\n"
-            "Odpowiedz konkretnie i praktycznie, odwołując się do realnych danych portfela powyżej "
-            "(wagi pozycji, waluty, zyski/straty). Jeśli pytanie dotyczy nowych środków do zainwestowania, "
-            "rozważ zarówno dokupienie istniejących pozycji jak i nowe kierunki, biorąc pod uwagę dywersyfikację "
-            "portfela. Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna."
+            "Zacznij od sekcji `## Werdykt` z jednozdaniową, konkretną odpowiedzią, a dopiero potem "
+            "rozwiń uzasadnienie i szczegółowy plan."
+            + ask_rules
+            + MARKDOWN_FORMAT_RULES
+            + DISCLAIMER_RULE
         )
 
     answer_text = call_gemini(prompt)
@@ -2340,23 +2451,25 @@ def watchlist_catalysts():
         blocks.append(block)
 
     prompt = (
-        "Jesteś analitykiem rynkowym budującym 'radar katalizatorów' dla agresywnego, "
-        "krótkoterminowego inwestora, który chce wiedzieć o nadchodzących raportach finansowych "
-        "i dużych wydarzeniach (konferencje, premiery produktów, prezentacje wyników) mogących "
-        "wywołać gwałtowny ruch kursu w najbliższych tygodniach. Poniżej masz dane obserwowanych "
-        "spółek - niezależnie od tego, czy inwestor je aktualnie posiada.\n\n"
-        "Dla KAŻDEJ spółki oceń:\n"
-        "1. Czy zbliża się raport finansowy lub inne wydarzenie w ciągu najbliższych ~30 dni - "
-        "podaj konkretną datę, jeśli jest znana, albo napisz wprost że brak danych.\n"
-        "2. Czy coś w nagłówkach sugeruje nadchodzącą konferencję, premierę produktu lub inny "
-        "potencjalny katalizator.\n"
-        "3. PRIORYTET UWAGI: WYSOKI / ŚREDNI / NISKI - im bliżej wydarzenia i im większy "
-        "potencjalny wpływ na kurs, tym wyższy priorytet.\n"
-        "Posortuj spółki od najwyższego priorytetu do najniższego. Jeśli dla danej spółki nic "
-        "istotnego się nie dzieje, napisz to wprost - fałszywy alarm jest gorszy niż jego brak.\n"
-        "Zakończ jednym zdaniem zastrzeżenia, że to analiza edukacyjna, nie porada inwestycyjna, "
-        "oraz że granie pod eventy w krótkim terminie niesie wysokie ryzyko.\n\n"
+        ANALYST_PERSONA
+        + "\nBudujesz 'radar katalizatorów' dla agresywnego, krótkoterminowego inwestora, który "
+        "poluje na gwałtowne ruchy kursu wokół raportów finansowych, konferencji i premier produktów. "
+        "Poniżej dane obserwowanych spółek.\n\n"
         + "\n\n".join(blocks)
+        + "\n\nZbuduj raport w tej strukturze:\n\n"
+        "## Priorytet WYSOKI\n"
+        "Spółki z wydarzeniem w ciągu ~14 dni lub wyraźnym sygnałem w newsach. Dla każdej: data wydarzenia "
+        "(albo wprost 'brak danych o dacie'), czego dotyczy, i **jak inwestor mógłby się ustawić** - "
+        "wejście przed czy reakcja po, i dlaczego.\n\n"
+        "## Priorytet ŚREDNI\n"
+        "Wydarzenie w perspektywie ~30 dni albo słabszy sygnał. Krótko, po 1-2 zdania.\n\n"
+        "## Priorytet NISKI / cisza\n"
+        "Jedna linia zbiorczo - wymień tickery, przy których nic się nie dzieje. Nie rozpisuj się.\n\n"
+        "KRYTYCZNE: nie naciągaj newsów na sensację. Jeśli nic się nie dzieje, napisz to wprost - "
+        "fałszywy alarm kosztuje inwestora realne pieniądze. Nie zmyślaj dat wydarzeń."
+        + MARKDOWN_FORMAT_RULES
+        + "\nNa końcu dodaj linię kursywą: *Analiza edukacyjna, nie porada inwestycyjna. "
+        "Granie pod eventy w krótkim terminie niesie bardzo wysokie ryzyko.*"
     )
 
     report_text = call_gemini(prompt, timeout=90)
@@ -2399,10 +2512,32 @@ def analyze_stock(request: AnalyzeRequest):
         })
         data_lines.append(f"{date_str}: Zamknięcie {c} PLN, Wolumen {v}")
 
+    config = HORIZON_CONFIG.get(request.horizon, HORIZON_CONFIG["sredni"])
+    company_name = get_company_name(request.ticker) or request.ticker
+    quote_currency = get_currency(request.ticker) or "PLN"
+    trend_summary = build_trend_summary(request.ticker, config["period"], quote_currency)
+    earnings_info = get_next_earnings_date(request.ticker) or "brak danych o terminie najbliższego raportu"
+
     prompt = (
-        f"Jesteś analitykiem giełdowym. Na podstawie danych spółki {request.ticker}:\n"
+        ANALYST_PERSONA
+        + f"\nAnalizujesz spółkę {company_name} ({request.ticker}), waluta notowań: {quote_currency}.\n\n"
+        f"Szerszy kontekst trendu: {trend_summary}\n"
+        f"Najbliższy raport finansowy: {earnings_info}\n\n"
+        f"Dane dzienne z ostatnich {request.days} sesji:\n"
         + "\n".join(data_lines)
-        + f"\n\nOdpowiedz krótko na pytanie: {request.question}"
+        + f"\n\nHoryzont analizy: {config['opis']}.\n\n"
+        f"Pytanie inwestora: \"{request.question}\"\n\n"
+        "Odpowiedz w tej strukturze:\n\n"
+        "## Odpowiedź\n"
+        "Bezpośrednia, konkretna odpowiedź na zadane pytanie - z **wytłuszczonym werdyktem**, jeśli pytanie "
+        "dotyczy decyzji. To ma być pierwsza rzecz, którą inwestor przeczyta.\n\n"
+        "## Co mówią dane\n"
+        "Konkretne obserwacje z powyższych notowań: kluczowe poziomy cenowe, zachowanie wolumenu, "
+        "struktura trendu. Podawaj liczby, nie ogólniki.\n\n"
+        "## Poziomy do obserwacji\n"
+        "Konkretne ceny: wsparcie, opór, poziom unieważniający tezę."
+        + MARKDOWN_FORMAT_RULES
+        + DISCLAIMER_RULE
     )
 
     # 2. Wywołanie Gemini REST API

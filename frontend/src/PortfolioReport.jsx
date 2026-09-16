@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import MarkdownView from './Markdownview'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -110,7 +111,7 @@ function PortfolioReport() {
             marginBottom: '30px',
           }}
         >
-          <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7', margin: 0, color: '#eee' }}>{diversification}</p>
+          <MarkdownView>{diversification}</MarkdownView>
         </div>
       )}
 
@@ -135,7 +136,7 @@ function PortfolioReport() {
               borderLeft: '4px solid #555',
             }}
           >
-            <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, color: '#eee' }}>{t.answer}</p>
+            <MarkdownView>{t.answer}</MarkdownView>
           </div>
         </div>
       ))}
