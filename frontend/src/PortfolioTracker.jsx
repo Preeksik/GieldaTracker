@@ -105,6 +105,41 @@ function PortfolioTracker() {
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState(null)
 
+  // Import pełnej historii z XTB (zakupy + sprzedaże)
+  const [xtbLoading, setXtbLoading] = useState(false)
+  const [xtbResult, setXtbResult] = useState(null)
+  const [xtbError, setXtbError] = useState('')
+  const [xtbAccount, setXtbAccount] = useState('zwykle')
+
+  const handleXtbImport = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setXtbLoading(true)
+    setXtbResult(null)
+    setXtbError('')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`${API_URL}/api/portfolio/import-xtb-history?account=${xtbAccount}`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się zaimportować historii XTB.')
+      }
+      setXtbResult(await res.json())
+      fetchPortfolio()
+    } catch (err) {
+      setXtbError(err.message)
+    } finally {
+      setXtbLoading(false)
+      e.target.value = ''
+    }
+  }
+
   const fetchPortfolio = async () => {
     setLoading(true)
     setError('')
@@ -498,28 +533,63 @@ function PortfolioTracker() {
       </form>
 
       <div style={{ marginBottom: '20px' }}>
-        <label
-          style={{
-            display: 'inline-block',
-            padding: '10px 20px',
-            background: '#444',
-            color: 'white',
-            borderRadius: '5px',
-            cursor: importLoading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {importLoading ? 'Importuję...' : '📁 Importuj z CSV'}
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleCsvImport}
-            disabled={importLoading}
-            style={{ display: 'none' }}
-          />
-        </label>
-        <span style={{ color: '#777', fontSize: '12px', marginLeft: '10px' }}>
-          Oczekiwane kolumny: ticker, ilość, cena, data (nazwy PL/EN rozpoznawane automatycznie)
-        </span>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label
+            style={{
+              display: 'inline-block',
+              padding: '10px 20px',
+              background: '#444',
+              color: 'white',
+              borderRadius: '5px',
+              cursor: importLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {importLoading ? 'Importuję...' : '📁 Importuj z CSV'}
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCsvImport}
+              disabled={importLoading}
+              style={{ display: 'none' }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: 'inline-block',
+              padding: '10px 20px',
+              background: '#1565C0',
+              color: 'white',
+              borderRadius: '5px',
+              cursor: xtbLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {xtbLoading ? 'Importuję historię...' : '📊 Importuj historię XTB'}
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleXtbImport}
+              disabled={xtbLoading}
+              style={{ display: 'none' }}
+            />
+          </label>
+
+          <select
+            value={xtbAccount}
+            onChange={(e) => setXtbAccount(e.target.value)}
+            style={{ ...inputStyle, width: '110px' }}
+            title="Konto, do którego trafią importowane transakcje XTB"
+          >
+            <option value="zwykle">Zwykłe</option>
+            <option value="ike">IKE</option>
+            <option value="ikze">IKZE</option>
+          </select>
+        </div>
+
+        <div style={{ color: '#777', fontSize: '12px', marginTop: '8px' }}>
+          <strong>Zwykły CSV</strong>: tylko otwarte pozycje (ticker, ilość, cena, data). <strong>Historia XTB</strong>:
+          pełen eksport z platformy — otwarte pozycje trafią do portfela, zamknięte do zakładki Sprzedaże.
+        </div>
 
         {importResult && (
           <div style={{ marginTop: '10px', color: importResult.errors.length > 0 ? '#FFA726' : '#4CAF50' }}>
@@ -536,6 +606,21 @@ function PortfolioTracker() {
             )}
           </div>
         )}
+
+        {xtbResult && (
+          <div style={{ marginTop: '10px', color: '#4CAF50' }}>
+            ✅ Zaimportowano z XTB: {xtbResult.imported_open_positions} otwartych pozycji,{' '}
+            {xtbResult.imported_closed_positions} zamkniętych (→ zakładka Sprzedaże).
+            <div style={{ color: '#888', fontSize: '12px' }}>Tickery: {xtbResult.tickers.join(', ')}</div>
+            {xtbResult.errors.length > 0 && (
+              <div style={{ color: '#FFA726', marginTop: '5px', fontSize: '12px' }}>
+                Pominięto {xtbResult.errors.length} wierszy: {xtbResult.errors.slice(0, 3).join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {xtbError && <div style={{ color: '#FF5252', marginTop: '10px' }}>{xtbError}</div>}
       </div>
 
       {error && <div style={{ color: '#FF5252', marginBottom: '15px' }}>{error}</div>}

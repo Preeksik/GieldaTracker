@@ -1,25 +1,69 @@
 import { useState, useEffect, useRef } from 'react'
-import { createChart, LineSeries } from 'lightweight-charts'
+import { createChart, LineSeries, LineStyle, createSeriesMarkers } from 'lightweight-charts'
 
 const API_URL = 'http://127.0.0.1:8000'
 
+const RANGES = [
+  { key: '1D', label: '1D' },
+  { key: '7D', label: '7D', days: 7 },
+  { key: '30D', label: '30D', days: 30 },
+  { key: 'YTD', label: 'YTD' },
+  { key: '1R', label: '1 rok', days: 365 },
+  { key: '5L', label: '5 lat', days: 365 * 5 },
+  { key: 'MAX', label: 'Max' },
+]
+
+function filterByRange(history, rangeKey) {
+  if (history.length === 0) return []
+  if (rangeKey === 'MAX') return history
+
+  const lastDate = new Date(history[history.length - 1].date)
+  let cutoff
+
+  if (rangeKey === 'YTD') {
+    cutoff = new Date(lastDate.getFullYear(), 0, 1)
+  } else {
+    const range = RANGES.find((r) => r.key === rangeKey)
+    cutoff = new Date(lastDate)
+    cutoff.setDate(cutoff.getDate() - (range?.days || 30))
+  }
+
+  const filtered = history.filter((h) => new Date(h.date) >= cutoff)
+  // Jeśli w wybranym oknie jest mniej niż 2 punkty, pokazujemy całość zamiast pustego wykresu
+  return filtered.length >= 2 ? filtered : history
+}
+
 function PortfolioHistoryChart() {
   const [history, setHistory] = useState([])
+  const [events, setEvents] = useState([])
+  const [liveHistory, setLiveHistory] = useState([])
+  const [range, setRange] = useState('30D')
+  const [showCost, setShowCost] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [snapshotLoading, setSnapshotLoading] = useState(false)
 
   const containerRef = useRef(null)
-  const chartInstanceRef = useRef(null)
 
-  const fetchHistory = async () => {
+  const fetchAll = async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_URL}/api/portfolio/history`)
-      if (!res.ok) throw new Error('Nie udało się pobrać historii portfela.')
-      const data = await res.json()
-      setHistory(data.history)
+      const [fullRes, liveRes] = await Promise.all([
+        fetch(`${API_URL}/api/portfolio/history/full`),
+        fetch(`${API_URL}/api/portfolio/history`),
+      ])
+      if (!fullRes.ok) {
+        const errData = await fullRes.json().catch(() => null)
+        throw new Error(errData?.detail || 'Nie udało się odtworzyć historii portfela.')
+      }
+      const fullData = await fullRes.json()
+      setHistory(fullData.history || [])
+      setEvents(fullData.events || [])
+
+      if (liveRes.ok) {
+        const liveData = await liveRes.json()
+        setLiveHistory(liveData.history || [])
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -27,59 +71,86 @@ function PortfolioHistoryChart() {
     }
   }
 
-  const forceSnapshot = async () => {
-    setSnapshotLoading(true)
-    try {
-      const res = await fetch(`${API_URL}/api/portfolio/history/snapshot-now`, { method: 'POST' })
-      if (!res.ok) throw new Error('Nie udało się dodać punktu do historii.')
-      const data = await res.json()
-      setHistory(data.history)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSnapshotLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchHistory()
+    fetchAll()
   }, [])
 
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayLivePoints = liveHistory.filter((h) => h.timestamp?.startsWith(todayStr))
+  const isIntraday = range === '1D'
+  const displayed = isIntraday ? [] : filterByRange(history, range)
+
   useEffect(() => {
-    if (!containerRef.current || history.length === 0) return
+    if (!containerRef.current) return
+    const hasData = isIntraday ? todayLivePoints.length >= 2 : displayed.length >= 2
+    if (!hasData) return
 
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: 'solid', color: '#1E1E2F' }, textColor: '#DDD' },
-      grid: { vertLines: { color: '#2B2B43' }, horzLines: { color: '#2B2B43' } },
+      layout: { background: { type: 'solid', color: '#151521' }, textColor: '#DDD', attributionLogo: false },
+      grid: { vertLines: { color: '#252538' }, horzLines: { color: '#252538' } },
+      rightPriceScale: { borderColor: '#333' },
+      timeScale: { borderColor: '#333', timeVisible: isIntraday, fixLeftEdge: true, fixRightEdge: true },
+      crosshair: { mode: 1 },
       width: containerRef.current.clientWidth,
-      height: 260,
+      height: 300,
+      localization: {
+        priceFormatter: (p) => `${p.toFixed(0)} zł`,
+      },
     })
 
-    const series = chart.addSeries(LineSeries, {
-      color: '#4CAF50',
+    const valueSeries = chart.addSeries(LineSeries, {
+      color: '#26C281',
       lineWidth: 2,
       priceLineVisible: false,
+      lastValueVisible: true,
+      title: 'Wartość',
     })
 
-    // lightweight-charts wymaga rosnących, unikalnych znaczników czasu (sekundy Unix)
-    const seen = new Set()
-    const data = []
-    history.forEach((h) => {
-      const time = Math.floor(new Date(h.timestamp.replace(' ', 'T')).getTime() / 1000)
-      if (!seen.has(time)) {
-        seen.add(time)
-        data.push({ time, value: h.total_value })
+    if (isIntraday) {
+      valueSeries.setData(
+        todayLivePoints.map((h) => ({
+          time: Math.floor(new Date(h.timestamp.replace(' ', 'T')).getTime() / 1000),
+          value: h.total_value,
+        }))
+      )
+    } else {
+      valueSeries.setData(displayed.map((h) => ({ time: h.date, value: h.total_value })))
+
+      if (showCost && displayed.some((h) => h.total_cost !== undefined)) {
+        const costSeries = chart.addSeries(LineSeries, {
+          color: '#7A7A8C',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: 'Wpłacone',
+        })
+        costSeries.setData(
+          displayed
+            .filter((h) => h.total_cost !== undefined)
+            .map((h) => ({ time: h.date, value: h.total_cost }))
+        )
       }
-    })
 
-    series.setData(data)
+      const visibleEvents = events.filter((e) => displayed.some((d) => d.date === e.date))
+      if (visibleEvents.length > 0) {
+        createSeriesMarkers(
+          valueSeries,
+          visibleEvents.map((e) => ({
+            time: e.date,
+            position: e.type === 'sell' ? 'aboveBar' : 'belowBar',
+            color: e.type === 'sell' ? '#FF7043' : '#42A5F5',
+            shape: e.type === 'sell' ? 'arrowDown' : 'arrowUp',
+            text: `${e.type === 'sell' ? '−' : '+'}${e.ticker}`,
+          }))
+        )
+      }
+    }
+
     chart.timeScale().fitContent()
-    chartInstanceRef.current = chart
 
     const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth })
-      }
+      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth })
     }
     window.addEventListener('resize', handleResize)
 
@@ -88,16 +159,13 @@ function PortfolioHistoryChart() {
       try {
         chart.remove()
       } catch (e) {
-        // wykres mógł już zostać usunięty (React StrictMode w dev) - ignorujemy
-      }
-      if (chartInstanceRef.current === chart) {
-        chartInstanceRef.current = null
+        // wykres mógł już zostać usunięty (React StrictMode w dev)
       }
     }
-  }, [history])
+  }, [displayed, isIntraday, todayLivePoints.length, showCost, events])
 
   if (loading) {
-    return <div style={{ color: '#aaa', marginBottom: '20px' }}>Ładowanie historii portfela...</div>
+    return <div style={{ color: '#aaa', marginBottom: '20px' }}>Odtwarzam historię portfela...</div>
   }
 
   if (error) {
@@ -106,56 +174,73 @@ function PortfolioHistoryChart() {
 
   if (history.length < 2) {
     return (
-      <div
-        style={{
-          color: '#aaa',
-          background: '#2a2a2a',
-          padding: '15px 20px',
-          borderRadius: '8px',
-          marginBottom: '25px',
-        }}
-      >
-        📈 Historia wartości portfela dopiero się buduje (zbieramy punkt co ~30 minut, gdy backend
-        jest uruchomiony). Potrzeba przynajmniej 2 punktów, żeby narysować wykres.
-        <div style={{ marginTop: '10px' }}>
-          <button
-            onClick={forceSnapshot}
-            disabled={snapshotLoading}
-            style={{
-              padding: '8px 16px',
-              background: '#007BFF',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: snapshotLoading ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-            }}
-          >
-            {snapshotLoading ? 'Dodaję...' : '➕ Dodaj punkt teraz (do testów)'}
-          </button>
-        </div>
+      <div style={{ color: '#aaa', background: '#222', padding: '15px 20px', borderRadius: '10px', marginBottom: '25px' }}>
+        📈 Za mało danych historycznych, żeby narysować wykres.
       </div>
     )
   }
 
-  const first = history[0].total_value
-  const last = history[history.length - 1].total_value
-  const change = last - first
-  const changePct = first ? (change / first) * 100 : 0
+  const series = isIntraday ? todayLivePoints : displayed
+  const first = series[0]?.total_value
+  const last = series[series.length - 1]?.total_value
+  const change = first !== undefined && last !== undefined ? last - first : null
+  const changePct = first ? (change / first) * 100 : null
+  const positive = change >= 0
+
+  const btnStyle = (active) => ({
+    padding: '5px 12px',
+    background: active ? '#007BFF' : 'transparent',
+    color: active ? '#fff' : '#999',
+    border: `1px solid ${active ? '#007BFF' : '#3a3a4a'}`,
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+  })
 
   return (
-    <div style={{ marginBottom: '25px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
-        <h3 style={{ margin: 0, color: '#fff' }}>📈 Wartość portfela w czasie</h3>
-        <div style={{ color: change >= 0 ? '#4CAF50' : '#FF5252', fontWeight: 'bold' }}>
-          {change >= 0 ? '+' : ''}
-          {change.toFixed(2)} PLN ({changePct.toFixed(2)}%) od {history[0].timestamp.split(' ')[0]}
+    <div style={{ marginBottom: '25px', background: '#1a1a26', padding: '18px', borderRadius: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+        <div>
+          <div style={{ color: '#888', fontSize: '13px', marginBottom: '2px' }}>Wartość portfela</div>
+          <div style={{ color: '#fff', fontSize: '26px', fontWeight: 'bold' }}>
+            {last?.toFixed(2)} PLN
+          </div>
+          {change !== null && (
+            <div style={{ color: positive ? '#26C281' : '#FF5252', fontSize: '14px', marginTop: '2px' }}>
+              {positive ? '▲' : '▼'} {Math.abs(change).toFixed(2)} PLN ({changePct.toFixed(2)}%)
+              <span style={{ color: '#666' }}> · {RANGES.find((r) => r.key === range)?.label}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          {RANGES.map((r) => (
+            <button key={r.key} onClick={() => setRange(r.key)} style={btnStyle(range === r.key)}>
+              {r.label}
+            </button>
+          ))}
         </div>
       </div>
-      <div
-        ref={containerRef}
-        style={{ width: '100%', height: '260px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#1E1E2F' }}
-      />
+
+      {isIntraday && todayLivePoints.length < 2 ? (
+        <div style={{ color: '#aaa', background: '#222', padding: '25px', borderRadius: '8px', textAlign: 'center' }}>
+          Za mało punktów z dzisiaj — dane wewnątrzdniowe zbierają się co ~30 min, tylko gdy backend działa.
+        </div>
+      ) : (
+        <div ref={containerRef} style={{ width: '100%', height: '300px', borderRadius: '8px', overflow: 'hidden' }} />
+      )}
+
+      {!isIntraday && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
+          <label style={{ color: '#888', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={showCost} onChange={(e) => setShowCost(e.target.checked)} />
+            Pokaż linię wpłaconego kapitału
+          </label>
+          <div style={{ color: '#666', fontSize: '11px' }}>
+            🔵 zakup · 🔴 sprzedaż · szara linia = wpłacone
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -234,17 +234,17 @@ _reconstructed_history_cache = {"data": None, "computed_at": None}
 def reconstruct_portfolio_history():
     """
     Odtwarza wartość CAŁEGO portfela dzień po dniu, od daty NAJWCZEŚNIEJSZEGO zakupu
-    do dziś - a nie tylko od momentu włączenia tej funkcji. Dla każdego dnia liczy,
-    ile akcji każdego tickera było już wtedy kupionych, mnoży przez historyczną cenę
-    zamknięcia z tego dnia i przelicza po historycznym kursie waluty z tego dnia.
+    do dziś. Kluczowe: uwzględnia też ZREALIZOWANE SPRZEDAŻE (sales.json) - inaczej
+    historyczne dni SPRZED sprzedaży byłyby liczone na podstawie dzisiejszej,
+    już zmniejszonej ilości akcji, co fałszuje cały wykres wstecz.
 
-    Zwraca też osobno 'total_cost' per dzień (ile realnie wpłaciłeś do tego dnia,
-    licząc kursem waluty Z DNIA ZAKUPU, więc to NIE rośnie/spada z wahaniami FX -
-    tylko skokowo przy nowych zakupach) oraz listę 'events' (daty i tickery zakupów),
-    żeby na wykresie dało się wizualnie odróżnić "skok od zakupu" od "skoku od wzrostu ceny".
+    Dla każdej "transzy" (nadal otwartej albo już sprzedanej) liczymy okres, w którym
+    faktycznie była w portfelu: od daty zakupu do dziś (jeśli nadal otwarta) albo do
+    daty sprzedaży (jeśli zamknięta). 'total_value' i 'total_cost' liczą się tylko
+    z transz aktywnych w danym dniu - dzięki temu obie linie spadają razem w dniu
+    sprzedaży, co jasno pokazuje że to realizacja zysku, nie spadek wartości rynkowej.
 
-    Wynik jest cache'owany na 15 minut w pamięci procesu, żeby nie odpytywać Yahoo
-    Finance przy każdym wejściu w zakładkę.
+    Wynik jest cache'owany na 15 minut w pamięci procesu.
     """
     now = datetime.now()
     if (
@@ -255,24 +255,47 @@ def reconstruct_portfolio_history():
         return _reconstructed_history_cache["data"]
 
     entries = load_portfolio()
-    if not entries:
+    sales = load_sales()
+    today_str = now.strftime("%Y-%m-%d")
+
+    # Budujemy listę "transz" - każda ma: ticker, walutę, datę startu, datę końca
+    # (None = nadal otwarta), ilość i cenę zakupu.
+    tranches = []
+    for e in entries:
+        tranches.append({
+            "ticker": e["ticker"],
+            "currency": e.get("currency") or "PLN",
+            "buy_date": e["buy_date"],
+            "end_date": None,
+            "quantity": e["quantity"],
+            "buy_price": e["buy_price"],
+        })
+    for s in sales:
+        tranches.append({
+            "ticker": s["ticker"],
+            "currency": s.get("buy_currency") or "PLN",
+            "buy_date": s["buy_date"],
+            "end_date": s["sell_date"],
+            "quantity": s["quantity"],
+            "buy_price": s["buy_price"],
+        })
+
+    if not tranches:
         empty = {"history": [], "events": []}
         _reconstructed_history_cache.update(data=empty, computed_at=now)
         return empty
 
-    earliest_date = min(e["buy_date"] for e in entries)
-
-    lots_by_ticker = {}
-    currency_by_ticker = {}
-    for e in entries:
-        lots_by_ticker.setdefault(e["ticker"], []).append(e)
+    earliest_date = min(t["buy_date"] for t in tranches)
+    tickers = set(t["ticker"] for t in tranches)
 
     price_series = {}
-    for ticker in lots_by_ticker:
+    currency_by_ticker = {}
+    for ticker in tickers:
         series = get_historical_price_series(ticker, earliest_date)
         if series is not None:
-            price_series[ticker] = series
-        currency_by_ticker[ticker] = get_currency(ticker) or (lots_by_ticker[ticker][0].get("currency") or "PLN")
+            price_series[ticker] = _filter_price_outliers(series)
+        matching = next((t for t in tranches if t["ticker"] == ticker), None)
+        currency_by_ticker[ticker] = get_currency(ticker) or (matching["currency"] if matching else "PLN")
 
     if not price_series:
         empty = {"history": [], "events": []}
@@ -305,64 +328,76 @@ def reconstruct_portfolio_history():
         s_upto = s[s.index <= date]
         return float(s_upto.iloc[-1]) if not s_upto.empty else None
 
-    # Koszt każdej transakcji liczony RAZ, kursem waluty z dnia zakupu (nie dzisiejszym) -
-    # dzięki temu linia kosztu nie faluje z kursem, tylko skacze wyłącznie przy nowych zakupach.
-    purchases = []  # [(buy_date_str, ticker, cost_pln, quantity)]
-    for ticker, lots in lots_by_ticker.items():
-        currency = currency_by_ticker[ticker]
-        for lot in lots:
-            buy_ts = pd.Timestamp(lot["buy_date"])
-            fx_at_buy = fx_on(currency, buy_ts)
-            if fx_at_buy is None:
-                fx_at_buy = get_fx_rate(currency)  # fallback: dzisiejszy kurs, gdyby brakło historii
-            cost_pln = lot["quantity"] * lot["buy_price"] * (fx_at_buy or 1.0)
-            purchases.append((lot["buy_date"], ticker, round(cost_pln, 2), lot["quantity"]))
-    purchases.sort(key=lambda p: p[0])
+    # Koszt każdej transzy liczony RAZ, kursem waluty z dnia zakupu (nie dzisiejszym) -
+    # dzięki temu linia kosztu nie faluje z kursem, tylko skacze przy zakupach/sprzedażach.
+    for t in tranches:
+        buy_ts = pd.Timestamp(t["buy_date"])
+        fx_at_buy = fx_on(currency_by_ticker[t["ticker"]], buy_ts)
+        if fx_at_buy is None:
+            fx_at_buy = get_fx_rate(t["currency"])
+        t["cost_pln"] = round(t["quantity"] * t["buy_price"] * (fx_at_buy or 1.0), 2)
 
-    events = [
-        {"date": p[0], "ticker": p[1], "cost_pln": p[2], "quantity": p[3]}
-        for p in purchases
-    ]
+    events = []
+    for t in tranches:
+        events.append({"date": t["buy_date"], "ticker": t["ticker"], "type": "buy", "quantity": t["quantity"]})
+        if t["end_date"]:
+            events.append({"date": t["end_date"], "ticker": t["ticker"], "type": "sell", "quantity": t["quantity"]})
 
     result = []
-    purchase_idx = 0
-    running_cost = 0.0
-
     for date in all_dates:
         date_str = date.strftime("%Y-%m-%d")
         if date_str < earliest_date:
             continue
 
-        # Doliczamy koszt wszystkich zakupów, które "weszły w życie" do tego dnia włącznie
-        while purchase_idx < len(purchases) and purchases[purchase_idx][0] <= date_str:
-            running_cost += purchases[purchase_idx][2]
-            purchase_idx += 1
-
         total_value = 0.0
+        total_cost = 0.0
         got_any = False
-        for ticker, lots in lots_by_ticker.items():
-            qty_held = sum(l["quantity"] for l in lots if l["buy_date"] <= date_str)
-            if qty_held <= 0:
+
+        for t in tranches:
+            active = t["buy_date"] <= date_str and (t["end_date"] is None or date_str <= t["end_date"])
+            if not active:
                 continue
-            price = price_on(ticker, date)
-            if price is None:
-                continue
-            fx = fx_on(currency_by_ticker[ticker], date)
-            if fx is None:
-                continue
-            total_value += qty_held * price * fx
-            got_any = True
+
+            total_cost += t["cost_pln"]
+
+            price = price_on(t["ticker"], date)
+            fx = fx_on(currency_by_ticker[t["ticker"]], date)
+            if price is not None and fx is not None:
+                total_value += t["quantity"] * price * fx
+                got_any = True
 
         if got_any:
             result.append({
                 "date": date_str,
                 "total_value": round(total_value, 2),
-                "total_cost": round(running_cost, 2),
+                "total_cost": round(total_cost, 2),
             })
 
     output = {"history": result, "events": events}
     _reconstructed_history_cache.update(data=output, computed_at=now)
     return output
+
+
+def _filter_price_outliers(series):
+    """
+    Odrzuca pojedyncze, ewidentnie błędne punkty cenowe (np. glitch danych z Yahoo,
+    niepoprawnie zastosowany split akcji) - jeśli cena zmienia się >5x albo <1/5x
+    z dnia na dzień i wraca do normy zaraz potem, to najpewniej błąd danych, nie realny ruch.
+    """
+    if series is None or len(series) < 3:
+        return series
+    values = series.values.copy()
+    for i in range(1, len(values) - 1):
+        prev_v, curr_v, next_v = values[i - 1], values[i], values[i + 1]
+        if prev_v <= 0 or curr_v <= 0 or next_v <= 0:
+            continue
+        jumped_up = curr_v > prev_v * 5 and curr_v > next_v * 5
+        jumped_down = curr_v < prev_v / 5 and curr_v < next_v / 5
+        if jumped_up or jumped_down:
+            values[i] = (prev_v + next_v) / 2
+    series = series.copy()
+    series[:] = values
+    return series
 
 
 def normalize_date(raw):
@@ -1227,6 +1262,215 @@ def find_header_row(lines):
     return None, None
 
 
+def _parse_number(raw):
+    """Parsuje liczbę z CSV, radząc sobie z przecinkiem dziesiętnym i spacjami jako separatorem tysięcy."""
+    if raw is None:
+        return None
+    s = str(raw).strip().replace("\xa0", "").replace(" ", "")
+    if not s:
+        return None
+    # '1 234,56' -> '1234.56'; '1,234.56' -> '1234.56'
+    if "," in s and "." in s:
+        s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
+    else:
+        s = s.replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+@app.post("/api/portfolio/import-xtb-history")
+async def import_xtb_history(file: UploadFile = File(...), account: str = "zwykle"):
+    """
+    Importuje PEŁNĄ historię transakcji z XTB (plik CSV z 'Historia operacji' / 'Zamknięte pozycje').
+    W odróżnieniu od /api/portfolio/import-csv, rozpoznaje zarówno ZAKUPY jak i SPRZEDAŻE:
+    - otwarte pozycje trafiają do portfela,
+    - zamknięte (z datą i ceną zamknięcia) trafiają do historii sprzedaży jako zrealizowany zysk.
+
+    Parser jest elastyczny co do nazw kolumn, bo XTB zmienia formaty eksportu między
+    wersjami platformy. Jeśli plik nie zostanie rozpoznany, zwraca listę znalezionych
+    nagłówków, żeby dało się zdiagnozować problem.
+    """
+    account = account.strip().lower()
+    if account not in VALID_ACCOUNTS:
+        account = "zwykle"
+
+    raw_bytes = await file.read()
+    try:
+        text = raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw_bytes.decode("latin-1")
+
+    all_lines = text.splitlines()
+    imported_buys, imported_sells, errors = [], [], []
+    found_headers = []
+
+    entries = load_portfolio()
+    sales = load_sales()
+    currency_cache = {}
+    name_cache = {}
+
+    # Plik XTB może mieć kilka sekcji (otwarte / zamknięte pozycje), każdą z własnym
+    # nagłówkiem - dlatego skanujemy cały plik, a nie tylko pierwszą tabelę.
+    idx = 0
+    fallback_ticker = None  # ticker z wcześniejszej sekcji pliku - dla tabel bez kolumny instrumentu
+    while idx < len(all_lines):
+        line = all_lines[idx]
+        lower = line.lower()
+        delimiter = ";" if lower.count(";") > lower.count(",") else ","
+        cells = [c.strip().lower() for c in line.split(delimiter)]
+
+        has_symbol = any("symbol" in c or "instrument" in c or "ticker" in c for c in cells)
+        has_date = any("data" in c or "time" in c or "date" in c for c in cells)
+        has_qty = any(k in c for c in cells for k in ("wolumen", "ilość", "ilosc", "quantity", "volume"))
+        # Niektóre sekcje eksportu XTB (np. 'POZYCJE ZAMKNIETE') nie mają kolumny
+        # instrumentu, bo cały plik dotyczy jednego waloru - wtedy wystarczy data + wolumen.
+        looks_like_header = has_date and (has_symbol or has_qty)
+        if not looks_like_header:
+            idx += 1
+            continue
+
+        table_lines = [line]
+        j = idx + 1
+        while j < len(all_lines):
+            stripped = all_lines[j].strip()
+            if not stripped or (stripped.startswith("=") and stripped.endswith("=")):
+                break
+            table_lines.append(all_lines[j])
+            j += 1
+
+        reader = csv.DictReader(io.StringIO("\n".join(table_lines)), delimiter=delimiter)
+        if not reader.fieldnames:
+            idx = j + 1
+            continue
+        found_headers.append(", ".join(reader.fieldnames))
+
+        def find_col(keywords, exclude=()):
+            for name in reader.fieldnames:
+                low = name.strip().lower()
+                if any(ex in low for ex in exclude):
+                    continue
+                if any(kw in low for kw in keywords):
+                    return name
+            return None
+
+        c_symbol = find_col(["symbol", "instrument", "ticker"])
+        c_qty = find_col(["wolumen", "ilość", "ilosc", "quantity", "volume", "lots"])
+        c_open_price = find_col(["cena otwarcia", "open price", "cena zakupu", "open rate"]) or find_col(["cena", "price"], exclude=["zamk", "close"])
+        c_open_date = find_col(["data otwarcia", "open time", "data zakupu"]) or find_col(["data", "time", "date"], exclude=["zamk", "close"])
+        c_close_price = find_col(["cena zamknięcia", "cena zamkniecia", "close price", "close rate"])
+        c_close_date = find_col(["data zamknięcia", "data zamkniecia", "close time"])
+
+        if not (c_qty and c_open_price and c_open_date):
+            idx = j + 1
+            continue
+        if not c_symbol and not fallback_ticker:
+            idx = j + 1
+            continue
+
+        header_currency = None
+        for code in {"PLN", "USD", "EUR", "GBP", "CHF"}:
+            if c_open_price and code in c_open_price.upper():
+                header_currency = code
+                break
+
+        for row_no, row in enumerate(reader, start=idx + 2):
+            try:
+                if c_symbol:
+                    raw_symbol = (row.get(c_symbol) or "").strip()
+                    if not raw_symbol:
+                        continue
+                    company_name, ticker = extract_name_and_ticker(raw_symbol)
+                    ticker = ticker.upper()
+                    fallback_ticker = ticker  # zapamiętujemy dla sekcji bez kolumny instrumentu
+                else:
+                    ticker = fallback_ticker
+                    company_name = None
+
+                quantity = _parse_number(row.get(c_qty))
+                open_price = _parse_number(row.get(c_open_price))
+                if quantity is None or open_price is None or quantity <= 0:
+                    continue
+
+                open_date = normalize_date((row.get(c_open_date) or "").strip().split(" ")[0])
+
+                if ticker not in currency_cache:
+                    currency_cache[ticker] = header_currency or get_currency(ticker) or "PLN"
+                currency = currency_cache[ticker]
+
+                if ticker not in name_cache:
+                    name_cache[ticker] = company_name or get_company_name(ticker) or ticker
+
+                close_price = _parse_number(row.get(c_close_price)) if c_close_price else None
+                close_date_raw = (row.get(c_close_date) or "").strip() if c_close_date else ""
+
+                if close_price is not None and close_date_raw:
+                    # ZAMKNIĘTA pozycja -> zrealizowana sprzedaż
+                    close_date = normalize_date(close_date_raw.split(" ")[0])
+                    fx_buy = get_fx_rate_on_date(currency, open_date)
+                    fx_sell = get_fx_rate_on_date(currency, close_date)
+                    cost_pln = quantity * open_price * (fx_buy or 1.0)
+                    proceeds_pln = quantity * close_price * (fx_sell or 1.0)
+
+                    sales.append({
+                        "id": str(uuid.uuid4()),
+                        "ticker": ticker,
+                        "name": name_cache[ticker],
+                        "account": account,
+                        "quantity": quantity,
+                        "buy_date": open_date,
+                        "buy_price": open_price,
+                        "buy_currency": currency,
+                        "sell_date": close_date,
+                        "sell_price": close_price,
+                        "sell_currency": currency,
+                        "cost_pln": round(cost_pln, 2),
+                        "proceeds_pln": round(proceeds_pln, 2),
+                        "realized_profit_pln": round(proceeds_pln - cost_pln, 2),
+                        "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    })
+                    imported_sells.append(ticker)
+                else:
+                    # OTWARTA pozycja -> normalny wpis w portfelu
+                    entries.append({
+                        "id": str(uuid.uuid4()),
+                        "ticker": ticker,
+                        "name": name_cache[ticker],
+                        "quantity": quantity,
+                        "buy_price": open_price,
+                        "currency": currency,
+                        "account": account,
+                        "buy_date": open_date,
+                        "note": "",
+                    })
+                    imported_buys.append(ticker)
+            except Exception as e:
+                errors.append(f"Wiersz {row_no}: {e}")
+
+        idx = j + 1
+
+    if not imported_buys and not imported_sells:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Nie rozpoznano żadnych transakcji w pliku. Znalezione nagłówki: "
+                + (" | ".join(found_headers) if found_headers else "brak tabel z danymi")
+            ),
+        )
+
+    save_portfolio(entries)
+    save_sales(sales)
+    _reconstructed_history_cache.update(data=None, computed_at=None)  # unieważniamy cache wykresu
+
+    return {
+        "imported_open_positions": len(imported_buys),
+        "imported_closed_positions": len(imported_sells),
+        "tickers": sorted(set(imported_buys + imported_sells)),
+        "errors": errors,
+    }
+
+
 @app.post("/api/portfolio/import-csv")
 async def import_portfolio_csv(file: UploadFile = File(...)):
     """
@@ -1362,7 +1606,162 @@ async def import_portfolio_csv(file: UploadFile = File(...)):
             errors.append(f"Wiersz {i}: {e}")
 
     save_portfolio(entries)
-    return {"added": len(added), "errors": errors, "total_rows_processed": len(added) + len(errors)}
+
+    # --- Drugi przebieg: sekcja zamkniętych/zrealizowanych transakcji (jeśli jest) ---
+    # trafia do historii SPRZEDAŻY, a nie jako aktywne pozycje.
+    sales_added, sales_errors = _import_closed_section_as_sales(all_lines, header_idx, added)
+
+    return {
+        "added": len(added),
+        "errors": errors,
+        "total_rows_processed": len(added) + len(errors),
+        "sales_added": sales_added,
+        "sales_errors": sales_errors,
+    }
+
+
+def _import_closed_section_as_sales(all_lines, open_header_idx, open_added_entries):
+    """
+    Szuka w pliku CSV sekcji z zamkniętymi/zrealizowanymi transakcjami (np.
+    '=== POZYCJE ZAMKNIETE ===') i importuje je do historii sprzedaży (sales.json).
+    Jeśli sekcja nie ma własnej kolumny z tickerem (częste w eksportach 'per instrument'
+    z XTB), a w sekcji otwartych pozycji z tego samego pliku występował dokładnie
+    JEDEN unikalny ticker, zakładamy że zamknięte transakcje dotyczą tego samego tickera.
+    """
+    # Szukamy nagłówka sekcji zamkniętej (linia w stylu '=== ... ===' zawierająca 'zamkniet'/'closed')
+    section_idx = None
+    for idx, line in enumerate(all_lines):
+        stripped = line.strip()
+        if stripped.startswith("=") and stripped.endswith("=") and (
+            "zamkniet" in stripped.lower() or "closed" in stripped.lower()
+        ):
+            section_idx = idx
+            break
+
+    if section_idx is None:
+        return 0, []
+
+    header_idx, delimiter = find_header_row(all_lines[section_idx:])
+    if header_idx is None:
+        return 0, ["Znaleziono sekcję zamkniętych transakcji, ale nie rozpoznano jej nagłówka."]
+    header_idx += section_idx
+
+    table_lines = [all_lines[header_idx]]
+    for line in all_lines[header_idx + 1:]:
+        stripped = line.strip()
+        if not stripped:
+            break
+        if stripped.startswith("=") and stripped.endswith("="):
+            break
+        table_lines.append(line)
+
+    reader = csv.DictReader(io.StringIO("\n".join(table_lines)), delimiter=delimiter)
+    if not reader.fieldnames:
+        return 0, ["Nie udało się odczytać nagłówków sekcji zamkniętych transakcji."]
+
+    def find_col(keywords):
+        for name in reader.fieldnames:
+            lower = name.strip().lower()
+            if any(kw in lower for kw in keywords):
+                return name
+        return None
+
+    col_instrument = find_col(["instrument", "ticker", "symbol"])
+    col_open_date = find_col(["data otwarcia", "otwarcie", "open date"])
+    col_close_date = find_col(["data zamkniecia", "data zamknięcia", "zamkniecie", "close date"])
+    col_qty = find_col(["wolumen", "ilość", "ilosc", "quantity"])
+    col_open_price = find_col(["cena otwarcia", "open price"])
+    col_close_price = find_col(["cena zamkniecia", "cena zamknięcia", "close price"])
+
+    if not all([col_open_date, col_close_date, col_qty, col_open_price, col_close_price]):
+        return 0, [
+            "Znaleziono sekcję zamkniętych transakcji, ale nie rozpoznano wymaganych kolumn "
+            "(data otwarcia/zamknięcia, wolumen, cena otwarcia/zamknięcia). Nagłówki: "
+            + ", ".join(reader.fieldnames)
+        ]
+
+    # Ticker dla zamkniętych transakcji - z kolumny, jeśli jest, inaczej z jedynego
+    # unikalnego tickera w sekcji otwartych pozycji tego samego pliku.
+    fallback_ticker = None
+    fallback_name = None
+    fallback_currency = None
+    if not col_instrument:
+        unique_tickers = set(e["ticker"] for e in open_added_entries)
+        if len(unique_tickers) == 1:
+            fallback_ticker = next(iter(unique_tickers))
+            match = next(e for e in open_added_entries if e["ticker"] == fallback_ticker)
+            fallback_name = match["name"]
+            fallback_currency = match["currency"]
+        else:
+            return 0, [
+                f"Sekcja zamkniętych transakcji nie ma kolumny z tickerem, a w pliku jest "
+                f"{len(unique_tickers)} różnych spółek - nie da się jednoznacznie przypisać. "
+                "Zaimportuj zamknięte transakcje osobno, per spółka."
+            ]
+
+    known_currencies = {"PLN", "USD", "EUR", "GBP", "CHF", "JPY"}
+    header_currency = fallback_currency
+    for code in known_currencies:
+        if code in col_open_price.upper():
+            header_currency = code
+            break
+
+    sales = load_sales()
+    added_count = 0
+    row_errors = []
+
+    for i, row in enumerate(reader, start=header_idx + 2):
+        try:
+            if col_instrument:
+                raw_instrument = (row.get(col_instrument) or "").strip()
+                if not raw_instrument:
+                    continue
+                name, ticker = extract_name_and_ticker(raw_instrument)
+                ticker = ticker.upper()
+                name = name or get_company_name(ticker) or ticker
+            else:
+                ticker = fallback_ticker
+                name = fallback_name
+
+            quantity = float(str(row.get(col_qty, "")).replace(",", ".").strip())
+            buy_price = float(str(row.get(col_open_price, "")).replace(",", ".").strip())
+            sell_price = float(str(row.get(col_close_price, "")).replace(",", ".").strip())
+
+            raw_open_date = (row.get(col_open_date, "") or "").strip().split(" ")[0]
+            raw_close_date = (row.get(col_close_date, "") or "").strip().split(" ")[0]
+            buy_date = normalize_date(raw_open_date)
+            sell_date = normalize_date(raw_close_date)
+
+            currency = header_currency or get_currency(ticker) or "PLN"
+
+            fx_at_buy = get_fx_rate_on_date(currency, buy_date)
+            fx_at_sell = get_fx_rate_on_date(currency, sell_date)
+            cost_pln = quantity * buy_price * (fx_at_buy or 1.0)
+            proceeds_pln = quantity * sell_price * (fx_at_sell or 1.0)
+
+            sales.append({
+                "id": str(uuid.uuid4()),
+                "ticker": ticker,
+                "name": name,
+                "account": "zwykle",
+                "quantity": quantity,
+                "buy_date": buy_date,
+                "buy_price": buy_price,
+                "buy_currency": currency,
+                "sell_date": sell_date,
+                "sell_price": sell_price,
+                "sell_currency": currency,
+                "cost_pln": round(cost_pln, 2),
+                "proceeds_pln": round(proceeds_pln, 2),
+                "realized_profit_pln": round(proceeds_pln - cost_pln, 2),
+                "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            })
+            added_count += 1
+        except Exception as e:
+            row_errors.append(f"Wiersz {i} (zamknięte): {e}")
+
+    save_sales(sales)
+    return added_count, row_errors
 
 
 @app.post("/api/portfolio/fix-currencies")
@@ -2011,7 +2410,7 @@ def analyze_stock(request: AnalyzeRequest):
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     try:
-        resp = requests.post(url, json=payload, timeout=120)
+        resp = requests.post(url, json=payload, timeout=30)
     except requests.exceptions.RequestException as e:
         logger.exception("Błąd sieci przy wywołaniu Gemini")
         raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
