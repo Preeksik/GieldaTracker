@@ -51,6 +51,21 @@ ALERTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.j
 # Plik z historią wartości portfela w czasie (snapshoty co ~30 min, gdy backend działa)
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_history.json")
 
+# Wszystkie pliki z danymi użytkownika w jednym miejscu - używane przez kopię zapasową.
+# Klucz = nazwa w pliku backupu, wartość = ścieżka na dysku.
+DATA_FILES = {
+    "portfolio": PORTFOLIO_FILE,
+    "sales": SALES_FILE,
+    "watchlist": WATCHLIST_FILE,
+    "alerts": ALERTS_FILE,
+    "history": HISTORY_FILE,
+}
+
+# Folder na automatyczne migawki robione PRZED każdym importem - żeby pomyłkowe
+# wgranie cudzego backupu nie skasowało bezpowrotnie Twoich danych.
+BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
+BACKUP_FORMAT_VERSION = 1
+
 # Konfiguracja e-mail (opcjonalna) - jeśli nie ustawisz tych zmiennych w .env,
 # alerty nadal będą działać, ale tylko w apce, bez wysyłki maila.
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
@@ -646,6 +661,83 @@ def scheduled_portfolio_snapshot():
         maybe_snapshot_portfolio(data["summary"])
     except Exception:
         logger.exception("Błąd przy zaplanowanym snapshotcie wartości portfela")
+
+
+def _read_data_file(path):
+    """Wczytuje plik danych; brakujący plik traktujemy jak pustą listę, nie jak błąd."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać %s przy tworzeniu kopii zapasowej", path)
+        return None
+
+
+def build_backup_bundle():
+    """Składa wszystkie dane użytkownika w jeden obiekt gotowy do zapisania jako plik."""
+    data = {}
+    for key, path in DATA_FILES.items():
+        content = _read_data_file(path)
+        if content is not None:
+            data[key] = content
+
+    return {
+        "format": "hossalab-backup",
+        "version": BACKUP_FORMAT_VERSION,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "data": data,
+    }
+
+
+def write_safety_snapshot(reason="import"):
+    """
+    Zapisuje bieżący stan danych do folderu backups/ PRZED nadpisaniem ich importem.
+    Dzięki temu nieudany albo pomyłkowy import zawsze da się cofnąć.
+    """
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    name = f"auto-{reason}-{stamp}.json"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(build_backup_bundle(), f, ensure_ascii=False, indent=2)
+    return name
+
+
+def apply_backup_bundle(bundle):
+    """
+    Wgrywa dane z backupu, nadpisując bieżące pliki. Zwraca podsumowanie
+    tego, co zostało przywrócone. Waliduje strukturę zanim cokolwiek ruszy.
+    """
+    if not isinstance(bundle, dict) or bundle.get("format") != "hossalab-backup":
+        raise HTTPException(
+            status_code=400,
+            detail="To nie wygląda na plik kopii zapasowej HossaLab (brak oznaczenia formatu)."
+        )
+
+    data = bundle.get("data")
+    if not isinstance(data, dict) or not data:
+        raise HTTPException(status_code=400, detail="Plik kopii zapasowej nie zawiera żadnych danych.")
+
+    unknown = [k for k in data if k not in DATA_FILES]
+    if unknown:
+        logger.warning("Backup zawiera nieznane sekcje, pomijam: %s", unknown)
+
+    restored = {}
+    for key, path in DATA_FILES.items():
+        if key not in data:
+            continue
+        content = data[key]
+        if not isinstance(content, (list, dict)):
+            raise HTTPException(status_code=400, detail=f"Sekcja '{key}' w backupie ma nieprawidłowy format.")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(content, f, ensure_ascii=False, indent=2)
+        restored[key] = len(content) if isinstance(content, list) else 1
+
+    # Wykres historii jest cache'owany w pamięci - po podmianie danych musi przeliczyć się od nowa
+    _reconstructed_history_cache.update(data=None, computed_at=None)
+    return restored
 
 
 scheduler = BackgroundScheduler()
@@ -2508,6 +2600,101 @@ def reset_alert(alert_id: str):
     alert["triggered_price"] = None
     save_alerts(alerts)
     return alert
+
+
+@app.get("/api/backup/status")
+def backup_status():
+    """Podsumowanie tego, co aktualnie siedzi w danych - żeby było wiadomo, co się archiwizuje."""
+    items = {}
+    for key, path in DATA_FILES.items():
+        if not os.path.exists(path):
+            items[key] = {"exists": False, "count": 0, "size_kb": 0, "modified": None}
+            continue
+        content = _read_data_file(path)
+        stat = os.stat(path)
+        items[key] = {
+            "exists": True,
+            "count": len(content) if isinstance(content, list) else (1 if content else 0),
+            "size_kb": round(stat.st_size / 1024, 1),
+            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+        }
+
+    snapshots = []
+    if os.path.isdir(BACKUP_DIR):
+        for name in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if not name.endswith(".json"):
+                continue
+            stat = os.stat(os.path.join(BACKUP_DIR, name))
+            snapshots.append({
+                "name": name,
+                "size_kb": round(stat.st_size / 1024, 1),
+                "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            })
+
+    return {"items": items, "snapshots": snapshots[:20]}
+
+
+@app.get("/api/backup/export")
+def backup_export():
+    """Zwraca cały stan aplikacji jako jeden obiekt JSON - frontend zapisuje go jako plik."""
+    return build_backup_bundle()
+
+
+@app.post("/api/backup/snapshot")
+def backup_snapshot():
+    """Ręczne zrobienie migawki na serwerze (bez pobierania pliku)."""
+    name = write_safety_snapshot(reason="manual")
+    return {"snapshot": name}
+
+
+@app.post("/api/backup/import")
+async def backup_import(file: UploadFile = File(...)):
+    """
+    Wgrywa kopię zapasową, NADPISUJĄC bieżące dane. Przed nadpisaniem automatycznie
+    zapisuje migawkę obecnego stanu w backups/, więc operacja jest odwracalna.
+    """
+    raw = await file.read()
+    try:
+        bundle = json.loads(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Nie udało się odczytać pliku - czy to na pewno JSON z kopią zapasową?")
+
+    safety = write_safety_snapshot(reason="przed-importem")
+    restored = apply_backup_bundle(bundle)
+
+    return {
+        "restored": restored,
+        "safety_snapshot": safety,
+        "backup_created_at": bundle.get("created_at"),
+    }
+
+
+@app.post("/api/backup/restore/{name}")
+def backup_restore(name: str):
+    """Przywraca dane z migawki zapisanej wcześniej na serwerze."""
+    # Zabezpieczenie przed wyjściem poza folder backups (np. '../../etc/passwd')
+    safe_name = os.path.basename(name)
+    path = os.path.join(BACKUP_DIR, safe_name)
+    if not safe_name.endswith(".json") or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Nie znaleziono takiej migawki.")
+
+    with open(path, "r", encoding="utf-8") as f:
+        bundle = json.load(f)
+
+    safety = write_safety_snapshot(reason="przed-przywroceniem")
+    restored = apply_backup_bundle(bundle)
+    return {"restored": restored, "from": safe_name, "safety_snapshot": safety}
+
+
+@app.delete("/api/backup/snapshot/{name}")
+def backup_delete_snapshot(name: str):
+    """Usuwa migawkę z serwera."""
+    safe_name = os.path.basename(name)
+    path = os.path.join(BACKUP_DIR, safe_name)
+    if not safe_name.endswith(".json") or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Nie znaleziono takiej migawki.")
+    os.remove(path)
+    return {"deleted": safe_name}
 
 
 @app.get("/api/watchlist")

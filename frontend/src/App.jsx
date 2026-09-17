@@ -6,6 +6,7 @@ import PortfolioNews from './PortfolioNews'
 import DividendCalendar from './DividendCalendar'
 import PriceAlerts from './PriceAlerts'
 import SalesHistory from './SalesHistory'
+import BackupPanel from './BackupPanel'
 import MarkdownView from './MarkdownView'
 import { BrandLockup } from './Logo'
 import { StepLoader, Spinner } from './Loader'
@@ -19,6 +20,7 @@ const TABS = [
   { key: 'dywidendy', icon: '●', label: 'Dywidendy' },
   { key: 'alerty', icon: '◉', label: 'Alerty' },
   { key: 'sprzedaze', icon: '▼', label: 'Sprzedaże' },
+  { key: 'dane', icon: '⬢', label: 'Dane' },
 ]
 
 const HORIZONS = [
@@ -260,6 +262,7 @@ function App() {
         {activeTab === 'dywidendy' && <DividendCalendar />}
         {activeTab === 'alerty' && <PriceAlerts />}
         {activeTab === 'sprzedaze' && <SalesHistory />}
+        {activeTab === 'dane' && <BackupPanel />}
       </main>
     </div>
   )
