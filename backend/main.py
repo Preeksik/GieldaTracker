@@ -1002,6 +1002,122 @@ def get_portfolio_history_full():
     return data
 
 
+# Indeksy do porównania. Dla każdego trzymamy listę kandydatów na ticker w Yahoo Finance,
+# bo symbole indeksów bywają różne - próbujemy po kolei, aż któryś zwróci dane.
+BENCHMARKS = {
+    "wig20": {"label": "WIG20", "tickers": ["WIG20.WA", "^WIG20", "WIG20.PL"]},
+    "wig": {"label": "WIG", "tickers": ["WIG.WA", "^WIG"]},
+    "sp500": {"label": "S&P 500", "tickers": ["^GSPC"]},
+    "nasdaq": {"label": "NASDAQ 100", "tickers": ["^NDX"]},
+    "msciworld": {"label": "MSCI World (ETF)", "tickers": ["IWDA.AS", "URTH"]},
+}
+
+
+def compute_twr_series(history):
+    """
+    Liczy stopę zwrotu portfela metodą TWR (time-weighted return), znormalizowaną do 100
+    na starcie. To JEDYNY uczciwy sposób porównania z indeksem: zwykła zmiana wartości
+    portfela rośnie także wtedy, gdy po prostu dopłacasz kapitał, co zawyżałoby wynik
+    względem rynku. TWR wycina wpływ wpłat i wypłat, zostawiając samą jakość decyzji.
+    """
+    result = []
+    idx = 100.0
+    prev_value = None
+    prev_cost = None
+
+    for h in history:
+        value = h.get("total_value")
+        cost = h.get("total_cost", 0) or 0
+        if value is None:
+            continue
+
+        if prev_value is None or prev_value <= 0:
+            result.append({"date": h["date"], "value": 100.0})
+        else:
+            cashflow = cost - (prev_cost or 0)  # dodatnie = dopłata (nowy zakup)
+            r = ((value - cashflow) / prev_value) - 1
+            # Zabezpieczenie przed absurdalnymi skokami przy dziurach w danych
+            if r < -0.95 or r > 2.0:
+                r = 0.0
+            idx *= (1 + r)
+            result.append({"date": h["date"], "value": round(idx, 2)})
+
+        prev_value = value
+        prev_cost = cost
+
+    return result
+
+
+@app.get("/api/portfolio/benchmark")
+def portfolio_benchmark(keys: str = "wig20,sp500"):
+    """
+    Porównuje wynik portfela z wybranymi indeksami. Wszystko sprowadzone do wspólnej
+    bazy 100 na dzień pierwszego zakupu, więc wykres czyta się wprost: linia wyżej = lepiej.
+    Portfel liczony metodą TWR, żeby dopłaty kapitału nie zawyżały wyniku względem rynku.
+    """
+    data = reconstruct_portfolio_history()
+    history = data.get("history", [])
+    if len(history) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Za mało danych historycznych, żeby porównać portfel z rynkiem."
+        )
+
+    twr = compute_twr_series(history)
+    start_date = history[0]["date"]
+    portfolio_dates = {h["date"] for h in history}
+
+    requested = [k.strip().lower() for k in keys.split(",") if k.strip()]
+    benchmarks = {}
+
+    for key in requested:
+        cfg = BENCHMARKS.get(key)
+        if not cfg:
+            continue
+
+        series, used_ticker = None, None
+        for candidate in cfg["tickers"]:
+            s = get_historical_price_series(candidate, start_date)
+            if s is not None and not s.empty:
+                series, used_ticker = s, candidate
+                break
+
+        if series is None or series.empty:
+            benchmarks[key] = {
+                "label": cfg["label"],
+                "available": False,
+                "reason": "Yahoo Finance nie zwróciło danych dla żadnego ze znanych symboli tego indeksu.",
+                "points": [],
+            }
+            continue
+
+        base = float(series.iloc[0])
+        if not base:
+            benchmarks[key] = {"label": cfg["label"], "available": False, "reason": "Zerowa wartość bazowa.", "points": []}
+            continue
+
+        points = []
+        for date, value in series.items():
+            date_str = date.strftime("%Y-%m-%d")
+            # Tylko dni, w których portfel też ma wycenę - inaczej linie rozjeżdżałyby się
+            # przez różne kalendarze sesji (GPW vs USA).
+            if date_str in portfolio_dates:
+                points.append({"date": date_str, "value": round(float(value) / base * 100, 2)})
+
+        benchmarks[key] = {
+            "label": cfg["label"],
+            "available": True,
+            "ticker": used_ticker,
+            "points": points,
+        }
+
+    return {
+        "portfolio": {"label": "Twój portfel", "points": twr},
+        "benchmarks": benchmarks,
+        "available_keys": {k: v["label"] for k, v in BENCHMARKS.items()},
+    }
+
+
 @app.get("/api/portfolio/dividends")
 def portfolio_dividends():
     """
