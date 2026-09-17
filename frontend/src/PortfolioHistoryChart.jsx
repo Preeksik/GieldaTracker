@@ -86,10 +86,10 @@ function PortfolioHistoryChart() {
     if (!hasData) return
 
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: 'solid', color: 'var(--bg-panel)' }, textColor: 'var(--text-muted)', attributionLogo: false },
+      layout: { background: { type: 'solid', color: '#0E1524' }, textColor: '#94A3B8', attributionLogo: false },
       grid: { vertLines: { color: 'rgba(148,163,184,0.055)' }, horzLines: { color: 'rgba(148,163,184,0.055)' } },
-      rightPriceScale: { borderColor: 'var(--bg-elevated)' },
-      timeScale: { borderColor: 'var(--bg-elevated)', timeVisible: isIntraday, fixLeftEdge: true, fixRightEdge: true },
+      rightPriceScale: { borderColor: '#1F2937' },
+      timeScale: { borderColor: '#1F2937', timeVisible: isIntraday, fixLeftEdge: true, fixRightEdge: true },
       crosshair: { mode: 1 },
       width: containerRef.current.clientWidth,
       height: 300,
@@ -99,7 +99,7 @@ function PortfolioHistoryChart() {
     })
 
     const valueSeries = chart.addSeries(LineSeries, {
-      color: 'var(--up)',
+      color: '#00F5A0',
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
@@ -118,7 +118,7 @@ function PortfolioHistoryChart() {
 
       if (showCost && displayed.some((h) => h.total_cost !== undefined)) {
         const costSeries = chart.addSeries(LineSeries, {
-          color: 'var(--text-dim)',
+          color: '#64748B',
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           priceLineVisible: false,
@@ -139,7 +139,7 @@ function PortfolioHistoryChart() {
           visibleEvents.map((e) => ({
             time: e.date,
             position: e.type === 'sell' ? 'aboveBar' : 'belowBar',
-            color: e.type === 'sell' ? 'var(--down)' : 'var(--cyan)',
+            color: e.type === 'sell' ? '#FF5B7F' : '#06B6D4',
             shape: e.type === 'sell' ? 'arrowDown' : 'arrowUp',
             text: `${e.type === 'sell' ? '−' : '+'}${e.ticker}`,
           }))
