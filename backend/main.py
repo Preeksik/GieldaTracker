@@ -17,7 +17,8 @@ import smtplib
 from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -2436,6 +2437,12 @@ def portfolio_diversification():
         "## Koncentracja ryzyka\n"
         "Konkretne procenty: ile % portfela to jeden kraj, jeden sektor, jedna waluta, największa "
         "pojedyncza pozycja. Wskaż wprost, które z tych wartości są niebezpiecznie wysokie i dlaczego.\n\n"
+        "## Ryzyko walutowe i stopy procentowe\n"
+        "Policz łączną ekspozycję na USD i EUR (razem i osobno) jako % portfela vs. pozycje w PLN - "
+        "napisz wprost, ile portfel straciłby/zyskał orientacyjnie przy 10% ruchu danej waluty względem PLN. "
+        "Osobno oceń wrażliwość portfela na stopy procentowe: które sektory/branże w portfelu są "
+        "najbardziej wrażliwe na zmiany stóp (np. spółki wzrostowe/technologiczne, banki, deweloperzy, spółki "
+        "z wysokim zadłużeniem) i w którą stronę - wzrost czy spadek stóp im szkodzi.\n\n"
         "## Czego brakuje\n"
         "Konkretne luki - jakich regionów, sektorów lub klas aktywów nie ma w portfelu, "
         "i dlaczego ich brak realnie szkodzi przy obecnym składzie.\n\n"
@@ -2777,6 +2784,217 @@ def watchlist_catalysts():
 
     report_text = call_gemini(prompt, timeout=90)
     return {"report": report_text, "tickers_checked": tickers}
+
+
+def get_espi_style_headlines(ticker, company_name, max_items=5, max_age_days=21):
+    """
+    Szuka świeżych komunikatów ESPI/EBI dla spółki przez publiczny, darmowy kanał RSS
+    Google News, zawężony do Bankier.pl - Bankier przedrukowuje tytuły komunikatów
+    spółek niemal 1:1 (np. 'SPÓŁKA S.A.: Zawarcie znaczącej umowy'), co daje niezłe
+    przybliżenie realnych raportów bieżących bez potrzeby własnego scrapera GPW/KNF.
+    """
+    query = f'"{company_name}" site:bankier.pl'
+    try:
+        url = f"https://news.google.com/rss/search?q={quote(query)}&hl=pl&gl=PL&ceid=PL:pl"
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+    except Exception:
+        logger.exception("Nie udało się pobrać komunikatów ESPI/EBI dla %s", company_name)
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    results = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        pub_date_raw = (item.findtext("pubDate") or "").strip()
+        if not title:
+            continue
+        try:
+            pub_dt = parsedate_to_datetime(pub_date_raw)
+            if pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if pub_dt < cutoff:
+            continue
+        results.append({"title": title, "pub_date": pub_dt.isoformat()})
+
+    results.sort(key=lambda r: r["pub_date"], reverse=True)
+    return results[:max_items]
+
+
+@app.get("/api/espi/scan")
+def espi_scan():
+    """
+    Skaner komunikatów ESPI/EBI: dla wszystkich spółek z portfela i watchlisty szuka
+    świeżych komunikatów bieżących (publiczny RSS Google News zawężony do Bankier.pl,
+    który przedrukowuje treść komunikatów), a Gemini streszcza każdy w 2-3 zdaniach
+    z oceną wpływu na kurs - żeby nie trzeba było czytać każdego raportu osobno.
+    """
+    portfolio_data = get_portfolio()
+    companies = {}
+    for pos in portfolio_data["positions"]:
+        companies[pos["ticker"]] = pos.get("name") or pos["ticker"]
+    for ticker in load_watchlist():
+        if ticker not in companies:
+            companies[ticker] = get_company_name(ticker) or ticker
+
+    if not companies:
+        raise HTTPException(
+            status_code=400,
+            detail="Brak spółek do sprawdzenia — dodaj coś do portfela lub watchlisty."
+        )
+
+    blocks = []
+    any_headlines = False
+    for ticker, name in companies.items():
+        headlines = get_espi_style_headlines(ticker, name)
+        if headlines:
+            any_headlines = True
+            lines = "\n".join(f"- {h['title']} ({h['pub_date'][:10]})" for h in headlines)
+            blocks.append(f"### {name} ({ticker})\n{lines}")
+        else:
+            blocks.append(f"### {name} ({ticker})\nBrak świeżych komunikatów w ostatnich 3 tygodniach.")
+
+    if not any_headlines:
+        return {
+            "report": (
+                "Brak nowych komunikatów ESPI/EBI dla spółek z portfela i watchlisty "
+                "w ostatnich 3 tygodniach."
+            ),
+            "companies_checked": list(companies.keys()),
+        }
+
+    prompt = (
+        ANALYST_PERSONA
+        + "\nJesteś skanerem komunikatów ESPI/EBI (raportów bieżących spółek giełdowych). "
+        "Poniżej surowe tytuły newsów znalezione dla każdej spółki z portfela/watchlisty inwestora "
+        "- część to prawdziwe komunikaty spółek (np. o umowach, WZA, wynikach, zmianach w zarządzie), "
+        "a część to zwykłe newsy rynkowe, które NIE są komunikatem spółki.\n\n"
+        + "\n\n".join(blocks)
+        + "\n\nDla KAŻDEJ spółki:\n"
+        "- Jeśli w tytułach rozpoznajesz realny komunikat spółki (umowa, WZA, zmiana zarządu, wyniki, "
+        "emisja akcji itp.), streść go w MAKSYMALNIE 3 zdaniach i na końcu dodaj ocenę wpływu na kurs: "
+        "**pozytywny**, **umiarkowanie pozytywny**, **neutralny**, **umiarkowanie negatywny** lub "
+        "**negatywny**.\n"
+        "- Pomiń tytuły, które są zwykłym newsem rynkowym (recenzje, komentarze do ceny akcji, ogólne "
+        "artykuły), a nie komunikatem spółki - nie zmyślaj komunikatu, którego nie ma w danych.\n"
+        "- Jeśli żaden z tytułów danej spółki nie wygląda na realny komunikat, napisz to wprost jednym "
+        "zdaniem zamiast pomijać spółkę całkowicie.\n\n"
+        "Strukturyzuj odpowiedź nagłówkiem ### dla każdej spółki (Nazwa + ticker), tak jak w danych "
+        "wejściowych."
+        + MARKDOWN_FORMAT_RULES
+        + "\nNa końcu dodaj linię kursywą: *Źródło: publiczny kanał Google News RSS zawężony do "
+        "Bankier.pl, nie oficjalne API GPW/KNF. Analiza edukacyjna, nie porada inwestycyjna.*"
+    )
+
+    report_text = call_gemini(prompt, timeout=90)
+    return {"report": report_text, "companies_checked": list(companies.keys())}
+
+
+# Indeksy do "Porannego Briefingu" - kilka kandydatów na ticker w Yahoo Finance na indeks,
+# próbujemy po kolei tak samo jak w /api/portfolio/benchmark.
+MARKET_SNAPSHOT_INDEXES = [
+    {"label": "Nikkei 225", "region": "Azja", "tickers": ["^N225"]},
+    {"label": "Hang Seng", "region": "Azja", "tickers": ["^HSI"]},
+    {"label": "Shanghai Composite", "region": "Azja", "tickers": ["000001.SS", "^SSEC"]},
+    {"label": "S&P 500", "region": "USA", "tickers": ["^GSPC"]},
+    {"label": "Nasdaq Composite", "region": "USA", "tickers": ["^IXIC"]},
+    {"label": "Dow Jones", "region": "USA", "tickers": ["^DJI"]},
+    {"label": "WIG20", "region": "Polska", "tickers": ["WIG20.WA", "^WIG20"]},
+]
+
+
+def get_index_snapshot(candidates):
+    """Zwraca (ostatnia_cena, zmiana_% vs poprzednia sesja) dla pierwszego działającego tickera."""
+    for candidate in candidates:
+        try:
+            stock = yf.Ticker(candidate)
+            hist = stock.history(period="5d")
+            closes = hist["Close"].dropna() if not hist.empty else hist["Close"]
+            if len(closes) >= 2:
+                last, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+                if prev:
+                    return safe_round(last, 2), safe_round((last - prev) / prev * 100, 2)
+            if len(closes) == 1:
+                return safe_round(float(closes.iloc[-1]), 2), None
+        except Exception:
+            logger.warning("Nie udało się pobrać notowań indeksu %s", candidate)
+    return None, None
+
+
+@app.get("/api/digest/morning")
+def morning_digest():
+    """
+    Poranny Briefing Inwestora: jednym kliknięciem - stan rynków Azji i USA z nocy,
+    świeże nagłówki rynkowe/makro i najbliższe raporty finansowe spółek z portfela
+    i watchlisty.
+    """
+    snapshot = []
+    for idx in MARKET_SNAPSHOT_INDEXES:
+        price, change_pct = get_index_snapshot(idx["tickers"])
+        snapshot.append({
+            "label": idx["label"], "region": idx["region"],
+            "price": price, "change_pct": change_pct,
+        })
+
+    macro_headlines = get_news_headlines("GPW gielda Wall Street Fed stopy procentowe", max_items=8)
+
+    portfolio_data = get_portfolio()
+    watchlist = load_watchlist()
+    earnings_lines = []
+    seen = set()
+    for pos in portfolio_data["positions"]:
+        ticker = pos["ticker"]
+        if ticker in seen:
+            continue
+        seen.add(ticker)
+        date = get_next_earnings_date(ticker)
+        if date:
+            earnings_lines.append(f"- {pos.get('name') or ticker} ({ticker}): {date} [pozycja w portfelu]")
+    for ticker in watchlist:
+        if ticker in seen:
+            continue
+        seen.add(ticker)
+        date = get_next_earnings_date(ticker)
+        if date:
+            earnings_lines.append(f"- {get_company_name(ticker) or ticker} ({ticker}): {date} [watchlista]")
+
+    market_lines = "\n".join(
+        f"- {s['label']} ({s['region']}): "
+        + (f"{s['price']}, zmiana {s['change_pct']}%" if s["price"] is not None else "brak danych")
+        for s in snapshot
+    )
+
+    prompt = (
+        ANALYST_PERSONA
+        + "\nPiszesz krótki 'Poranny Briefing Inwestora' - inwestor czyta go raz, przy porannej kawie, "
+        "zanim otworzy się GPW. Ma być rzeczowo i szybko do przeczytania, nie akademicko.\n\n"
+        f"STAN RYNKÓW (ostatnie dostępne dane):\n{market_lines}\n\n"
+        "ŚWIEŻE NAGŁÓWKI RYNKOWE/MAKRO (z ostatnich godzin/dni):\n"
+        + ("\n".join(macro_headlines) if macro_headlines else "Brak świeżych nagłówków w wyszukiwaniu.")
+        + "\n\nNAJBLIŻSZE RAPORTY FINANSOWE (portfel + watchlista):\n"
+        + ("\n".join(earnings_lines) if earnings_lines else "Brak zaplanowanych dat raportów w danych Yahoo Finance.")
+        + "\n\nNapisz raport w tej strukturze:\n\n"
+        "## Rynki w nocy\n"
+        "Azja i USA - co się działo, jeden konkretny wniosek co to oznacza na dziś dla GPW.\n\n"
+        "## Kluczowe wydarzenia dnia\n"
+        "Na podstawie nagłówków powyżej - co realnie może ruszyć rynkiem dziś. Jeśli nagłówki nie "
+        "wskazują na nic istotnego, napisz to wprost zamiast zmyślać wydarzenia, których nie ma w danych.\n\n"
+        "## Twoje spółki - najbliższe wyniki\n"
+        "Lista z datami z danych powyżej. Jeśli brak dat, napisz to wprost.\n\n"
+        "Zero lania wody, konkret, maksymalnie kilka zdań na sekcję."
+        + MARKDOWN_FORMAT_RULES
+        + DISCLAIMER_RULE
+    )
+
+    report_text = call_gemini(prompt, timeout=90)
+    return {
+        "report": report_text,
+        "market_snapshot": snapshot,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.post("/api/analyze")

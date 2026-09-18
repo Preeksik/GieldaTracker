@@ -7,6 +7,8 @@ import DividendCalendar from './DividendCalendar'
 import PriceAlerts from './PriceAlerts'
 import SalesHistory from './SalesHistory'
 import BackupPanel from './BackupPanel'
+import EspiScanner from './EspiScanner'
+import MorningDigest from './MorningDigest'
 import MarkdownView from './MarkdownView'
 import { BrandLockup } from './Logo'
 import { StepLoader, Spinner } from './Loader'
@@ -16,6 +18,8 @@ const TABS = [
   { key: 'analiza', icon: '◈', label: 'Analiza' },
   { key: 'portfel', icon: '◼', label: 'Portfel' },
   { key: 'rekomendacje', icon: '◆', label: 'Analiza i pytania' },
+  { key: 'briefing', icon: '☕', label: 'Briefing poranny' },
+  { key: 'espi', icon: '📜', label: 'ESPI/EBI' },
   { key: 'newsy', icon: '▲', label: 'Radar' },
   { key: 'dywidendy', icon: '●', label: 'Dywidendy' },
   { key: 'alerty', icon: '◉', label: 'Alerty' },
@@ -258,6 +262,8 @@ function App() {
 
         {activeTab === 'portfel' && <PortfolioTracker />}
         {activeTab === 'rekomendacje' && <PortfolioReport />}
+        {activeTab === 'briefing' && <MorningDigest />}
+        {activeTab === 'espi' && <EspiScanner />}
         {activeTab === 'newsy' && <PortfolioNews />}
         {activeTab === 'dywidendy' && <DividendCalendar />}
         {activeTab === 'alerty' && <PriceAlerts />}
