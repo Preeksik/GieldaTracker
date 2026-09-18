@@ -9,6 +9,8 @@ function DividendCalendar() {
   const [error, setError] = useState('')
   const [view, setView] = useState('szacowane') // 'szacowane' | 'realne'
   const [expandedTicker, setExpandedTicker] = useState(null)
+  const [upcomingCutoffs, setUpcomingCutoffs] = useState([])
+  const [checkingCutoffs, setCheckingCutoffs] = useState(false)
 
   const fetchDividends = async () => {
     setLoading(true)
@@ -29,8 +31,33 @@ function DividendCalendar() {
     }
   }
 
+  const fetchUpcomingCutoffs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/dividends/alerts`)
+      if (!res.ok) return
+      const data = await res.json()
+      setUpcomingCutoffs(data.upcoming || [])
+    } catch {
+      // banner ostrzeżeń jest dodatkiem - błąd pobrania nie powinien blokować reszty widoku
+    }
+  }
+
+  const checkCutoffsNow = async () => {
+    setCheckingCutoffs(true)
+    try {
+      const res = await fetch(`${API_URL}/api/dividends/alerts/check-now`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setUpcomingCutoffs(data.upcoming || [])
+      }
+    } finally {
+      setCheckingCutoffs(false)
+    }
+  }
+
   useEffect(() => {
     fetchDividends()
+    fetchUpcomingCutoffs()
   }, [])
 
   const toggleTabStyle = (active) => ({
@@ -56,6 +83,51 @@ function DividendCalendar() {
 
       {error && <div style={{ color: 'var(--down)', marginBottom: '20px' }}>{error}</div>}
       {loading && <div style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Ładowanie danych o dywidendach...</div>}
+
+      {upcomingCutoffs.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          {upcomingCutoffs.map((c) => (
+            <div
+              key={`${c.ticker}-${c.ex_date}`}
+              style={{
+                background: 'rgba(251,191,36,0.08)',
+                borderLeft: '4px solid var(--warn)',
+                padding: '12px 15px',
+                borderRadius: 'var(--radius)',
+                marginBottom: '8px',
+              }}
+            >
+              📅{' '}
+              {c.days_until === 0 ? (
+                <>Dziś</>
+              ) : (
+                <>Za {c.days_until} {c.days_until === 1 ? 'dzień' : 'dni'}</>
+              )}
+              {' '}dzień ustalenia prawa do dywidendy dla spółki <strong>{c.name}</strong> ({c.ticker}) –
+              aby ją otrzymać, akcje musisz posiadać do sesji <strong>{c.last_buy_session}</strong>.
+              {c.amount_per_share !== null && (
+                <span style={{ color: 'var(--text-muted)' }}> Szac. kwota: {c.amount_per_share} {c.currency}/akcję.</span>
+              )}
+            </div>
+          ))}
+          <button
+            className="hl-btn"
+            onClick={checkCutoffsNow}
+            disabled={checkingCutoffs}
+            style={{
+              background: 'var(--bg-elevated)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '6px 12px',
+              cursor: checkingCutoffs ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            {checkingCutoffs ? 'Sprawdzam...' : '🔄 Sprawdź teraz'}
+          </button>
+        </div>
+      )}
 
       {summary && (
         <div
@@ -201,6 +273,11 @@ function DividendCalendar() {
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '20px' }}>
         ⚠️ "Szacowana dywidenda" bazuje na estymacjach Yahoo Finance (roczna stawka, ostatnia wypłata) -
         to NIE jest gwarancja wypłaty ani jej wysokości. "Realna dywidenda" to twarde dane historyczne.
+      </p>
+      <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
+        📅 Backend sprawdza co 12h, czy zbliża się dzień odcięcia dywidendy (3 dni wyprzedzenia) i wysyła
+        jednorazowe powiadomienie na e-mail, jeśli skonfigurujesz SMTP w backend/.env (SMTP_HOST, SMTP_PORT,
+        SMTP_USER, SMTP_PASSWORD, SMTP_TO) - działa tylko, gdy backend jest uruchomiony.
       </p>
     </div>
   )

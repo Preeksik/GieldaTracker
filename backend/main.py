@@ -49,6 +49,12 @@ WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watch
 # Plik z alertami cenowymi
 ALERTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.json")
 
+# Plik z historią wysłanych powiadomień o odcięciu dywidendy (ticker + data odcięcia) -
+# żeby przy każdym cyklicznym sprawdzeniu nie wysyłać tego samego maila kilka razy.
+DIVIDEND_CUTOFF_NOTIFICATIONS_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "dividend_cutoff_notifications.json"
+)
+
 # Plik z historią wartości portfela w czasie (snapshoty co ~30 min, gdy backend działa)
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_history.json")
 
@@ -60,6 +66,7 @@ DATA_FILES = {
     "watchlist": WATCHLIST_FILE,
     "alerts": ALERTS_FILE,
     "history": HISTORY_FILE,
+    "dividend_cutoff_notifications": DIVIDEND_CUTOFF_NOTIFICATIONS_FILE,
 }
 
 # Folder na automatyczne migawki robione PRZED każdym importem - żeby pomyłkowe
@@ -609,6 +616,104 @@ def check_price_alerts():
         save_alerts(alerts)
 
 
+def load_dividend_cutoff_notifications():
+    if not os.path.exists(DIVIDEND_CUTOFF_NOTIFICATIONS_FILE):
+        return []
+    try:
+        with open(DIVIDEND_CUTOFF_NOTIFICATIONS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Nie udało się odczytać dividend_cutoff_notifications.json - traktuję jako pustą listę")
+        return []
+
+
+def save_dividend_cutoff_notifications(notifications):
+    with open(DIVIDEND_CUTOFF_NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(notifications, f, ensure_ascii=False, indent=2)
+
+
+def last_session_before(date_str):
+    """
+    Ostatnia sesja giełdowa PRZED podaną datą (żeby otrzymać dywidendę, akcje trzeba mieć
+    na koniec sesji dzień przed dniem odcięcia - w dniu odcięcia notowane są już bez tego prawa).
+    Prosto pomija tylko weekendy, nie uwzględnia świąt giełdowych.
+    """
+    d = datetime.strptime(date_str, "%Y-%m-%d").date() - timedelta(days=1)
+    while d.weekday() >= 5:  # 5 = sobota, 6 = niedziela
+        d -= timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
+def check_dividend_cutoff_alerts():
+    """
+    Uruchamiane cyklicznie w tle - sprawdza, czy dla którejś spółki z portfela dzień
+    odcięcia dywidendy (ex-dividend date, szacowany przez Yahoo Finance) przypada za
+    dokładnie 3 dni, i jeśli tak, wysyła jednorazowy e-mail z ostrzeżeniem. Każda para
+    (ticker, data odcięcia) powiadamiana tylko raz - stan trzymamy w pliku na dysku.
+    Działa TYLKO gdy backend jest uruchomiony - to nie jest usługa w chmurze.
+    """
+    entries = load_portfolio()
+    if not entries:
+        return
+
+    try:
+        data = portfolio_dividends()
+    except HTTPException:
+        return
+
+    notified = load_dividend_cutoff_notifications()
+    notified_keys = {f"{n['ticker']}:{n['ex_date']}" for n in notified}
+    today = datetime.now().date()
+    changed = False
+
+    for pos in data["positions"]:
+        ex_date_str = pos.get("next_ex_date")
+        if not ex_date_str:
+            continue
+        try:
+            ex_date = datetime.strptime(ex_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+
+        key = f"{pos['ticker']}:{ex_date_str}"
+        if (ex_date - today).days != 3 or key in notified_keys:
+            continue
+
+        last_session = last_session_before(ex_date_str)
+        subject = f"📅 Za 3 dni odcięcie dywidendy: {pos['name']} ({pos['ticker']})"
+        amount_line = (
+            f"Szacowana kwota: {pos['next_amount_estimate_per_share']} {pos['currency']}/akcję.\n\n"
+            if pos.get("next_amount_estimate_per_share") is not None else ""
+        )
+        body = (
+            f"Za 3 dni ({ex_date_str}) przypada dzień ustalenia prawa do dywidendy dla spółki "
+            f"{pos['name']} ({pos['ticker']}).\n\n"
+            f"Aby ją otrzymać, akcje musisz posiadać do sesji {last_session} włącznie "
+            f"(w dniu odcięcia akcje notowane są już bez prawa do dywidendy).\n\n"
+            f"{amount_line}"
+            "To jest szacowana data z Yahoo Finance - spółka może ją jeszcze zmienić."
+        )
+        email_sent = send_alert_email(subject, body)
+        logger.info(
+            "Powiadomienie o odcięciu dywidendy: %s za 3 dni, dzień odcięcia %s (e-mail wysłany: %s)",
+            pos["ticker"], ex_date_str, email_sent
+        )
+
+        notified.append({
+            "ticker": pos["ticker"],
+            "name": pos["name"],
+            "ex_date": ex_date_str,
+            "last_buy_session": last_session,
+            "notified_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "email_sent": email_sent,
+        })
+        notified_keys.add(key)
+        changed = True
+
+    if changed:
+        save_dividend_cutoff_notifications(notified)
+
+
 def load_history():
     if not os.path.exists(HISTORY_FILE):
         return []
@@ -749,6 +854,10 @@ scheduler.add_job(
 scheduler.add_job(
     scheduled_portfolio_snapshot, "interval", minutes=30, id="portfolio_snapshot",
     next_run_time=datetime.now()  # tak samo - pierwszy snapshot od razu
+)
+scheduler.add_job(
+    check_dividend_cutoff_alerts, "interval", hours=12, id="check_dividend_cutoff_alerts",
+    next_run_time=datetime.now()  # sprawdź od razu przy starcie
 )
 
 
@@ -1303,6 +1412,52 @@ def portfolio_dividends():
             "total_annual_estimate_pln": safe_round(total_annual_estimate_pln) or 0.0,
         },
     }
+
+
+@app.get("/api/dividends/alerts")
+def get_dividend_cutoff_alerts():
+    """
+    Zwraca spółki z portfela, dla których dzień odcięcia dywidendy przypada w ciągu
+    najbliższych 3 dni - do wyświetlenia jako ostrzeżenie w kalendarzu dywidend
+    ("aby otrzymać dywidendę, akcje musisz posiadać do sesji X").
+    """
+    try:
+        data = portfolio_dividends()
+    except HTTPException:
+        return {"upcoming": []}
+
+    today = datetime.now().date()
+    upcoming = []
+    for pos in data["positions"]:
+        ex_date_str = pos.get("next_ex_date")
+        if not ex_date_str:
+            continue
+        try:
+            ex_date = datetime.strptime(ex_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+
+        days_until = (ex_date - today).days
+        if 0 <= days_until <= 3:
+            upcoming.append({
+                "ticker": pos["ticker"],
+                "name": pos["name"],
+                "ex_date": ex_date_str,
+                "days_until": days_until,
+                "last_buy_session": last_session_before(ex_date_str),
+                "amount_per_share": pos["next_amount_estimate_per_share"],
+                "currency": pos["currency"],
+            })
+
+    upcoming.sort(key=lambda u: u["days_until"])
+    return {"upcoming": upcoming}
+
+
+@app.post("/api/dividends/alerts/check-now")
+def check_dividend_cutoff_alerts_now():
+    """Wymusza natychmiastowe sprawdzenie i wysyłkę powiadomień o odcięciu dywidendy (do testów)."""
+    check_dividend_cutoff_alerts()
+    return get_dividend_cutoff_alerts()
 
 
 @app.post("/api/portfolio")
