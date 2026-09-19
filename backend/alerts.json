@@ -10,5 +10,17 @@
     "triggered": false,
     "triggered_at": null,
     "triggered_price": null
+  },
+  {
+    "id": "e5a341e7-8241-4cfc-88b7-b71dc9984b09",
+    "ticker": "VOX.WA",
+    "name": "Voxel S.A.",
+    "currency": "PLN",
+    "condition": "above",
+    "target_price": 135.0,
+    "created_at": "2026-09-19 13:57",
+    "triggered": true,
+    "triggered_at": "2026-09-19 13:57",
+    "triggered_price": 137.8000030517578
   }
 ]

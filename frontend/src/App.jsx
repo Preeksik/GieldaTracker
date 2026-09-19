@@ -7,6 +7,7 @@ import DividendCalendar from './DividendCalendar'
 import PriceAlerts from './PriceAlerts'
 import SalesHistory from './SalesHistory'
 import BackupPanel from './BackupPanel'
+import AutomationPanel from './AutomationPanel'
 import EspiScanner from './EspiScanner'
 import MorningDigest from './MorningDigest'
 import MarkdownView from './MarkdownView'
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'alerty', icon: '◉', label: 'Alerty' },
   { key: 'sprzedaze', icon: '▼', label: 'Sprzedaże' },
   { key: 'dane', icon: '⬢', label: 'Dane' },
+  { key: 'automat', icon: '⚙', label: 'Automat' },
 ]
 
 const HORIZONS = [
@@ -269,6 +271,7 @@ function App() {
         {activeTab === 'alerty' && <PriceAlerts />}
         {activeTab === 'sprzedaze' && <SalesHistory />}
         {activeTab === 'dane' && <BackupPanel />}
+        {activeTab === 'automat' && <AutomationPanel />}
       </main>
     </div>
   )

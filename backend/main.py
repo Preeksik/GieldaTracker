@@ -24,6 +24,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # wczytuje zmienne z pliku .env leżącego obok main.py
 
+# Automatyzacja i powiadomienia Telegram (osobny moduł automation.py).
+# Import po load_dotenv(), żeby token z .env był już dostępny.
+from automation import setup_automation, send_telegram_alert
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gpw-api")
 
@@ -177,10 +181,14 @@ def get_fx_rate(currency, cache=None):
     try:
         fx_ticker = yf.Ticker(f"{currency}PLN=X")
         hist = fx_ticker.history(period="5d")
-        if not hist.empty:
-            last = float(hist["Close"].iloc[-1])
-            if not math.isnan(last) and not math.isinf(last):
-                rate = last
+        if not hist.empty and "Close" in hist:
+            # ostatni NIEPUSTY kurs, nie po prostu ostatni wiersz
+            closes = pd.to_numeric(hist["Close"], errors="coerce").dropna()
+            closes = closes[closes > 0]
+            if not closes.empty:
+                last = float(closes.iloc[-1])
+                if not math.isnan(last) and not math.isinf(last):
+                    rate = last
     except Exception:
         logger.warning("Nie udało się pobrać kursu %sPLN", currency)
 
@@ -193,19 +201,47 @@ def get_fx_rate(currency, cache=None):
         except Exception:
             logger.warning("Nie udało się pobrać kursu %sPLN (fast_info)", currency)
 
+    # Nigdy nie wypuszczamy stąd NaN/inf. W całej aplikacji kurs bywa używany
+    # wzorcem `fx or 1.0`, a `nan or 1.0` daje w Pythonie nan (NaN jest "prawdziwy"),
+    # więc NaN przeciekłby przez fallback aż do json.dumps i wywalił endpoint.
+    if rate is not None:
+        try:
+            rate = float(rate)
+            if math.isnan(rate) or math.isinf(rate) or rate <= 0:
+                rate = None
+        except (TypeError, ValueError):
+            rate = None
+
+    if rate is None:
+        logger.warning("Brak kursu %sPLN - dane w PLN dla tej waluty mogą być niepełne", currency)
+
     if cache is not None:
         cache[currency] = rate
     return rate
 
 
 def _normalize_date_index(series):
-    """Sprowadza indeks pandas Series (daty z yfinance, czasem tz-aware) do samych dat bez strefy czasowej."""
+    """
+    Sprowadza indeks pandas Series (daty z yfinance, czasem tz-aware) do samych dat bez strefy czasowej
+    i WYRZUCA wiersze bez ceny (NaN/inf/<=0).
+
+    To jest jedno wąskie gardło dla wszystkich serii z Yahoo Finance w tej aplikacji.
+    Yahoo potrafi zwrócić dzień sesyjny z pustym 'Close' (święto na danej giełdzie,
+    zawieszone notowania, dziura w danych dla ETF-ów typu VWCE.DE / CNDX.L). Taki NaN
+    wchodził dalej do rekonstrukcji wykresu i przez round(nan, 2) wywalał cały endpoint
+    błędem 'Out of range float values are not JSON compliant: nan'.
+    """
     if series is None or series.empty:
         return series
+    series = series.copy()
     if series.index.tz is not None:
-        series = series.copy()
         series.index = series.index.tz_localize(None)
     series.index = series.index.normalize()
+    series = pd.to_numeric(series, errors="coerce")
+    series = series.replace([float("inf"), float("-inf")], pd.NA).dropna()
+    series = series[series > 0]
+    if series.empty:
+        return None
     return series
 
 
@@ -261,11 +297,20 @@ def get_fx_rate_on_date(currency, date_str):
     series = get_historical_fx_series(currency, date_str)
     if series is None or series.empty:
         return get_fx_rate(currency)  # fallback: dzisiejszy kurs, gdy brak historii
-    target = pd.Timestamp(date_str)
+    try:
+        target = pd.Timestamp(_safe_start_date(date_str))
+    except Exception:
+        return get_fx_rate(currency)
     s_upto = series[series.index <= target]
     if s_upto.empty:
         return get_fx_rate(currency)
-    return float(s_upto.iloc[-1])
+    try:
+        value = float(s_upto.iloc[-1])
+    except (TypeError, ValueError):
+        return get_fx_rate(currency)
+    if math.isnan(value) or math.isinf(value) or value <= 0:
+        return get_fx_rate(currency)
+    return value
 
 
 _reconstructed_history_cache = {"data": None, "computed_at": None}
@@ -352,30 +397,51 @@ def reconstruct_portfolio_history():
 
     all_dates = sorted(set().union(*(s.index for s in price_series.values())))
 
+    def _clean(value):
+        """Zwraca float tylko jeśli to realna, dodatnia liczba - inaczej None."""
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return None
+        if math.isnan(v) or math.isinf(v) or v <= 0:
+            return None
+        return v
+
     def price_on(ticker, date):
         s = price_series.get(ticker)
-        if s is None:
+        if s is None or s.empty:
             return None
         s_upto = s[s.index <= date]
-        return float(s_upto.iloc[-1]) if not s_upto.empty else None
+        return _clean(s_upto.iloc[-1]) if not s_upto.empty else None
 
     def fx_on(currency, date):
         if currency == "PLN":
             return 1.0
         s = fx_series.get(currency)
-        if s is None:
+        if s is None or s.empty:
             return None
         s_upto = s[s.index <= date]
-        return float(s_upto.iloc[-1]) if not s_upto.empty else None
+        return _clean(s_upto.iloc[-1]) if not s_upto.empty else None
 
     # Koszt każdej transzy liczony RAZ, kursem waluty z dnia zakupu (nie dzisiejszym) -
     # dzięki temu linia kosztu nie faluje z kursem, tylko skacze przy zakupach/sprzedażach.
     for t in tranches:
-        buy_ts = pd.Timestamp(t["buy_date"])
+        try:
+            buy_ts = pd.Timestamp(_safe_start_date(t["buy_date"]))
+        except Exception:
+            buy_ts = pd.Timestamp(datetime.now())
         fx_at_buy = fx_on(currency_by_ticker[t["ticker"]], buy_ts)
         if fx_at_buy is None:
-            fx_at_buy = get_fx_rate(t["currency"])
-        t["cost_pln"] = round(t["quantity"] * t["buy_price"] * (fx_at_buy or 1.0), 2)
+            fx_at_buy = _clean(get_fx_rate(t["currency"]))
+        # UWAGA: nie da się tu napisać `fx_at_buy or 1.0` - w Pythonie NaN jest "prawdziwy",
+        # więc `nan or 1.0` daje nan i cały fallback by nie zadziałał.
+        if fx_at_buy is None:
+            fx_at_buy = 1.0
+        qty = _clean(t["quantity"])
+        buy_price = _clean(t["buy_price"])
+        t["cost_pln"] = safe_round(qty * buy_price * fx_at_buy) if (qty and buy_price) else 0.0
+        if t["cost_pln"] is None:
+            t["cost_pln"] = 0.0
 
     events = []
     for t in tranches:
@@ -402,15 +468,21 @@ def reconstruct_portfolio_history():
 
             price = price_on(t["ticker"], date)
             fx = fx_on(currency_by_ticker[t["ticker"]], date)
-            if price is not None and fx is not None:
-                total_value += t["quantity"] * price * fx
+            qty = _clean(t["quantity"])
+            if price is not None and fx is not None and qty is not None:
+                total_value += qty * price * fx
                 got_any = True
 
-        if got_any:
+        value_rounded = safe_round(total_value)
+        cost_rounded = safe_round(total_cost)
+        # Dzień bez ani jednej sensownej wyceny pomijamy zamiast wpisywać NaN -
+        # inaczej jeden ticker bez danych (AMB.WA, VWCE.DE, CNDX.L, IBCJ.DE)
+        # psuł CAŁĄ odpowiedź endpointu.
+        if got_any and value_rounded is not None:
             result.append({
                 "date": date_str,
-                "total_value": round(total_value, 2),
-                "total_cost": round(total_cost, 2),
+                "total_value": value_rounded,
+                "total_cost": cost_rounded if cost_rounded is not None else 0.0,
             })
 
     output = {"history": result, "events": events}
@@ -549,7 +621,15 @@ def save_alerts(alerts):
 
 
 def send_alert_email(subject, body):
-    """Wysyła e-mail o wyzwolonym alercie. Jeśli SMTP nie jest skonfigurowane w .env, po cichu pomija."""
+    """
+    Wysyła powiadomienie o wyzwolonym alercie (cenowym i dywidendowym).
+
+    Telegram leci PRZED sprawdzeniem SMTP - inaczej brak konfiguracji poczty
+    blokowałby też powiadomienia na telefon. Zwracana wartość dotyczy e-maila,
+    żeby nie zmieniać znaczenia pola "email_sent" w istniejących logach i danych.
+    """
+    send_telegram_alert(subject, body)
+
     if not EMAIL_ENABLED:
         return False
     try:
@@ -892,14 +972,29 @@ def get_current_price(ticker):
     (puste wyniki, rate limiting Yahoo). Loguje każdą nieudaną próbę, żeby było
     widać w terminalu co dokładnie zawiodło.
     """
+    def _last_valid_close(hist):
+        """
+        Bierze OSTATNIĄ NIEPUSTĄ cenę zamknięcia, a nie po prostu ostatni wiersz.
+        Yahoo potrafi dokleić najświeższy dzień z pustym 'Close' (sesja jeszcze trwa,
+        święto na danej giełdzie, dziura w danych ETF-a) - wcześniej wystarczyło to,
+        żeby cała metoda uznała, że danych nie ma, mimo że kilka wierszy wyżej
+        siedziała poprawna cena.
+        """
+        if hist is None or hist.empty or "Close" not in hist:
+            return None
+        closes = pd.to_numeric(hist["Close"], errors="coerce").dropna()
+        closes = closes[closes > 0]
+        if closes.empty:
+            return None
+        price = float(closes.iloc[-1])
+        return price if not math.isnan(price) and not math.isinf(price) else None
+
     # Metoda 1: krótka historia (5 dni)
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="5d")
-        if not hist.empty:
-            price = float(hist["Close"].iloc[-1])
-            if not math.isnan(price) and not math.isinf(price):
-                return price
+        price = _last_valid_close(stock.history(period="5d"))
+        if price is not None:
+            return price
         logger.warning("history(period='5d') zwróciło pusty/nieprawidłowy wynik dla %s", ticker)
     except Exception:
         logger.exception("Błąd history(period='5d') dla %s", ticker)
@@ -907,11 +1002,9 @@ def get_current_price(ticker):
     # Metoda 2: dłuższa historia - czasem 5d trafia w dziurę w danych
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="1mo")
-        if not hist.empty:
-            price = float(hist["Close"].iloc[-1])
-            if not math.isnan(price) and not math.isinf(price):
-                return price
+        price = _last_valid_close(stock.history(period="1mo"))
+        if price is not None:
+            return price
         logger.warning("history(period='1mo') też puste/nieprawidłowe dla %s", ticker)
     except Exception:
         logger.exception("Błąd history(period='1mo') dla %s", ticker)
@@ -926,8 +1019,68 @@ def get_current_price(ticker):
     except Exception:
         logger.exception("Błąd fast_info dla %s", ticker)
 
+    # Metoda 4: .info - najwolniejsza, ale dla części ETF-ów (VWCE.DE, CNDX.L, IBCJ.DE)
+    # bywa jedyną, która zwraca cokolwiek, gdy history() trafia w pustkę.
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info or {}
+        for field in ("regularMarketPrice", "currentPrice", "previousClose", "navPrice"):
+            value = info.get(field)
+            if value is None:
+                continue
+            try:
+                price = float(value)
+            except (TypeError, ValueError):
+                continue
+            if not math.isnan(price) and not math.isinf(price) and price > 0:
+                logger.info("Cena dla %s pobrana z .info['%s']", ticker, field)
+                return price
+        logger.warning(".info nie zwróciło ceny dla %s", ticker)
+    except Exception:
+        logger.exception("Błąd .info dla %s", ticker)
+
     logger.error("Wszystkie metody pobrania ceny zawiodły dla %s", ticker)
     return None
+
+
+@app.get("/api/debug/ticker/{ticker}")
+def debug_ticker(ticker: str):
+    """
+    Diagnostyka jednego tickera: pokazuje DOKŁADNIE, co zwróciła każda metoda Yahoo Finance.
+    Służy do odróżnienia dwóch bardzo różnych przyczyn pustych danych:
+      - zły/nieistniejący symbol (wszystkie metody puste, a w 'error' widać 'possibly delisted'),
+      - rate limiting Yahoo (w 'error' pojawia się 429 / 'Too Many Requests' - wtedy symbol jest
+        dobry, tylko trzeba odczekać albo rzadziej odpytywać).
+    Użycie: http://127.0.0.1:8000/api/debug/ticker/AMB.WA
+    """
+    out = {"ticker": ticker, "methods": {}}
+
+    def try_method(name, fn):
+        try:
+            out["methods"][name] = {"ok": True, "result": fn()}
+        except Exception as e:
+            out["methods"][name] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
+
+    def _hist(period):
+        h = yf.Ticker(ticker).history(period=period)
+        if h.empty:
+            return {"rows": 0, "last_close": None}
+        return {"rows": int(len(h)), "last_close": safe_round(float(h["Close"].iloc[-1]))}
+
+    try_method("history_5d", lambda: _hist("5d"))
+    try_method("history_1mo", lambda: _hist("1mo"))
+    try_method("fast_info", lambda: safe_round(float(yf.Ticker(ticker).fast_info.get("lastPrice"))))
+    try_method("info", lambda: {
+        k: (yf.Ticker(ticker).info or {}).get(k)
+        for k in ("regularMarketPrice", "previousClose", "currency", "exchange", "quoteType", "shortName")
+    })
+
+    out["final_price"] = safe_round(get_current_price(ticker))
+    out["hint"] = (
+        "Wszystko puste + 'possibly delisted' => najpewniej zły symbol. "
+        "Wszystko puste + 429/Too Many Requests => rate limiting Yahoo, symbol jest OK."
+    )
+    return out
 
 
 def get_next_earnings_date(ticker):
@@ -1232,6 +1385,13 @@ def compute_twr_series(history):
         cost = h.get("total_cost", 0) or 0
         if value is None:
             continue
+        try:
+            value = float(value)
+            cost = float(cost)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(value) or math.isinf(value) or math.isnan(cost) or math.isinf(cost):
+            continue
 
         if prev_value is None or prev_value <= 0:
             result.append({"date": h["date"], "value": 100.0})
@@ -1242,7 +1402,10 @@ def compute_twr_series(history):
             if r < -0.95 or r > 2.0:
                 r = 0.0
             idx *= (1 + r)
-            result.append({"date": h["date"], "value": round(idx, 2)})
+            idx_rounded = safe_round(idx)
+            if idx_rounded is None:
+                continue
+            result.append({"date": h["date"], "value": idx_rounded})
 
         prev_value = value
         prev_cost = cost
@@ -1293,9 +1456,12 @@ def portfolio_benchmark(keys: str = "wig20,sp500"):
             }
             continue
 
-        base = float(series.iloc[0])
-        if not base:
-            benchmarks[key] = {"label": cfg["label"], "available": False, "reason": "Zerowa wartość bazowa.", "points": []}
+        try:
+            base = float(series.iloc[0])
+        except (TypeError, ValueError):
+            base = float("nan")
+        if not base or math.isnan(base) or math.isinf(base):
+            benchmarks[key] = {"label": cfg["label"], "available": False, "reason": "Brak poprawnej wartości bazowej.", "points": []}
             continue
 
         points = []
@@ -1303,8 +1469,14 @@ def portfolio_benchmark(keys: str = "wig20,sp500"):
             date_str = date.strftime("%Y-%m-%d")
             # Tylko dni, w których portfel też ma wycenę - inaczej linie rozjeżdżałyby się
             # przez różne kalendarze sesji (GPW vs USA).
-            if date_str in portfolio_dates:
-                points.append({"date": date_str, "value": round(float(value) / base * 100, 2)})
+            if date_str not in portfolio_dates:
+                continue
+            try:
+                normalized = safe_round(float(value) / base * 100)
+            except (TypeError, ValueError, ZeroDivisionError):
+                normalized = None
+            if normalized is not None:
+                points.append({"date": date_str, "value": normalized})
 
         benchmarks[key] = {
             "label": cfg["label"],
@@ -3252,3 +3424,10 @@ def analyze_stock(request: AnalyzeRequest):
         "ai_analysis": ai_text,
         "chart_data": chart_data,
     }
+
+
+# ============================================================================
+# AUTOMATYZACJA - na końcu pliku, bo potrzebuje morning_digest i espi_scan,
+# które są zdefiniowane wyżej. Dokłada zadania do istniejącego `scheduler`.
+# ============================================================================
+setup_automation(app, scheduler, digest_fn=morning_digest, espi_fn=espi_scan)
