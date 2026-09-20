@@ -1,18 +1,19 @@
 {
-  "mode": "mocny",
-  "manual_model": null,
+  "mode": "reczny",
+  "manual_model": "gemini-3.8-flash",
   "cooldowns": {
     "gemini-3.8-flash": "2026-09-20T01:12:56.486951+00:00",
     "gemini-3.7-flash": "2026-09-20T01:13:00.865069+00:00"
   },
   "usage": {
     "2026-09-20": {
-      "gemini-3.6-flash": 2
+      "gemini-3.6-flash": 2,
+      "gemini-3.8-flash": 1
     }
   },
   "last_used": {
-    "model": "gemini-3.6-flash",
-    "at": "2026-09-20T01:09:10.673695+00:00"
+    "model": "gemini-3.8-flash",
+    "at": "2026-09-20T01:19:13.769016+00:00"
   },
   "last_fallback": {
     "at": "2026-09-20T01:09:10.673715+00:00",

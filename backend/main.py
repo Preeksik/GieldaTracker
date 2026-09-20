@@ -30,7 +30,13 @@ from automation import setup_automation, send_telegram_alert
 
 # Wybór modelu Gemini + automatyczne zejście na zapasowy po wyczerpaniu limitu
 # (osobny moduł ai_models.py). Też po load_dotenv(), bo czyta GOOGLE_API_KEY.
-from ai_models import setup_ai_models, generate as ai_generate, GeminiError, AllModelsExhausted
+from ai_models import (
+    setup_ai_models,
+    generate as ai_generate,
+    redact as ai_redact,
+    GeminiError,
+    AllModelsExhausted,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gpw-api")
@@ -1170,9 +1176,11 @@ def get_dividend_data(ticker):
 def list_models():
     """Pomocniczy endpoint: pokazuje jakie modele Gemini są dostępne dla Twojego klucza."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
-    resp = requests.get(url)
+    resp = requests.get(url, timeout=20)  # bez timeoutu zawieszone połączenie blokowało wątek bezterminowo
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        # redact() wycina klucz API - bez tego leciał w odpowiedzi HTTP, bo siedzi
+        # w query stringu URL-a, który Google odbija w treści błędu.
+        raise HTTPException(status_code=resp.status_code, detail=ai_redact(resp.text)[:500])
     data = resp.json()
     # Filtrujemy tylko te, które wspierają generateContent (czyli zwykłe zapytania tekstowe)
     usable = [

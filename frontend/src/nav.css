@@ -349,6 +349,26 @@
   margin-bottom: 10px;
 }
 
+.hl-ms-last {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+}
+.hl-ms-last strong { color: var(--accent-bright); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+
+.hl-ms-group {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding: 9px 2px 7px;
+}
+
 .hl-ms-err {
   font-size: 11px;
   line-height: 1.5;

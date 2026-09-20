@@ -67,7 +67,17 @@ export default function ModelSwitcher({ mini }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body || {}),
       })
-      if (!r.ok) throw new Error(`Backend zwrócił ${r.status}`)
+      if (!r.ok) {
+        // Backend odrzuca np. tryb ręczny bez wskazanego modelu - pokazujemy
+        // jego komunikat, a nie gołe "Backend zwrócił 400".
+        let detail = `Backend zwrócił ${r.status}`
+        try {
+          const body = await r.json()
+          if (body?.detail) detail = body.detail
+        } catch { /* odpowiedź bez JSON-a */ }
+        throw new Error(detail)
+      }
+      setErr('')
       await load()
     } catch (e) {
       setErr(e.message)
@@ -76,13 +86,22 @@ export default function ModelSwitcher({ mini }) {
     }
   }
 
-  const setMode = (mode) => send('/api/ai/config', { mode })
+  // Tryb ręczny wymaga modelu. Gdy żadnego jeszcze nie wybrano, bierzemy ten,
+  // który i tak jest w użyciu - inaczej kliknięcie "Ręczny" kończyłoby się błędem.
+  const setMode = (mode) => {
+    if (mode !== 'reczny') return send('/api/ai/config', { mode })
+    const chosen = status?.manual_model || status?.active_model
+    if (!chosen) return setErr('Najpierw wybierz model z listy poniżej.')
+    return send('/api/ai/config', { mode: 'reczny', manual_model: chosen })
+  }
   const pickModel = (id) => send('/api/ai/config', { mode: 'reczny', manual_model: id })
   const clearCooldowns = () => send('/api/ai/clear-cooldowns')
 
   // Kolor kropki: zielony = jest z czego strzelać, bursztyn = część spalona,
   // czerwony = wszystko na kwarantannie, szary = brak kontaktu z backendem.
-  const models = status?.models || []
+  const all = status?.models || []
+  const models = all.filter((m) => !m.alias)     // kolejka automatyczna
+  const aliases = all.filter((m) => m.alias)     // bez numeru wersji - tylko ręcznie
   const free = models.filter((m) => m.available).length
   const dot = !status
     ? 'var(--text-dim)'
@@ -142,6 +161,15 @@ export default function ModelSwitcher({ mini }) {
             {MODES.find((m) => m.key === status?.mode)?.hint}
           </div>
 
+          {status?.last_used && (
+            <div className="hl-ms-last">
+              Ostatnią analizę wykonał <strong>{status.last_used.model}</strong>
+              {status.last_used.at && (
+                <span> · {new Date(status.last_used.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</span>
+              )}
+            </div>
+          )}
+
           {status?.last_fallback && (
             <div className="hl-ms-fallback">
               Ostatnio zszedłem z <strong>{status.last_fallback.wanted}</strong> na{' '}
@@ -180,6 +208,30 @@ export default function ModelSwitcher({ mini }) {
               <div className="hl-ms-hint" style={{ padding: '8px 2px' }}>Wczytuję listę modeli…</div>
             )}
           </div>
+
+          {aliases.length > 0 && (
+            <>
+              <div className="hl-ms-group">
+                Poza automatem — brak numeru wersji, więc nie da się ich uszeregować,
+                a aliasy „latest” dzielą limit z modelem numerowanym. Wybieralne ręcznie:
+              </div>
+              <div className="hl-ms-list" style={{ borderTop: 'none', paddingTop: 0 }}>
+                {aliases.map((m) => (
+                  <button
+                    key={m.id}
+                    disabled={busy}
+                    onClick={() => pickModel(m.id)}
+                    className={`hl-ms-row ${status?.manual_model === m.id ? 'hl-ms-row-on' : ''}`}
+                    title="Kliknij, żeby wymusić ten model"
+                  >
+                    <span className="hl-ms-dot" style={{ background: 'var(--text-dim)' }} />
+                    <span className="hl-ms-row-name">{m.label.replace(/^Gemini\s*/i, '')}</span>
+                    <span className="hl-ms-row-meta">{m.used_today > 0 ? `${m.used_today}×` : ''}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <button className="hl-ms-reset" disabled={busy} onClick={clearCooldowns}>
             Zdejmij kwarantannę ze wszystkich
