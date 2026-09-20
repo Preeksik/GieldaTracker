@@ -1,0 +1,358 @@
+/* ============================================================
+   HossaLab — nawigacja boczna
+   Osobny plik, żeby theme.css (paleta, panele, przyciski) został nietknięty.
+   ============================================================ */
+
+:root {
+  --nav-w: 236px;       /* pełna szerokość paska */
+  --nav-w-mini: 64px;   /* szerokość po zwinięciu do ikon */
+  --topbar-h: 56px;
+}
+
+/* ---------- Szkielet strony ---------- */
+
+.hl-shell {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+.hl-main {
+  flex: 1;
+  min-width: 0;           /* KLUCZOWE: bez tego długie tabele rozpychają layout */
+  display: flex;
+  flex-direction: column;
+}
+
+.hl-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 26px 30px 70px;
+}
+
+/* ---------- Pasek boczny ---------- */
+
+.hl-nav {
+  width: var(--nav-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(8, 13, 26, 0.96), rgba(3, 7, 18, 0.98));
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(18px);
+  transition: width 0.26s var(--ease);
+  z-index: 60;
+}
+
+.hl-nav-mini { width: var(--nav-w-mini); }
+
+/* Nagłówek z logo */
+.hl-nav-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+  min-height: 82px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hl-nav-mini .hl-nav-head { justify-content: center; padding: 18px 8px; }
+
+.hl-nav-tagline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 3.4px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* Lista sekcji */
+.hl-nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 10px 10px;
+}
+
+/* Delikatny pasek przewijania — pojawia się dopiero przy bardzo niskim oknie */
+.hl-nav-scroll::-webkit-scrollbar { width: 6px; }
+.hl-nav-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-bright);
+  border-radius: 3px;
+}
+.hl-nav-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.hl-nav-group + .hl-nav-group { margin-top: 18px; }
+
+.hl-nav-group-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 10px 7px;
+  white-space: nowrap;
+}
+
+/* Kreska zamiast etykiety, gdy pasek jest zwinięty */
+.hl-nav-mini .hl-nav-group-label {
+  font-size: 0;
+  padding: 0;
+  margin: 0 10px 9px;
+  height: 1px;
+  background: var(--border);
+  letter-spacing: 0;
+}
+
+/* Pojedyncza zakładka */
+.hl-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  padding: 9px 11px;
+  margin-bottom: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 9px;
+  white-space: nowrap;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease);
+}
+
+.hl-nav-item:hover {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hl-nav-item-active {
+  color: var(--text);
+  background: rgba(16, 185, 129, 0.11);
+}
+
+/* Pionowy akcent po lewej — odpowiednik podkreślenia z poziomych zakładek */
+.hl-nav-item-active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gradient-hossa);
+  animation: fadeIn 0.28s ease both;
+}
+
+.hl-nav-icon {
+  width: 17px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.hl-nav-item-active .hl-nav-icon {
+  color: var(--accent-bright);
+  opacity: 1;
+}
+
+.hl-nav-mini .hl-nav-item { justify-content: center; padding: 10px 0; gap: 0; }
+.hl-nav-mini .hl-nav-label { display: none; }
+.hl-nav-mini .hl-nav-item-active::before { left: -10px; }
+
+/* Dymek z nazwą przy zwiniętym pasku */
+.hl-nav-mini .hl-nav-item::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+  z-index: 80;
+}
+.hl-nav-mini .hl-nav-item:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Stopka paska */
+.hl-nav-foot {
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.hl-nav-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+.hl-nav-collapse:hover { color: var(--text-muted); border-color: var(--border-bright); }
+
+/* ---------- Górna belka treści ---------- */
+
+.hl-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--topbar-h);
+  padding: 0 30px;
+  background: rgba(3, 7, 18, 0.82);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--border);
+}
+
+.hl-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.hl-topbar-crumb {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.hl-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease), color 0.18s var(--ease);
+}
+.hl-burger:hover { border-color: var(--border-bright); color: var(--text); }
+
+/* Przyciemnienie tła przy otwartej szufladzie (tylko mobile) */
+.hl-nav-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 55;
+  animation: fadeIn 0.2s ease both;
+}
+
+/* ---------- Telefon / wąskie okno ---------- */
+
+@media (max-width: 900px) {
+  .hl-nav {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--nav-w);
+    transform: translateX(-100%);
+    transition: transform 0.26s var(--ease);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.55);
+  }
+  .hl-nav-open { transform: translateX(0); }
+
+  /* Na telefonie nie ma trybu ikon — szuflada zawsze pełna */
+  .hl-nav-mini { width: var(--nav-w); }
+  .hl-nav-mini .hl-nav-label { display: inline; }
+  .hl-nav-mini .hl-nav-item { justify-content: flex-start; padding: 9px 11px; gap: 11px; }
+  .hl-nav-mini .hl-nav-item::after { display: none; }
+  .hl-nav-mini .hl-nav-head { justify-content: flex-start; padding: 18px 16px; }
+  .hl-nav-mini .hl-nav-group-label {
+    font-size: 9.5px;
+    height: auto;
+    background: none;
+    padding: 0 10px 7px;
+    margin: 0;
+    letter-spacing: 1.6px;
+  }
+
+  .hl-burger { display: flex; }
+  .hl-nav-collapse { display: none; }
+  .hl-nav-backdrop { display: block; }
+
+  .hl-topbar { padding: 0 16px; }
+  .hl-content { padding: 20px 16px 80px; }
+}
+
+/* Szerokie tabele (portfel, sprzedaże, dywidendy) mają na telefonie przewijać się
+   WEWNĄTRZ swojego panelu, a nie rozpychać całą stronę. Bez tego pojawiał się
+   poziomy suwak na poziomie dokumentu i cały layout dawało się przesuwać w bok. */
+@media (max-width: 900px) {
+  .hl-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .hl-table th, .hl-table td { white-space: nowrap; }
+}
+
+@media (max-width: 560px) {
+  .hl-topbar-crumb { display: none; }
+  .hl-content { padding: 16px 14px 80px; }
+}
+
+/* Bezpiecznik pod PWA na iPhonie — treść nie wchodzi pod notch/pasek gestów */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .hl-content { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .hl-nav-foot { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-nav, .hl-nav-item, .hl-nav-item::after { transition: none; animation: none; }
+}

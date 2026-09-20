@@ -11,23 +11,10 @@ import AutomationPanel from './AutomationPanel'
 import EspiScanner from './EspiScanner'
 import MorningDigest from './MorningDigest'
 import MarkdownView from './MarkdownView'
-import { BrandLockup } from './Logo'
-import { StepLoader, Spinner } from './Loader'
+import Sidebar, { findTab } from './Sidebar'
+import { StepLoader } from './Loader'
 import './theme.css'
-
-const TABS = [
-  { key: 'analiza', icon: '◈', label: 'Analiza' },
-  { key: 'portfel', icon: '◼', label: 'Portfel' },
-  { key: 'rekomendacje', icon: '◆', label: 'Analiza i pytania' },
-  { key: 'briefing', icon: '☕', label: 'Briefing poranny' },
-  { key: 'espi', icon: '📜', label: 'ESPI/EBI' },
-  { key: 'newsy', icon: '▲', label: 'Radar' },
-  { key: 'dywidendy', icon: '●', label: 'Dywidendy' },
-  { key: 'alerty', icon: '◉', label: 'Alerty' },
-  { key: 'sprzedaze', icon: '▼', label: 'Sprzedaże' },
-  { key: 'dane', icon: '⬢', label: 'Dane' },
-  { key: 'automat', icon: '⚙', label: 'Automat' },
-]
+import './nav.css'
 
 const HORIZONS = [
   { key: 'krotki', label: 'Krótkoterminowo' },
@@ -46,13 +33,37 @@ function App() {
   const [activeTab, setActiveTab] = useState('analiza')
   const [tabKey, setTabKey] = useState(0) // wymusza re-animację przy zmianie zakładki
 
+  // Zwinięcie paska do ikon zapamiętujemy, żeby nie ustawiać go przy każdym wejściu.
+  const [navMini, setNavMini] = useState(() => {
+    try {
+      return localStorage.getItem('hl-nav-mini') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [navOpen, setNavOpen] = useState(false) // szuflada na telefonie
+
   const chartContainerRef = useRef(null)
   const chartInstanceRef = useRef(null)
+
+  const current = findTab(activeTab)
 
   const switchTab = (key) => {
     if (key === activeTab) return
     setActiveTab(key)
     setTabKey((k) => k + 1)
+  }
+
+  const toggleMini = () => {
+    setNavMini((v) => {
+      const next = !v
+      try {
+        localStorage.setItem('hl-nav-mini', next ? '1' : '0')
+      } catch {
+        // tryb prywatny albo zablokowane cookies — działa dalej, po prostu bez zapamiętania
+      }
+      return next
+    })
   }
 
   const analyzeStock = async () => {
@@ -125,154 +136,151 @@ function App() {
     }
   }, [chartData])
 
+  // Zwinięcie/rozwinięcie paska zmienia szerokość kontenera, ale nie wywołuje
+  // zdarzenia 'resize' — wykres musi dostać nową szerokość ręcznie, inaczej
+  // zostaje przycięty albo wystaje poza panel.
+  useEffect(() => {
+    if (!chartInstanceRef.current || !chartContainerRef.current) return
+    const t = setTimeout(() => {
+      try {
+        chartInstanceRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
+      } catch (e) {
+        // wykres zdążył zniknąć przy zmianie zakładki
+      }
+    }, 300) // po zakończeniu animacji paska (0.26s)
+    return () => clearTimeout(t)
+  }, [navMini])
+
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', zIndex: 1 }}>
-      {/* ===================== HEADER ===================== */}
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          background: 'rgba(3,7,18,0.82)',
-          backdropFilter: 'blur(18px)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '14px 24px 0' }}>
-          <div className="hl-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
-            <BrandLockup />
-            <div className="hl-badge hl-badge-accent hl-fade-in" style={{ animationDelay: '0.5s' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-bright)', boxShadow: '0 0 8px var(--accent-bright)' }} />
-              Gemini 3.6 Flash
-            </div>
+    <div className="hl-shell">
+      <Sidebar
+        activeTab={activeTab}
+        onSelect={switchTab}
+        mini={navMini}
+        onToggleMini={toggleMini}
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+      />
+
+      <div className="hl-main">
+        {/* ===================== GÓRNA BELKA ===================== */}
+        <header className="hl-topbar">
+          <button className="hl-burger" onClick={() => setNavOpen(true)} aria-label="Menu">
+            ☰
+          </button>
+          <div className="hl-topbar-title">
+            <span style={{ color: 'var(--accent-bright)', fontSize: '13px' }}>{current.icon}</span>
+            {current.label}
           </div>
+          <span className="hl-topbar-crumb">{current.group}</span>
+        </header>
 
-          {/* Zakładki */}
-          <nav
-            className="hl-stagger"
-            style={{ display: 'flex', gap: '2px', marginTop: '14px', overflowX: 'auto', paddingBottom: '2px' }}
-          >
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => switchTab(t.key)}
-                className={`hl-tab ${activeTab === t.key ? 'hl-tab-active' : ''}`}
-              >
-                <span style={{ marginRight: '7px', fontSize: '10px', opacity: 0.8, color: activeTab === t.key ? 'var(--accent-bright)' : 'inherit' }}>
-                  {t.icon}
-                </span>
-                {t.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-
-      {/* ===================== TREŚĆ ===================== */}
-      <main key={tabKey} className="hl-fade-up" style={{ maxWidth: '1180px', margin: '0 auto', padding: '28px 24px 60px' }}>
-        {activeTab === 'analiza' && (
-          <>
-            <div className="hl-panel" style={{ padding: '22px', marginBottom: '22px' }}>
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                <input
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
-                  placeholder="Ticker"
-                  className="hl-input hl-num"
-                  style={{ width: '140px', fontWeight: 600 }}
-                />
-                <input
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !loading && analyzeStock()}
-                  placeholder="O co chcesz zapytać?"
-                  className="hl-input"
-                  style={{ flex: 1, minWidth: '240px' }}
-                />
-                <button onClick={analyzeStock} disabled={loading} className="hl-btn hl-btn-primary">
-                  {loading ? 'Analizuję…' : 'Analizuj ▸'}
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '7px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--text-dim)', fontSize: '11.5px', letterSpacing: '0.6px', textTransform: 'uppercase', fontWeight: 600 }}>
-                  Horyzont
-                </span>
-                {HORIZONS.map((h) => (
-                  <button
-                    key={h.key}
-                    onClick={() => setHorizon(h.key)}
-                    className={`hl-btn hl-btn-sm ${horizon === h.key ? 'hl-tab-active' : ''}`}
-                    style={horizon === h.key ? { borderColor: 'var(--accent)', color: 'var(--text)' } : undefined}
-                  >
-                    {h.label}
+        {/* ===================== TREŚĆ ===================== */}
+        <main key={tabKey} className="hl-content hl-fade-up">
+          {activeTab === 'analiza' && (
+            <>
+              <div className="hl-panel" style={{ padding: '22px', marginBottom: '22px' }}>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <input
+                    value={ticker}
+                    onChange={(e) => setTicker(e.target.value)}
+                    placeholder="Ticker"
+                    className="hl-input hl-num"
+                    style={{ width: '140px', fontWeight: 600 }}
+                  />
+                  <input
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !loading && analyzeStock()}
+                    placeholder="O co chcesz zapytać?"
+                    className="hl-input"
+                    style={{ flex: 1, minWidth: '240px' }}
+                  />
+                  <button onClick={analyzeStock} disabled={loading} className="hl-btn hl-btn-primary">
+                    {loading ? 'Analizuję…' : 'Analizuj ▸'}
                   </button>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {error && (
-              <div
-                className="hl-fade-up"
-                style={{ color: '#FF8FA8', background: 'rgba(255,91,127,0.08)', border: '1px solid rgba(255,91,127,0.3)', padding: '13px 17px', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}
-              >
-                {error}
+                <div style={{ display: 'flex', gap: '7px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--text-dim)', fontSize: '11.5px', letterSpacing: '0.6px', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Horyzont
+                  </span>
+                  {HORIZONS.map((h) => (
+                    <button
+                      key={h.key}
+                      onClick={() => setHorizon(h.key)}
+                      className={`hl-btn hl-btn-sm ${horizon === h.key ? 'hl-tab-active' : ''}`}
+                      style={horizon === h.key ? { borderColor: 'var(--accent)', color: 'var(--text)' } : undefined}
+                    >
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            {loading && chartData.length === 0 && (
-              <div style={{ marginBottom: '22px' }}>
-                <StepLoader
-                  title={`Analizuję ${ticker}`}
-                  steps={[
-                    'Pobieram notowania z giełdy',
-                    'Liczę trend i profil wolumenu',
-                    'Sprawdzam nadchodzące wydarzenia',
-                    'Gemini opracowuje werdykt',
-                  ]}
-                />
-              </div>
-            )}
-
-            <div
-              className="hl-panel"
-              ref={chartContainerRef}
-              style={{ width: '100%', height: '400px', marginBottom: '22px', overflow: 'hidden', background: '#0B1120' }}
-            >
-              {chartData.length === 0 && !loading && (
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--text-dim)', textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '30px', opacity: 0.35 }}>◈</div>
-                  <div style={{ fontSize: '14px' }}>Wpisz ticker i naciśnij <strong style={{ color: 'var(--accent)' }}>Analizuj</strong></div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>np. CDR.WA, PKN.WA, NVDA</div>
+              {error && (
+                <div
+                  className="hl-fade-up"
+                  style={{ color: '#FF8FA8', background: 'rgba(255,91,127,0.08)', border: '1px solid rgba(255,91,127,0.3)', padding: '13px 17px', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}
+                >
+                  {error}
                 </div>
               )}
-            </div>
 
-            {aiAnalysis && (
-              <div className="hl-panel hl-panel-glow hl-fade-up" style={{ padding: '24px 26px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px' }}>
-                  <span style={{ fontSize: '15px' }}>◆</span>
-                  <h3 style={{ margin: 0, fontSize: '15px', background: 'var(--gradient-hossa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                    Werdykt HossaLab
-                  </h3>
+              {loading && chartData.length === 0 && (
+                <div style={{ marginBottom: '22px' }}>
+                  <StepLoader
+                    title={`Analizuję ${ticker}`}
+                    steps={[
+                      'Pobieram notowania z giełdy',
+                      'Liczę trend i profil wolumenu',
+                      'Sprawdzam nadchodzące wydarzenia',
+                      'Gemini opracowuje werdykt',
+                    ]}
+                  />
                 </div>
-                <MarkdownView>{aiAnalysis}</MarkdownView>
-              </div>
-            )}
-          </>
-        )}
+              )}
 
-        {activeTab === 'portfel' && <PortfolioTracker />}
-        {activeTab === 'rekomendacje' && <PortfolioReport />}
-        {activeTab === 'briefing' && <MorningDigest />}
-        {activeTab === 'espi' && <EspiScanner />}
-        {activeTab === 'newsy' && <PortfolioNews />}
-        {activeTab === 'dywidendy' && <DividendCalendar />}
-        {activeTab === 'alerty' && <PriceAlerts />}
-        {activeTab === 'sprzedaze' && <SalesHistory />}
-        {activeTab === 'dane' && <BackupPanel />}
-        {activeTab === 'automat' && <AutomationPanel />}
-      </main>
+              <div
+                className="hl-panel"
+                ref={chartContainerRef}
+                style={{ width: '100%', height: '400px', marginBottom: '22px', overflow: 'hidden', background: '#0B1120' }}
+              >
+                {chartData.length === 0 && !loading && (
+                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--text-dim)', textAlign: 'center', padding: '20px' }}>
+                    <div style={{ fontSize: '30px', opacity: 0.35 }}>◈</div>
+                    <div style={{ fontSize: '14px' }}>Wpisz ticker i naciśnij <strong style={{ color: 'var(--accent)' }}>Analizuj</strong></div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>np. CDR.WA, PKN.WA, NVDA</div>
+                  </div>
+                )}
+              </div>
+
+              {aiAnalysis && (
+                <div className="hl-panel hl-panel-glow hl-fade-up" style={{ padding: '24px 26px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px' }}>
+                    <span style={{ fontSize: '15px' }}>◆</span>
+                    <h3 style={{ margin: 0, fontSize: '15px', background: 'var(--gradient-hossa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                      Werdykt HossaLab
+                    </h3>
+                  </div>
+                  <MarkdownView>{aiAnalysis}</MarkdownView>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'portfel' && <PortfolioTracker />}
+          {activeTab === 'rekomendacje' && <PortfolioReport />}
+          {activeTab === 'briefing' && <MorningDigest />}
+          {activeTab === 'espi' && <EspiScanner />}
+          {activeTab === 'newsy' && <PortfolioNews />}
+          {activeTab === 'dywidendy' && <DividendCalendar />}
+          {activeTab === 'alerty' && <PriceAlerts />}
+          {activeTab === 'sprzedaze' && <SalesHistory />}
+          {activeTab === 'dane' && <BackupPanel />}
+          {activeTab === 'automat' && <AutomationPanel />}
+        </main>
+      </div>
     </div>
   )
 }

@@ -1,0 +1,13 @@
+{
+  "digest_enabled": false,
+  "digest_hour": 7,
+  "digest_minute": 30,
+  "digest_weekdays_only": false,
+  "espi_enabled": false,
+  "espi_every_hours": 2,
+  "espi_start_hour": 8,
+  "espi_end_hour": 20,
+  "telegram_digest": true,
+  "telegram_espi": true,
+  "telegram_alerts": true
+}

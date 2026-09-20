@@ -1,0 +1,68 @@
+{
+  "digest": {
+    "generated_at": "2026-09-20T02:40:35",
+    "unread": false,
+    "error": null,
+    "report": "## Rynki w nocy\nAzja zamknęła sesję silnymi wzrostami: **Nikkei 225 zyskał +1,38% (65 018,95 pkt)**, **Shanghai Composite +0,94% (3 911,87 pkt)**, a **Hang Seng +0,60% (24 750,78 pkt)**. USA po pociągnięciu w dół przez decyzję Fed zdołało odrobić straty na spółkach technologicznych: **Nasdaq +0,39% (26 522,54 pkt)**, **S&P 500 +0,17% (7 650,50 pkt)**, jedynie **Dow Jones spadł o -0,18% (51 682,64 pkt)**.\n\n**Wniosek i decyzja dla GPW:**\nAprecjacja w Azji i obrona Nasdaq po decyzji Fed neutralizują presję podażową. WIG20 rusza z poziomu **4 122,52 pkt**. \n* **Decyzja:** Otwarcie pozycji długiej (LONG) na otwarciu sesji.\n* **Alokacja:** **15% wolnego kapitału** portfela.\n* **Poziomy cenowe:** Wejście po cenie otwarcia w przedziale **4 122 - 4 130 pkt**, **Stop-loss: 4 095 pkt** (ochrona kapitału poniżej wsparcia), **Take-profit: 4 180 pkt** (najbliższy opór).\n\n## Kluczowe wydarzenia dnia\nRynek przetrawił **podwyżkę stóp procentowych przez Fed**. Pierwsza reakcja Wall Street była spadkowa, ale zamknięcie sesji i zachowanie Azji pokazują scenariusz \"ulgi\" po wyczyszczeniu niepewności. W dostarczonych danych brak zaplanowanych odczytów makro na dziś – sesja na GPW podąży wyłącznie za spływającym kapitałem globalnym po decyzji Fed.\n\n## Twoje spółki - najbliższe wyniki\nW dostarczonych danych Yahoo Finance **brak zaplanowanych dat publikacji raportów finansowych** dla analizowanych spółek.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+    "market_snapshot": [
+      {
+        "label": "Nikkei 225",
+        "region": "Azja",
+        "price": 65018.95,
+        "change_pct": 1.38
+      },
+      {
+        "label": "Hang Seng",
+        "region": "Azja",
+        "price": 24750.78,
+        "change_pct": 0.6
+      },
+      {
+        "label": "Shanghai Composite",
+        "region": "Azja",
+        "price": 3911.87,
+        "change_pct": 0.94
+      },
+      {
+        "label": "S&P 500",
+        "region": "USA",
+        "price": 7650.5,
+        "change_pct": 0.17
+      },
+      {
+        "label": "Nasdaq Composite",
+        "region": "USA",
+        "price": 26522.54,
+        "change_pct": 0.39
+      },
+      {
+        "label": "Dow Jones",
+        "region": "USA",
+        "price": 51682.64,
+        "change_pct": -0.18
+      },
+      {
+        "label": "WIG20",
+        "region": "Polska",
+        "price": 4122.52,
+        "change_pct": null
+      }
+    ]
+  },
+  "espi": {
+    "generated_at": "2026-09-20T02:39:53",
+    "unread": false,
+    "error": null,
+    "report": "## Analiza Komunikatów ESPI/EBI i Raportów Spółek\n\n### Voxel S.A. (VOX.WA)\nSpółka opublikowała rozszerzony półroczny raport finansowy za I półrocze 2026 roku (PSr /2026). W udostępnionym nagłówku brakuje szczegółowych danych liczbowych dotyczących przychodów oraz zysku netto. Sama publikacja raportu stanowi realizację obowiązków informacyjnych spółki giełdowej.\n*Ocena wpływu na kurs:* **neutralny**\n\n### VIGO Photonics S.A. (VGO.WA)\nSpółka poinformowała o procedurze dopuszczenia, warunkowej rejestracji w KDPW oraz wprowadzeniu do obrotu giełdowego nowo wyemitowanych akcji serii G, a także o wniosku akcjonariusza ws. zwołania NWZ. Wprowadzenie nowej serii akcji do obrotu zwiększa całkowitą liczbę walorów w rynku, co prowadzi do rozwodnienia kapitału dotychczasowych akcjonariuszy. Zwołanie NWZ wskazuje na nadchodzące kluczowe decyzje właścicielskie.\n*Ocena wpływu na kurs:* **umiarkowanie negatywny**\n\n### DataWalk S.A. (DAT.WA)\nW dostarczonych danych nie ma żadnego oficjalnego komunikatu ESPI/EBI spółki DataWalk S.A. – wszystkie nagłówki to wyłącznie wpisy dyskusyjne z forum internetowego.\n\n### Creotech Instruments S.A. (CRI.WA)\nSpółka opublikowała raport bieżący nr 51/2026 dotyczący podpisania umowy podwykonawczej z renomowanym partnerem ICEYE Oy. Przedmiotem kontraktu jest udział w studium projektowym architektury systemów satelitarnych w ramach programu *Earth Observation Governmental Service*. Pozyskanie kontraktu w sektorze technologii kosmicznych wzmacnia pozycję rynkową spółki oraz jej portfel zamówień.\n*Ocena wpływu na kurs:* **pozytywny**\n\n### Captor Therapeutics S.A. (CTX.WA)\nSpółka przekazała do publicznej wiadomości rozszerzony raport półroczny za I półrocze 2026 roku (PSr /2026). W treści nagłówka nie zawarto konkretnych wyników finansowych (kwot przychodów, poziomu cash burn czy wyniku netto), co uniemożliwia ich twardą wycenę na podstawie samego komunikatu. Publikacja jest standardową realizacją kalendarza inwestorskiego.\n*Ocena wpływu na kurs:* **neutralny**\n\n### Atal S.A. (1AT.WA)\nDeweloper opublikował półroczny raport finansowy (PSr /2026) oraz zgłosił otrzymanie zawiadomienia o zmianie stanu posiadania głosów na Walnym Zgromadzeniu. Zawiadomienie o zmianie udziału w ogólnej liczbie głosów świadczy o ruchach w akcjonariacie, jednak brak podanych szczegółów (kto i jaki próg przekroczył) oraz brak cyfr w raporcie nie daje natychmiastowego impulsu cenowego.\n*Ocena wpływu na kurs:* **neutralny**\n\n---\n\n*Źródło: publiczny kanał Google News RSS zawężony do Bankier.pl, nie oficjalne API GPW/KNF. Analiza edukacyjna, nie porada inwestycyjna.*",
+    "companies_checked": [
+      "VOX.WA",
+      "VGO.WA",
+      "DAT.WA",
+      "CRI.WA",
+      "CTX.WA",
+      "1AT.WA"
+    ],
+    "content_hash": "e2a63e269d9db7f8",
+    "changed": true
+  }
+}
