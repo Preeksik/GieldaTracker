@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { LogoMark, Wordmark } from './Logo'
+import ModelSwitcher from './ModelSwitcher'
 
 /**
  * Boczna nawigacja HossaLab.
@@ -114,20 +115,7 @@ export default function Sidebar({ activeTab, onSelect, mini, onToggleMini, open,
         </nav>
 
         <div className="hl-nav-foot">
-          {!mini && (
-            <div className="hl-badge hl-badge-accent" style={{ justifyContent: 'center' }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--accent-bright)',
-                  boxShadow: '0 0 8px var(--accent-bright)',
-                }}
-              />
-              Gemini 3.6 Flash
-            </div>
-          )}
+          <ModelSwitcher mini={mini} />
           <button
             className="hl-nav-collapse"
             onClick={onToggleMini}

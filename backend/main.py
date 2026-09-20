@@ -28,6 +28,10 @@ load_dotenv()  # wczytuje zmienne z pliku .env leżącego obok main.py
 # Import po load_dotenv(), żeby token z .env był już dostępny.
 from automation import setup_automation, send_telegram_alert
 
+# Wybór modelu Gemini + automatyczne zejście na zapasowy po wyczerpaniu limitu
+# (osobny moduł ai_models.py). Też po load_dotenv(), bo czyta GOOGLE_API_KEY.
+from ai_models import setup_ai_models, generate as ai_generate, GeminiError, AllModelsExhausted
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gpw-api")
 
@@ -38,6 +42,9 @@ API_KEY = os.environ.get("GOOGLE_API_KEY", "WKLEJ_TU_SWOJ_KLUCZ_JESLI_NIE_UZYWAS
 
 # Nazwa modelu - jeśli nie masz pewności które masz dostępne,
 # uruchom GET /api/models (zdefiniowany niżej) i sprawdź w przeglądarce/curl.
+# UWAGA: od czasu dodania przełącznika modeli tę wartość czyta ai_models.py i traktuje
+# ją tylko jako model startowy. Faktyczny wybór (tryb mocny/oszczędny/ręczny) siedzi
+# w pliku ai_models_state.json i zmienia się z poziomu aplikacji, nie z .env.
 MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Plik, w którym trzymamy pozycje portfela (prosty JSON, bez bazy danych)
@@ -2667,32 +2674,25 @@ def get_sector_info(ticker):
 
 
 def call_gemini(prompt, timeout=60):
-    """Wspólna funkcja wywołania Gemini - używana przez dywersyfikację i pytania o portfel."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    """
+    Wspólne wejście do Gemini dla WSZYSTKICH analiz w aplikacji.
 
+    Całą robotę - wybór modelu, kolejkę zapasowych i kwarantannę po wyczerpaniu
+    limitu - robi moduł ai_models.py. Tutaj zostaje tylko tłumaczenie jego wyjątków
+    na odpowiedzi HTTP, żeby front dostał czytelny komunikat zamiast gołego 500.
+    """
     try:
-        resp = requests.post(url, json=payload, timeout=timeout)
-    except requests.exceptions.RequestException as e:
-        logger.exception("Błąd sieci przy wywołaniu Gemini")
-        raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
-
-    try:
-        data = resp.json()
-    except ValueError:
-        logger.error("Gemini zwrócił nie-JSON: %s", resp.text[:500])
-        raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
-
-    if resp.status_code != 200:
-        err = data.get("error", {}).get("message", "Nieznany błąd API")
-        logger.error("BŁĄD Z GOOGLE (status %s): %s", resp.status_code, err)
-        raise HTTPException(status_code=502, detail=err)
-
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        logger.error("Nieoczekiwany kształt odpowiedzi Gemini: %s", data)
-        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści odpowiedzi.")
+        return ai_generate(prompt, timeout=timeout)
+    except AllModelsExhausted as e:
+        spalone = ", ".join(
+            a["model"] for a in e.attempts if not a.get("skipped")
+        ) or "wszystkie"
+        raise HTTPException(
+            status_code=429,
+            detail=f"{e.message} Wyczerpane w tej próbie: {spalone}.",
+        )
+    except GeminiError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
 
 
 def build_portfolio_context(portfolio_data):
@@ -3388,36 +3388,8 @@ def analyze_stock(request: AnalyzeRequest):
         + DISCLAIMER_RULE
     )
 
-    # 2. Wywołanie Gemini REST API
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        resp = requests.post(url, json=payload, timeout=30)
-    except requests.exceptions.RequestException as e:
-        logger.exception("Błąd sieci przy wywołaniu Gemini")
-        raise HTTPException(status_code=502, detail=f"Nie udało się połączyć z Gemini API: {e}")
-
-    try:
-        data = resp.json()
-    except ValueError:
-        logger.error("Gemini zwrócił nie-JSON: %s", resp.text[:500])
-        raise HTTPException(status_code=502, detail="Gemini API zwróciło nieprawidłową odpowiedź.")
-
-    if resp.status_code != 200:
-        err = data.get("error", {}).get("message", "Nieznany błąd API")
-        logger.error("BŁĄD Z GOOGLE (status %s): %s", resp.status_code, err)
-        # Podpowiedź gdy model nie istnieje/nie jest dostępny dla klucza
-        hint = ""
-        if resp.status_code == 404:
-            hint = f" Model '{MODEL_NAME}' może nie być dostępny dla Twojego klucza — sprawdź GET /api/models."
-        raise HTTPException(status_code=502, detail=f"{err}{hint}")
-
-    try:
-        ai_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        logger.error("Nieoczekiwany kształt odpowiedzi Gemini: %s", data)
-        raise HTTPException(status_code=502, detail="Gemini nie zwróciło treści (możliwy filtr bezpieczeństwa).")
+    # 2. Wywołanie Gemini - przez wspólny funnel z automatycznym fallbackiem modeli
+    ai_text = call_gemini(prompt, timeout=45)
 
     return {
         "ticker": request.ticker,
@@ -3431,3 +3403,6 @@ def analyze_stock(request: AnalyzeRequest):
 # które są zdefiniowane wyżej. Dokłada zadania do istniejącego `scheduler`.
 # ============================================================================
 setup_automation(app, scheduler, digest_fn=morning_digest, espi_fn=espi_scan)
+
+# Przełącznik modeli Gemini - endpointy /api/ai/*
+setup_ai_models(app)
