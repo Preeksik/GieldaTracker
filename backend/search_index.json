@@ -196,5 +196,11 @@
   "exchange": "NYSE",
   "type": "akcje",
   "seen": "2026-09-21T01:52:24.695353+00:00"
+ },
+ "ASBI.JK": {
+  "name": "PT Asuransi Bintang Tbk",
+  "exchange": "JKT",
+  "type": "akcje",
+  "seen": "2026-09-21T02:04:35.875304+00:00"
  }
 }

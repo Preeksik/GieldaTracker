@@ -229,6 +229,168 @@
 }
 .hl-nav-collapse:hover { color: var(--text-muted); border-color: var(--border-bright); }
 
+/* ---------- Doradca ---------- */
+
+.hl-adv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 14px 18px;
+}
+
+.hl-adv-field { display: flex; flex-direction: column; gap: 6px; }
+
+.hl-adv-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.hl-adv-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.hl-adv-chip {
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.18s var(--ease);
+}
+.hl-adv-chip:hover { color: var(--text-muted); border-color: var(--border-bright); }
+.hl-adv-chip-on {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.hl-adv-hint {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin-top: 12px;
+}
+
+.hl-adv-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.hl-adv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.hl-adv-check input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
+.hl-adv-error {
+  color: #FF8FA8;
+  background: rgba(255, 91, 127, 0.08);
+  border: 1px solid rgba(255, 91, 127, 0.3);
+  padding: 13px 17px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 18px;
+  font-size: 13.5px;
+}
+
+/* Panel weryfikacji symboli */
+.hl-adv-verify {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.hl-adv-verify-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.hl-adv-bad-count { color: var(--warn); }
+
+.hl-adv-verify-rows { display: flex; flex-direction: column; gap: 1px; }
+
+.hl-adv-vrow {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  background: rgba(16, 185, 129, 0.055);
+}
+.hl-adv-vrow-bad { background: rgba(251, 191, 36, 0.08); }
+
+.hl-adv-vtick {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  min-width: 74px;
+  flex-shrink: 0;
+}
+.hl-adv-vrow-bad .hl-adv-vtick { color: var(--warn); }
+
+.hl-adv-vname {
+  flex: 1;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hl-adv-vprice {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.hl-adv-vrow-bad .hl-adv-vprice { color: var(--warn); }
+
+.hl-adv-warn {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.26);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 10px;
+}
+
+.hl-adv-follow {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.hl-adv-followitem {
+  border-left: 2px solid var(--border-bright);
+  padding-left: 14px;
+  margin-bottom: 16px;
+}
+
+.hl-adv-followq {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
 /* ---------- Wyszukiwarka spółek po nazwie ---------- */
 
 .hl-ts { position: relative; }

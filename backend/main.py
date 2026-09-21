@@ -33,6 +33,9 @@ from automation import setup_automation, send_telegram_alert
 # Wyszukiwarka spółek po nazwie (osobny moduł search.py).
 from search import setup_search
 
+# Doradca - otwarte pytanie inwestycyjne, działa też przy pustym portfelu.
+from advisor import setup_advisor
+
 from ai_models import (
     setup_ai_models,
     generate as ai_generate,
@@ -2810,10 +2813,17 @@ def portfolio_ask(request: PortfolioQuestionRequest):
     poprzednich pytań w tej samej rozmowie.
     """
     portfolio_data = get_portfolio()
-    if not portfolio_data["positions"]:
-        raise HTTPException(status_code=400, detail="Portfel jest pusty — dodaj przynajmniej jedną pozycję.")
-
-    portfolio_context = build_portfolio_context(portfolio_data)
+    # Pusty portfel NIE jest powodem, żeby odmówić odpowiedzi - to właśnie wtedy
+    # najczęściej pada pytanie "mam X zł, od czego zacząć". Wcześniej aplikacja
+    # kończyła w tym miejscu ślepą uliczką.
+    if portfolio_data["positions"]:
+        portfolio_context = build_portfolio_context(portfolio_data)
+    else:
+        portfolio_context = (
+            "PORTFEL: inwestor nie ma jeszcze żadnych pozycji - zaczyna od zera. "
+            "Nie odsyłaj go do uzupełnienia portfela, tylko odpowiedz na pytanie wprost, "
+            "proponując konkretny pierwszy skład portfela."
+        )
 
     ask_rules = (
         "\nZASADY ODPOWIEDZI:\n"
@@ -3428,4 +3438,22 @@ setup_search(
     portfolio_fn=load_portfolio,
     watchlist_fn=load_watchlist,
     sales_fn=load_sales,
+)
+
+# Doradca - endpoint /api/advisor/ask
+setup_advisor(
+    app,
+    ask_fn=call_gemini,
+    persona=ANALYST_PERSONA,
+    markdown_rules=MARKDOWN_FORMAT_RULES,
+    disclaimer=DISCLAIMER_RULE,
+    portfolio_fn=get_portfolio,
+    portfolio_context_fn=build_portfolio_context,
+    watchlist_fn=load_watchlist,
+    price_fn=get_current_price,
+    name_fn=get_company_name,
+    currency_fn=get_currency,
+    snapshot_fn=get_index_snapshot,
+    indexes=MARKET_SNAPSHOT_INDEXES,
+    fx_fn=get_fx_rate,
 )

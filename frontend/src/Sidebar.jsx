@@ -25,6 +25,7 @@ export const NAV_GROUPS = [
   {
     label: 'Analiza',
     items: [
+      { key: 'doradca', icon: '✦', label: 'Doradca' },
       { key: 'analiza', icon: '◈', label: 'Spółka' },
       { key: 'rekomendacje', icon: '◆', label: 'Portfel AI' },
     ],

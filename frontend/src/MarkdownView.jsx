@@ -28,14 +28,25 @@ function MarkdownView({ children }) {
           ol: ({ children }) => <ol style={{ margin: '0 0 12px', paddingLeft: '22px' }}>{children}</ol>,
           li: ({ children }) => <li style={{ margin: '0 0 6px' }}>{children}</li>,
           hr: () => <hr style={{ border: 'none', borderTop: '1px solid #33333f', margin: '18px 0' }} />,
-          code: ({ inline, children }) =>
-            inline ? (
-              <code style={{ background: '#2a2a38', padding: '2px 6px', borderRadius: '4px', fontSize: '13px', color: '#7FD6A0' }}>{children}</code>
+          // react-markdown od wersji 9 NIE przekazuje już propa `inline` do `code`.
+          // Stary warunek `inline ? ... : <pre>` był więc zawsze fałszywy i każdy
+          // fragment w backtickach - np. ticker `VWCE.DE` w komórce tabeli - wyskakiwał
+          // jako duży blok, rozrywając tabelę na trzy linie.
+          // Teraz blok rozpoznajemy po tym, że react-markdown sam owija go w <pre>,
+          // a <code> zawsze stylujemy jako inline.
+          pre: ({ children }) => (
+            <pre className="hl-md-pre" style={{ background: '#15151f', padding: '12px', borderRadius: '6px', overflowX: 'auto', fontSize: '13px', margin: '0 0 12px' }}>
+              {children}
+            </pre>
+          ),
+          code: ({ className, children }) => {
+            const isBlock = /language-/.test(className || '') || String(children).includes('\n')
+            return isBlock ? (
+              <code className={className} style={{ fontFamily: "'JetBrains Mono', monospace" }}>{children}</code>
             ) : (
-              <pre style={{ background: '#15151f', padding: '12px', borderRadius: '6px', overflowX: 'auto', fontSize: '13px' }}>
-                <code>{children}</code>
-              </pre>
-            ),
+              <code style={{ background: '#2a2a38', padding: '2px 6px', borderRadius: '4px', fontSize: '12.5px', color: '#7FD6A0', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>{children}</code>
+            )
+          },
           blockquote: ({ children }) => (
             <blockquote style={{ borderLeft: '3px solid #4FA3FF', margin: '0 0 12px', padding: '4px 0 4px 14px', color: '#b8b8c4' }}>{children}</blockquote>
           ),
