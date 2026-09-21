@@ -36,6 +36,9 @@ from search import setup_search
 # Doradca - otwarte pytanie inwestycyjne, działa też przy pustym portfelu.
 from advisor import setup_advisor
 
+# Koszty maklerskie - tabele opłat brokerów i Twój profil (osobny moduł broker.py).
+from broker import setup_broker, broker_prompt_block
+
 from ai_models import (
     setup_ai_models,
     generate as ai_generate,
@@ -2695,6 +2698,19 @@ def call_gemini(prompt, timeout=60):
     limitu - robi moduł ai_models.py. Tutaj zostaje tylko tłumaczenie jego wyjątków
     na odpowiedzi HTTP, żeby front dostał czytelny komunikat zamiast gołego 500.
     """
+    # Do każdej analizy inwestycyjnej (rozpoznajemy ją po personie analityka) dokładamy
+    # realne koszty maklerskie użytkownika. Bez tego model zakładał "typowe" prowizje
+    # i doradzał np. jednorazowy zakup zamiast transz "bo prowizje zjedzą zysk" -
+    # co w XTB, gdzie akcje do 100 tys. EUR obrotu są bez prowizji, było po prostu
+    # nieprawdą. Skany ESPI i podsumowania newsów nie mają persony, więc ich nie ruszamy.
+    if ANALYST_PERSONA in prompt:
+        try:
+            block = broker_prompt_block(fx_fn=get_fx_rate)
+            if block:
+                prompt = prompt.replace(ANALYST_PERSONA, ANALYST_PERSONA + "\n" + block, 1)
+        except Exception:
+            logger.exception("Nie udało się dołączyć kosztów maklerskich do promptu")
+
     try:
         return ai_generate(prompt, timeout=timeout)
     except AllModelsExhausted as e:
@@ -3439,6 +3455,9 @@ setup_search(
     watchlist_fn=load_watchlist,
     sales_fn=load_sales,
 )
+
+# Koszty maklerskie - endpointy /api/broker/*
+setup_broker(app, fx_fn=get_fx_rate)
 
 # Doradca - endpoint /api/advisor/ask
 setup_advisor(

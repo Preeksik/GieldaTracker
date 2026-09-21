@@ -1,0 +1,29 @@
+{
+  "accounts": {
+    "zwykle": "xtb",
+    "ike": "xtb",
+    "ikze": "xtb"
+  },
+  "custom": {
+    "name": "Własne stawki",
+    "source": null,
+    "source_kind": "wpisane ręcznie",
+    "checked": null,
+    "gpw": {
+      "pct": 0.0,
+      "min": 0,
+      "min_currency": "PLN"
+    },
+    "zagranica": {
+      "pct": 0.0,
+      "min": 0,
+      "min_currency": "PLN"
+    },
+    "free_monthly_eur": null,
+    "above_free": null,
+    "fx_pct": null,
+    "notes": [
+      "Stawki wpisane ręcznie."
+    ]
+  }
+}

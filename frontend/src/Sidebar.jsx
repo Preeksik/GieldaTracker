@@ -42,6 +42,7 @@ export const NAV_GROUPS = [
   {
     label: 'System',
     items: [
+      { key: 'broker', icon: '⚖', label: 'Broker i koszty' },
       { key: 'automat', icon: '⚙', label: 'Automat' },
       { key: 'dane', icon: '⬢', label: 'Dane' },
     ],

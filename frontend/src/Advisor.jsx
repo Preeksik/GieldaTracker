@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import MarkdownView from './MarkdownView'
 import { StepLoader } from './Loader'
 
@@ -50,6 +50,14 @@ export default function Advisor() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [brokers, setBrokers] = useState(null)   // u kogo są konta - pokazujemy, dla kogo liczone koszty
+
+  useEffect(() => {
+    fetch(`${API}/api/broker/profile`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setBrokers(d.accounts))
+      .catch(() => {})
+  }, [])
 
   // Pytania uzupełniające - model dostaje poprzednią część rozmowy jako kontekst.
   const [followUps, setFollowUps] = useState([])
@@ -189,6 +197,10 @@ export default function Advisor() {
         <div className="hl-adv-hint">
           {ACCOUNTS.find((a) => a.key === account)?.hint}{' '}
           {RISKS.find((r) => r.key === risk)?.hint}
+          {brokers?.[account] && (
+            <> Koszty transakcji liczone dla: <strong style={{ color: 'var(--accent)' }}>{brokers[account].name}</strong>
+              {' '}(zmienisz w zakładce Broker i koszty).</>
+          )}
         </div>
 
         <label className="hl-adv-field" style={{ marginTop: '14px' }}>

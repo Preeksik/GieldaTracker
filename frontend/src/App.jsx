@@ -13,6 +13,8 @@ import MorningDigest from './MorningDigest'
 import MarkdownView from './MarkdownView'
 import Sidebar, { findTab } from './Sidebar'
 import TickerSearch from './TickerSearch'
+import Advisor from './Advisor'
+import BrokerPanel from './BrokerPanel'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -270,6 +272,7 @@ function App() {
             </>
           )}
 
+          {activeTab === 'doradca' && <Advisor />}
           {activeTab === 'portfel' && <PortfolioTracker />}
           {activeTab === 'rekomendacje' && <PortfolioReport />}
           {activeTab === 'briefing' && <MorningDigest />}
@@ -279,6 +282,7 @@ function App() {
           {activeTab === 'alerty' && <PriceAlerts />}
           {activeTab === 'sprzedaze' && <SalesHistory />}
           {activeTab === 'dane' && <BackupPanel />}
+          {activeTab === 'broker' && <BrokerPanel />}
           {activeTab === 'automat' && <AutomationPanel />}
         </main>
       </div>
