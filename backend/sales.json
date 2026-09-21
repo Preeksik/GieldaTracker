@@ -1,1 +1,36 @@
-[]
+[
+  {
+    "id": "ffeb79f2-9485-4c8b-b324-42b187046b80",
+    "ticker": "VOX.WA",
+    "name": "Voxel S.A.",
+    "account": "zwykle",
+    "quantity": 5.0,
+    "buy_date": "2026-03-09",
+    "buy_price": 120.6,
+    "buy_currency": "PLN",
+    "sell_date": "2026-09-21",
+    "sell_price": 137.8,
+    "sell_currency": "PLN",
+    "cost_pln": 603.0,
+    "proceeds_pln": 689.0,
+    "realized_profit_pln": 86.0,
+    "recorded_at": "2026-09-21 03:47"
+  },
+  {
+    "id": "b8dfae87-29ba-4737-93f4-787ed3577171",
+    "ticker": "VOX.WA",
+    "name": "Voxel S.A.",
+    "account": "zwykle",
+    "quantity": 5.0,
+    "buy_date": "2026-01-02",
+    "buy_price": 123.0,
+    "buy_currency": "PLN",
+    "sell_date": "2026-09-21",
+    "sell_price": 137.8,
+    "sell_currency": "PLN",
+    "cost_pln": 615.0,
+    "proceeds_pln": 689.0,
+    "realized_profit_pln": 74.0,
+    "recorded_at": "2026-09-21 03:47"
+  }
+]

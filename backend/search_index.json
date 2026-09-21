@@ -1,0 +1,200 @@
+{
+ "CDR.WA": {
+  "name": "CD Projekt Red S.A.",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:43.738158+00:00"
+ },
+ "PKN.WA": {
+  "name": "Orlen S.A.",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980508+00:00"
+ },
+ "PKY1.F": {
+  "name": "Orlen S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980528+00:00"
+ },
+ "PKN.PR": {
+  "name": "Orlen S.A.",
+  "exchange": "PRA",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980532+00:00"
+ },
+ "PKY1.MU": {
+  "name": "Polski Koncern Naftowy ORLEN SA",
+  "exchange": "Monachium",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980535+00:00"
+ },
+ "PKY1.DU": {
+  "name": "Polski Koncern Naftowy ORLEN SA",
+  "exchange": "DUS",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980538+00:00"
+ },
+ "PKY1.HM": {
+  "name": "Orlen S.A.                    I",
+  "exchange": "HAM",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980541+00:00"
+ },
+ "PKNW.XD": {
+  "name": "ORLEN SA",
+  "exchange": "DXE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:51:49.980544+00:00"
+ },
+ "OTGLY": {
+  "name": "CD Projekt Red S.A.",
+  "exchange": "PNK",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150164+00:00"
+ },
+ "OTGLF": {
+  "name": "CD Projekt Red S.A.",
+  "exchange": "PNK",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150243+00:00"
+ },
+ "7CD.F": {
+  "name": "CD Projekt Red S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150255+00:00"
+ },
+ "7CD.MU": {
+  "name": "CD Projekt SA",
+  "exchange": "Monachium",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150271+00:00"
+ },
+ "7CD0.F": {
+  "name": "CD Projekt Red S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150280+00:00"
+ },
+ "7CD.DU": {
+  "name": "CD Projekt SA",
+  "exchange": "DUS",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:14.150288+00:00"
+ },
+ "CPD.TO": {
+  "name": "iShares S&P/TSX Canadian Preferred Share Index ETF Common Class",
+  "exchange": "TOR",
+  "type": "ETF",
+  "seen": "2026-09-21T01:52:20.127337+00:00"
+ },
+ "DIVS.TO": {
+  "name": "Evolve Active Canadian Preferred Share Fund",
+  "exchange": "TOR",
+  "type": "ETF",
+  "seen": "2026-09-21T01:52:20.127361+00:00"
+ },
+ "CD2.AX": {
+  "name": "CD Private Equity Fund II",
+  "exchange": "ASX",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:20.127436+00:00"
+ },
+ "ASB.WA": {
+  "name": "ASBISc Enterprises Plc",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:23.567196+00:00"
+ },
+ "J1L.F": {
+  "name": "ASBISc Enterprises Plc",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:23.567213+00:00"
+ },
+ "0QGZ.L": {
+  "name": "ASBISc Enterprises Plc",
+  "exchange": "Londyn",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:23.567217+00:00"
+ },
+ "AS": {
+  "name": "Amer Sports, Inc.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186184+00:00"
+ },
+ "IQGR": {
+  "name": "Astoria International Quality Growth Kings ETF",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186205+00:00"
+ },
+ "ASTS": {
+  "name": "AST SpaceMobile, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186210+00:00"
+ },
+ "ASML": {
+  "name": "ASML Holding N.V.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186213+00:00"
+ },
+ "ASST": {
+  "name": "Strive, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186216+00:00"
+ },
+ "NVO": {
+  "name": "Novo Nordisk A/S",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186219+00:00"
+ },
+ "ALAB": {
+  "name": "Astera Labs, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.186224+00:00"
+ },
+ "ASB": {
+  "name": "Associated Banc-Corp",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695313+00:00"
+ },
+ "ASBH": {
+  "name": "American Savings Bank, National Association",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695337+00:00"
+ },
+ "ABG": {
+  "name": "Asbury Automotive Group, Inc.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695341+00:00"
+ },
+ "ASBP": {
+  "name": "Aspire-Lakewood Holdings, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695344+00:00"
+ },
+ "ASBA": {
+  "name": "ASBA",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695349+00:00"
+ },
+ "ASB-PE": {
+  "name": "Associated Banc-Corp",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T01:52:24.695353+00:00"
+ }
+}

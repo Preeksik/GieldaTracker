@@ -30,6 +30,9 @@ from automation import setup_automation, send_telegram_alert
 
 # Wybór modelu Gemini + automatyczne zejście na zapasowy po wyczerpaniu limitu
 # (osobny moduł ai_models.py). Też po load_dotenv(), bo czyta GOOGLE_API_KEY.
+# Wyszukiwarka spółek po nazwie (osobny moduł search.py).
+from search import setup_search
+
 from ai_models import (
     setup_ai_models,
     generate as ai_generate,
@@ -3414,3 +3417,15 @@ setup_automation(app, scheduler, digest_fn=morning_digest, espi_fn=espi_scan)
 
 # Przełącznik modeli Gemini - endpointy /api/ai/*
 setup_ai_models(app)
+
+# Wyszukiwarka spółek po nazwie - endpointy /api/search/*
+# Na końcu pliku, bo potrzebuje funkcji zdefiniowanych wyżej.
+setup_search(
+    app,
+    price_fn=get_current_price,
+    name_fn=get_company_name,
+    currency_fn=get_currency,
+    portfolio_fn=load_portfolio,
+    watchlist_fn=load_watchlist,
+    sales_fn=load_sales,
+)

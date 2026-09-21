@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 import MarkdownView from './MarkdownView'
+import TickerSearch from './TickerSearch'
 import { StepLoader, TableSkeleton, InlineLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
@@ -458,12 +459,11 @@ function PortfolioTracker() {
         onSubmit={handleAdd}
         style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}
       >
-        <input
-          name="ticker"
-          placeholder="Ticker (np. CDR.WA)"
+        <TickerSearch
           value={form.ticker}
-          onChange={handleChange}
-          style={{ ...inputStyle, width: '140px' }}
+          onChange={(t) => setForm((f) => ({ ...f, ticker: t }))}
+          placeholder="Nazwa spółki albo ticker"
+          style={{ width: '250px' }}
         />
         <input
           name="quantity"

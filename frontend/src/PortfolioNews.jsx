@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import MarkdownView from './MarkdownView'
+import TickerSearch from './TickerSearch'
 import { StepLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
@@ -90,20 +91,12 @@ function PortfolioNews() {
 
       {/* Zarządzanie watchlistą */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
-        <input
-          placeholder="Dodaj ticker (np. NVDA, TSLA, CDR.WA)"
+        <TickerSearch
           value={newTicker}
-          onChange={(e) => setNewTicker(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addTicker()}
-          style={{
-            padding: '10px',
-            fontSize: '14px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border)',
-            color: 'var(--text)',
-            backgroundColor: 'var(--bg-elevated)',
-            width: '250px',
-          }}
+          onChange={setNewTicker}
+          onEnter={addTicker}
+          placeholder="Dodaj spółkę — nazwa albo ticker"
+          style={{ width: '280px' }}
         />
         <button
           onClick={addTicker} className="hl-btn hl-btn-primary"

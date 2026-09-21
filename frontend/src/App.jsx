@@ -12,6 +12,7 @@ import EspiScanner from './EspiScanner'
 import MorningDigest from './MorningDigest'
 import MarkdownView from './MarkdownView'
 import Sidebar, { findTab } from './Sidebar'
+import TickerSearch from './TickerSearch'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -180,13 +181,13 @@ function App() {
           {activeTab === 'analiza' && (
             <>
               <div className="hl-panel" style={{ padding: '22px', marginBottom: '22px' }}>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                  <input
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  <TickerSearch
                     value={ticker}
-                    onChange={(e) => setTicker(e.target.value)}
-                    placeholder="Ticker"
-                    className="hl-input hl-num"
-                    style={{ width: '140px', fontWeight: 600 }}
+                    onChange={setTicker}
+                    onEnter={() => !loading && analyzeStock()}
+                    placeholder="Nazwa spółki albo ticker"
+                    style={{ width: '270px' }}
                   />
                   <input
                     value={question}
