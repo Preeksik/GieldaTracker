@@ -202,5 +202,41 @@
   "exchange": "JKT",
   "type": "akcje",
   "seen": "2026-09-21T02:04:35.875304+00:00"
+ },
+ "BBCA.JK": {
+  "name": "PT Bank Central Asia Tbk",
+  "exchange": "JKT",
+  "type": "akcje",
+  "seen": "2026-09-21T02:10:42.749333+00:00"
+ },
+ "AIA": {
+  "name": "iShares Asia 50 ETF",
+  "exchange": "NASDAQ",
+  "type": "ETF",
+  "seen": "2026-09-21T02:10:42.749376+00:00"
+ },
+ "ASII.JK": {
+  "name": "PT Astra International Tbk",
+  "exchange": "JKT",
+  "type": "akcje",
+  "seen": "2026-09-21T02:10:42.749386+00:00"
+ },
+ "AABB": {
+  "name": "Asia Broadband, Inc.",
+  "exchange": "OID",
+  "type": "akcje",
+  "seen": "2026-09-21T02:10:42.749395+00:00"
+ },
+ "FAX": {
+  "name": "Abrdn Asia-Pacific Income Fund Inc",
+  "exchange": "NYSE American",
+  "type": "akcje",
+  "seen": "2026-09-21T02:10:42.749404+00:00"
+ },
+ "ASIX": {
+  "name": "AdvanSix Inc.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-21T02:10:42.749412+00:00"
  }
 }

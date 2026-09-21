@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 const API = 'http://127.0.0.1:8000'
 
@@ -34,8 +35,46 @@ export default function TickerSearch({
 
   const boxRef = useRef(null)
   const inputRef = useRef(null)
+  const popRef = useRef(null)
   const abortRef = useRef(null)
   const skipNextRef = useRef(false)              // po wyborze nie szukamy od nowa
+  const [pos, setPos] = useState(null)           // położenie listy na ekranie
+
+  // Lista jest renderowana przez portal bezpośrednio w <body>, a nie wewnątrz pola.
+  // Panele aplikacji mają backdrop-filter i z-index, co tworzy osobne konteksty warstw:
+  // lista zamknięta w panelu formularza NIE MOGŁA wyjść ponad panel wykresu leżący
+  // niżej, niezależnie od własnego z-indexu - widać było tylko pierwszy wiersz.
+  // Dochodzą do tego panele z overflow:hidden, które zwyczajnie ją obcinały.
+  // Dlatego liczymy pozycję pola na ekranie i kładziemy listę na samym wierzchu.
+  const place = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const below = window.innerHeight - r.bottom - 12
+    const above = r.top - 12
+    // Gdy pod polem brakuje miejsca (pole na dole ekranu), otwieramy listę do góry.
+    const up = below < 220 && above > below
+    setPos({
+      left: Math.max(8, Math.min(r.left, window.innerWidth - Math.max(r.width, 320) - 8)),
+      width: Math.max(r.width, 320),
+      top: up ? undefined : r.bottom + 6,
+      bottom: up ? window.innerHeight - r.top + 6 : undefined,
+      maxHeight: Math.max(160, Math.min(360, up ? above : below)),
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    place()
+    // capture: true - łapiemy przewijanie KAŻDEGO kontenera, nie tylko okna
+    // (panel treści i pasek boczny przewijają się niezależnie).
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, place, items.length])
 
   // --- pobieranie podpowiedzi, z opóźnieniem i anulowaniem starych zapytań ---
   useEffect(() => {
@@ -81,10 +120,22 @@ export default function TickerSearch({
     return () => clearTimeout(timer)
   }, [value])
 
-  // Klik poza polem zamyka listę
+  // Strzałki przewijają listę razem z podświetleniem - przy niskim oknie lista
+  // ma ograniczoną wysokość i podświetlony wiersz uciekałby poza widok.
+  useEffect(() => {
+    if (cursor < 0 || !popRef.current) return
+    const row = popRef.current.querySelectorAll('.hl-ts-row')[cursor]
+    if (row) row.scrollIntoView({ block: 'nearest' })
+  }, [cursor])
+
+  // Klik poza polem zamyka listę. Lista siedzi teraz w <body> (portal), więc
+  // "wewnątrz" oznacza pole ALBO listę - inaczej klik w podpowiedź zamykałby ją,
+  // zanim zdąży się wybrać.
   useEffect(() => {
     const onDown = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false)
+      const inBox = boxRef.current && boxRef.current.contains(e.target)
+      const inPop = popRef.current && popRef.current.contains(e.target)
+      if (!inBox && !inPop) setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
@@ -148,8 +199,18 @@ export default function TickerSearch({
       />
       {loading && <span className="hl-ts-spin" />}
 
-      {open && items.length > 0 && (
-        <div className="hl-ts-pop">
+      {open && items.length > 0 && pos && createPortal(
+        <div
+          ref={popRef}
+          className="hl-ts-pop"
+          style={{
+            left: pos.left,
+            width: pos.width,
+            top: pos.top,
+            bottom: pos.bottom,
+            maxHeight: pos.maxHeight,
+          }}
+        >
           {items.map((it, i) => (
             <button
               key={it.ticker}
@@ -166,7 +227,8 @@ export default function TickerSearch({
             </button>
           ))}
           {warning && <div className="hl-ts-warn">{warning}</div>}
-        </div>
+        </div>,
+        document.body
       )}
 
       {!open && warning && <div className="hl-ts-warn hl-ts-warn-inline">{warning}</div>}
