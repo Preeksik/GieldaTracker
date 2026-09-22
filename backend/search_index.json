@@ -238,5 +238,53 @@
   "exchange": "NYSE",
   "type": "akcje",
   "seen": "2026-09-21T02:10:42.749412+00:00"
+ },
+ "AMBA": {
+  "name": "Ambarella, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027271+00:00"
+ },
+ "AMBQ": {
+  "name": "Ambiq Micro, Inc.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027281+00:00"
+ },
+ "ABEV": {
+  "name": "Ambev S.A.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027284+00:00"
+ },
+ "AMBR": {
+  "name": "Amber International Holding Limited",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027288+00:00"
+ },
+ "AMBP": {
+  "name": "Ardagh Metal Packaging S.A.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027290+00:00"
+ },
+ "AMBU-B.CO": {
+  "name": "Ambu A/S",
+  "exchange": "Kopenhaga",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:31.027292+00:00"
+ },
+ "AMBFX": {
+  "name": "American Funds American Balanced F-2",
+  "exchange": "NAS",
+  "type": "fundusz",
+  "seen": "2026-09-22T17:44:31.027294+00:00"
+ },
+ "AMB.WA": {
+  "name": "Ambra S.A.",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-09-22T17:44:32.205285+00:00"
  }
 }

@@ -97,7 +97,13 @@ export default function Advisor() {
     setResult(null)
     setFollowUps([])
     try {
-      setResult(await call({ ...base(), question }))
+      const data = await call({ ...base(), question })
+      setResult(data)
+      // Jeśli backend odczytał horyzont/ryzyko z treści pytania, ustawiamy chipy tak samo -
+      // formularz ma pokazywać to, na podstawie czego faktycznie policzono odpowiedź.
+      const it = data.interpreted
+      if (it?.from_text?.horizon) setHorizon(it.horizon)
+      if (it?.from_text?.risk) setRisk(it.risk)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -135,12 +141,21 @@ export default function Advisor() {
         </div>
         <div className="hl-adv-verify-rows">
           {rows.map((r) => (
-            <div key={r.ticker} className={`hl-adv-vrow ${r.ok ? '' : 'hl-adv-vrow-bad'}`}>
-              <span className="hl-adv-vtick">{r.ticker}</span>
-              <span className="hl-adv-vname">{r.ok ? (r.name || '—') : 'brak danych w Yahoo Finance'}</span>
-              <span className="hl-adv-vprice">
-                {r.ok ? `${r.price} ${r.currency}` : '✗'}
-              </span>
+            <div key={r.ticker}>
+              <div className={`hl-adv-vrow ${!r.ok || r.fit === false ? 'hl-adv-vrow-bad' : ''}`}>
+                <span className="hl-adv-vtick">{r.ticker}</span>
+                <span className="hl-adv-vname">
+                  {r.ok ? (r.name || '—') : 'brak danych w Yahoo Finance'}
+                  {r.ok && r.metrics?.vol_90 != null && (
+                    <span className="hl-adv-vmeta"> · zmienność {Math.round(r.metrics.vol_90)}%/rok</span>
+                  )}
+                  {r.ok && r.from_scanner === false && <span className="hl-adv-vmeta"> · spoza skanera</span>}
+                </span>
+                <span className="hl-adv-vprice">
+                  {r.ok ? `${r.price} ${r.currency}` : '✗'}
+                </span>
+              </div>
+              {r.fit === false && <div className="hl-adv-misfit">⚠ Nie pasuje do profilu: {r.fit_reason}</div>}
             </div>
           ))}
         </div>
@@ -248,18 +263,80 @@ export default function Advisor() {
         <StepLoader
           title="Układam plan"
           steps={[
-            'Zbieram stan rynków i kursy walut',
-            'Czytam Twój portfel i watchlistę',
+            'Odczytuję profil z Twojego pytania',
+            'Skanuję ~70 spółek i ETF-ów pod ten profil',
+            'Sprawdzam katalizatory czołówki',
             'Analityk układa alokację',
-            'Sprawdzam każdą wymienioną spółkę w Yahoo Finance',
+            'Weryfikuję każdą propozycję w Yahoo Finance',
           ]}
         />
       )}
 
       {result && (
         <div className="hl-panel hl-panel-glow hl-fade-up" style={{ padding: '24px 26px' }}>
+          {result.interpreted && (
+            <div className="hl-adv-interp">
+              <span className="hl-adv-interp-label">Profil</span>
+              <strong>{result.interpreted.profile}</strong>
+              {(result.interpreted.from_text?.horizon || result.interpreted.from_text?.risk) && (
+                <span> · odczytane z Twojego pytania
+                  {result.interpreted.from_text.horizon && <> (horyzont: {HORIZONS.find((h) => h.key === result.interpreted.horizon)?.label})</>}
+                  {result.interpreted.from_text.risk && <> (ryzyko: {RISKS.find((r) => r.key === result.interpreted.risk)?.label})</>}
+                </span>
+              )}
+              {result.interpreted.exclusions && <span> · bez: {result.interpreted.exclusions}</span>}
+            </div>
+          )}
+
           <MarkdownView>{result.answer}</MarkdownView>
           <Verified rows={result.verified} />
+
+          {result.scan?.candidates?.length > 0 && (
+            <details className="hl-adv-scan">
+              <summary>
+                Skaner wybrał {result.scan.candidates.length} kandydatów z {result.scan.scanned} przeskanowanych
+                {result.scan.relaxed && ' (kryteria poluzowane — mało spółek spełniało je w pełni)'}
+              </summary>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="hl-table" style={{ marginTop: 10 }}>
+                  <thead>
+                    <tr>
+                      <th>Spółka</th>
+                      <th style={{ textAlign: 'right' }}>Zmienność</th>
+                      <th style={{ textAlign: 'right' }}>1M</th>
+                      <th style={{ textAlign: 'right' }}>3M</th>
+                      <th>Najbliższy raport</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.scan.candidates.map((c) => (
+                      <tr key={c.ticker}>
+                        <td>
+                          <span className="hl-adv-vtick" style={{ minWidth: 0, marginRight: 8 }}>{c.ticker}</span>
+                          {c.name} <span className="hl-adv-vmeta">· {c.sector}</span>
+                          {c.owned && <span className="hl-ts-owned" style={{ marginLeft: 6 }}>masz</span>}
+                        </td>
+                        <td className="hl-num" style={{ textAlign: 'right' }}>{Math.round(c.metrics.vol_90)}%</td>
+                        <td className={`hl-num ${c.metrics.ret_1m >= 0 ? 'hl-up' : 'hl-down'}`} style={{ textAlign: 'right' }}>
+                          {c.metrics.ret_1m != null ? `${c.metrics.ret_1m > 0 ? '+' : ''}${c.metrics.ret_1m}%` : '—'}
+                        </td>
+                        <td className={`hl-num ${c.metrics.ret_3m >= 0 ? 'hl-up' : 'hl-down'}`} style={{ textAlign: 'right' }}>
+                          {c.metrics.ret_3m != null ? `${c.metrics.ret_3m > 0 ? '+' : ''}${c.metrics.ret_3m}%` : '—'}
+                        </td>
+                        <td className="hl-num">{c.catalysts?.earnings ? String(c.catalysts.earnings).slice(0, 10) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {result.scan.rejected_owned?.length > 0 && (
+                <div className="hl-adv-hint">
+                  Z Twojego portfela odrzucone jako niepasujące do profilu:{' '}
+                  {result.scan.rejected_owned.map(([t, why]) => `${t} (${why})`).join(', ')}.
+                </div>
+              )}
+            </details>
+          )}
 
           <div className="hl-adv-follow">
             <div className="hl-adv-label" style={{ marginBottom: '8px' }}>Dopytaj</div>

@@ -31,7 +31,7 @@ from automation import setup_automation, send_telegram_alert
 # Wybór modelu Gemini + automatyczne zejście na zapasowy po wyczerpaniu limitu
 # (osobny moduł ai_models.py). Też po load_dotenv(), bo czyta GOOGLE_API_KEY.
 # Wyszukiwarka spółek po nazwie (osobny moduł search.py).
-from search import setup_search
+from search import setup_search, known_symbols
 
 # Doradca - otwarte pytanie inwestycyjne, działa też przy pustym portfelu.
 from advisor import setup_advisor
@@ -3475,4 +3475,8 @@ setup_advisor(
     snapshot_fn=get_index_snapshot,
     indexes=MARKET_SNAPSHOT_INDEXES,
     fx_fn=get_fx_rate,
+    # skaner rynku: katalizatory i symbole, które kiedykolwiek wyszukałeś
+    earnings_fn=get_next_earnings_date,
+    news_fn=get_news_headlines,
+    search_index_fn=known_symbols,
 )

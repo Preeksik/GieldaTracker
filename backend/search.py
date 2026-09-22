@@ -129,6 +129,12 @@ def _save_index():
         logger.exception("Nie udało się zapisać indeksu wyszukiwarki")
 
 
+def known_symbols():
+    """Kopia trwałego indeksu symboli - używana m.in. przez skaner Doradcy."""
+    with _lock:
+        return dict(_load_index())
+
+
 def remember(entries):
     """Dopisuje znalezione symbole do trwałego indeksu (offline na przyszłość)."""
     if not entries:
