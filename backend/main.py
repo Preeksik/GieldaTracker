@@ -39,6 +39,9 @@ from advisor import setup_advisor
 # Koszty maklerskie - tabele opłat brokerów i Twój profil (osobny moduł broker.py).
 from broker import setup_broker, broker_prompt_block
 
+# Dziennik porad AI - każda porada z datą i cenami z tamtego dnia (osobny moduł journal.py).
+from journal import setup_journal, journal_save, journal_append
+
 from ai_models import (
     setup_ai_models,
     generate as ai_generate,
@@ -3428,10 +3431,20 @@ def analyze_stock(request: AnalyzeRequest):
     # 2. Wywołanie Gemini - przez wspólny funnel z automatycznym fallbackiem modeli
     ai_text = call_gemini(prompt, timeout=45)
 
+    # Dziennik porad: analiza spółki też jest poradą - zapisujemy ją z ceną zamknięcia
+    # z dnia analizy, żeby dało się potem sprawdzić, czy werdykt się sprawdził.
+    last_close = chart_data[-1]["close"] if chart_data else None
+    journal_id = journal_save(
+        "spolka", request.question, ai_text,
+        [{"ticker": request.ticker, "name": company_name, "price": last_close, "currency": quote_currency}],
+        brief={"horizon": {"krotki": "krotki", "dlugi": "dlugi"}.get(request.horizon, "sredni")},
+    )
+
     return {
         "ticker": request.ticker,
         "ai_analysis": ai_text,
         "chart_data": chart_data,
+        "journal_id": journal_id,
     }
 
 
@@ -3459,6 +3472,15 @@ setup_search(
 # Koszty maklerskie - endpointy /api/broker/*
 setup_broker(app, fx_fn=get_fx_rate)
 
+# Dziennik porad - endpointy /api/journal/*
+from ai_models import snapshot_state as _ai_state
+setup_journal(
+    app,
+    price_fn=get_current_price,
+    snapshot_fn=get_index_snapshot,
+    model_fn=lambda: (_ai_state().get("last_used") or {}).get("model"),
+)
+
 # Doradca - endpoint /api/advisor/ask
 setup_advisor(
     app,
@@ -3479,4 +3501,7 @@ setup_advisor(
     earnings_fn=get_next_earnings_date,
     news_fn=get_news_headlines,
     search_index_fn=known_symbols,
+    # Dziennik porad - każda odpowiedź zapisuje się sama
+    journal_save_fn=journal_save,
+    journal_append_fn=journal_append,
 )

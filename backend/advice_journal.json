@@ -1,0 +1,67 @@
+[
+ {
+  "id": "9f70e23b7e5d",
+  "created_at": "2026-09-22T18:08:04.050457+00:00",
+  "source": "spolka",
+  "question": "Jak oceniasz aktualny trend spółki?",
+  "answer": "## Odpowiedź\n\nAktualny trend spółki Atal S.A. oceniam jako **silnie wzrostowy w długim i krótkim horyzoncie czasowym**. Po przejściu płytkiej korekty w okresie lipiec–sierpień, spółka dokonała 11 września 2026 r. wybicia 2-letniego szczytu na potężnym, akumulacyjnym wolumenie. Obecny spadek wolumenu przy utrzymaniu wysokich cen oznacza stabilną konsolidację przed kontynuacją ruchu w górę. **Decyzja dla portfela długoterminowego: KUPUJ / TRZYMAJ z docelową alokacją 7% kapitału.**\n\n## Co mówią dane\n\n*   **Trend długoterminowy (2 lata):** Zmiana o **+40,4%** (z 42,95 PLN do 60,30 PLN) jednoznacznie wskazuje na utwooną strukturę wyższych dołków i wyższych szczytów.\n*   **Przebieg korekty:** Od lokalnego szczytu z 2 czerwca (60,39 PLN) do dołka z 7 września (54,80 PLN) kurs spadł o **9,25%**. Korekta odbywała się przy niskich wolumenach (często poniżej 10 000 sztuk dziennie), co świadczyło o braku presji podażowej ze strony dużych inwestorów.\n*   **Sygnał wybicia (10–11 września 2026 r.):**\n    *   10 września: wzrost do 57,90 PLN przy wolumenie **208 888 sztuk**.\n    *   11 września: ustanowienie 2-letniego szczytu na poziomie **60,90 PLN** przy wolumenie **454 197 sztuk**.\n    *   W dwa dni obrócono **663 085 akcjami** (średni dzienny wolumen z 2 lat wynosił 14 151 sztuk). Jest to bezdyskusyjny dowód na wejście kapitału instytucjonalnego.\n*   **Obecna konsolidacja (14–22 września 2026 r.):** Kurs ustabilizował się w przedziale 59,00–60,30 PLN. Sesja z 22 września zakończyła się na poziomie **60,30 PLN** przy wolumenie 12 889 sztuk. Wyschnięcie wolumenu po wyznaczonym szczycie oznacza, że rynek nie chce oddawać akcji taniej.\n*   **Brakujące dane:** Dostarczone dane nie zawierają wskaźników fundamentalnych (P/E, EPS, C/WK) ani daty publikacji najbliższego raportu finansowego – analiza opiera się wyłącznie na strukturze ceny, trendzie i wolumenie.\n\n## Poziomy do obserwacji\n\nZe względu na notowania na GPW w PLN na koncie XTB, koszty prowizji wynoszą **0,00 PLN** (do limitu 100 000 EUR obrotu miesięcznie), a koszty przewalutowania to **0,00 PLN**. Zakup jednorazowy lub w transzach nie różni się pod względem opłat.\n\n*   **Rekomendowany poziom wejścia:** **60,30 PLN** (obecna cena rynkowa).\n*   **Kluczowy opór:** **60,90 PLN** (szczyt z 11 września 2026 r.). Wybicie tego poziomu zamknięciem sesji otwiera drogę do dalszych wzrostów.\n*   **Najbliższe wsparcie:** **59,00 PLN** (dołek z 15 września 2026 r.).\n*   **Poziom unieważnienia tezy / Stop Loss:** **54,50 PLN** (zamknięcie poniżej dołka z 7 września 2026 r. czyli 54,80 PLN oznacza załamanie struktury wzrostowej – maksymalna akceptowalna strata wynosi 9,6%).\n*   **Cena docelowa (Take Profit w horyzoncie >12 miesięcy):** **67,00 PLN** (projekcja zasięgu ostatniego wybiórczego ruchu wzrostowego 54,80 -> 60,90 PLN dodana do poziomu wybicia).\n*   **Alokacja:** **7% wartości portfela**. Przy kapitale 100 000 PLN oznacza to zakup **116 sztuk** akcji po cenie 60,30 PLN (łączna kwota: 6 994,80 PLN).\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.6-flash",
+  "tickers": [
+   {
+    "ticker": "1AT.WA",
+    "name": "Atal S.A.",
+    "price": 60.3,
+    "currency": "PLN"
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4218.3,
+   "sp500": 7770.57
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
+  "id": "bbf6b58856ec",
+  "created_at": "2026-09-22T18:06:34.859985+00:00",
+  "source": "doradca",
+  "question": "Mam 10k, mysle dlugi termin, ryzyko zrownowazone, mozemy wziac pod uwage spolki zagraniczne. Ryzyko zrownowazone bo dlugi termin, najlepiej dywidendowe, Mozemy wplacic czesc na IKE, czesc na zwykle. Doradz cos.",
+  "answer": "Twój obecny portfel (16 128,53 PLN) jest silnie skrzywiony w stronę polskich spółek o wysokiej zmienności oraz specyficznych branż (technologia/medycyna). Brakuje w nim stabilnego, globalnego rdzenia, a udział posiadanego już `VWCE.DE` wynosi zaledwie ok. 512 PLN (3% portfela). \n\nAby zrealizować Twój cel (długi horyzont, profil zrównoważony, wykorzystanie IKE pod dywidendy), dzielimy kwotę **10 000 PLN** na dwa konta.\n\n---\n\n## DECYZJA INWESTYCYJNA I PLAN ALOKACJI (10 000 PLN)\n\n| Instrument | Konto | Liczba sztuk | Cena / szt. | Wartość (PLN) | Udział % |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| **Vanguard FTSE All-World UCITS ETF (VWCE.DE)** | Zwykłe | **9 szt.** | 170.50 EUR (741,44 PLN) | **6 672,93 PLN** | **66,73%** |\n| **Atal S.A. (1AT.WA)** *(spoza skanera - z watchlisty)* | **IKE** | **55 szt.** | 60,30 PLN | **3 316,50 PLN** | **33,17%** |\n| **Gotówka (bufor)** | Zwykłe | - | - | **10,57 PLN** | **0,10%** |\n| **RAZEM** | | | | **10 000,00 PLN** | **100,00%** |\n\n*Przelicznik walutowy: EUR/PLN = 4,3486.*\n\n---\n\n## ARGUMENTACJA I STRUKTURA KOSZTOWA\n\n### 1. Rdzeń Portfela: Vanguard FTSE All-World UCITS ETF (`VWCE.DE`) – 6 672,93 PLN (Konto Zwykłe)\n* **Dlaczego ten instrument:** Znajduje się na Twojej liście kandydatów ze skanera (zmienność roczna 10,8%, obecny kurs przy szczycie 52-tygodniowym). Inwestor posiada już ten ETF w śladowej ilości. Dokupienie 9 sztuk urealnia rolę globalnego rdzenia, dając ekspozycję na ponad 3 000 spółek z całego świata.\n* **Dlaczego Konto Zwykłe:** `VWCE.DE` to ETF akumulujący (Acc) – reinvestuje dywidendy wewnątrz funduszu. Nie wypłaca gotówki, więc nie generuje corocznego obowiązku podatkowego. Podatek Belki (19%) zapłacisz dopiero przy sprzedaży za kilka/kilkanaście lat.\n* **Koszty transakcyjne:** \n  * Prowizja XTB: **0,00 PLN** (poniżej limitu 100 000 EUR/miesiąc).\n  * Przewalutowanie (0,5% przy zakupie): **33,36 PLN**. Przy ewentualnej sprzedaży poniesiesz kolejne 0,5% od wartości pozycji.\n* **Egzekucja:** Kupujesz jednorazowo całą pakietową kwotę. Rozbijanie na mniejsze transze nie zmieni kosztu prowizji (0 zł), ale narazi Cię na ryzyko ucieczki rynku w trendzie wzrostowym (+3,5% w 3M).\n\n### 2. Komponent Dywidendowy: Atal S.A. (`1AT.WA`) – 3 316,50 PLN (Konto IKE)\n* **Dlaczego ten instrument:** Wybrany z Twojej watchlisty (spoza skanera). Jako spółka deweloperska z GPW generuje wysokie, regularne przepływy dywidendowe.\n* **Dlaczego Konto IKE:** Dywidendy ze spółek polskich na koncie zwykłym są automatycznie obciążane 19% podatkiem Belki u źródła. Lokując `1AT.WA` na **IKE**, zachowujesz **100% kwoty wypłacanych dywidend**, które możesz natychmiast reinwestować bez oddawania ani grosza fiskusowi.\n* **Koszty transakcyjne:**\n  * Prowizja XTB: **0,00 PLN**.\n  * Przewalutowanie: **0,00 PLN** (spółka notowana w PLN).\n\n---\n\n## ANALIZA RYZYKA I SCENARIUSZE NEGATYWNE\n\n### Ryzyko dla `VWCE.DE`:\n* **Scenariusz negatywny:** Globalna recesja lub kryzys finansowy w USA/Europie.\n* **Maksymalny spadek:** W przypadku głębokiej bessy historyczne spadki tego typu indeksów dochodziły do **-25% do -35%**.\n* **Wartość pozycji w zły scenariusz:** Twoja alokacja 6 672,93 PLN może tymczasowo spaść do poziomu ok. **4 330 PLN – 5 000 PLN**. Horyzont 3+ lat pozwala na przeczekanie i odrobienie takiego cyklu.\n\n### Ryzyko dla `1AT.WA`:\n* **Scenariusz negatywny:** Gwałtowny wzrost stóp procentowych w Polsce, spadek popytu na mieszkania, załamanie marż deweloperskich lub wstrzymanie wypłaty dywidendy przez zarząd.\n* **Maksymalny spadek:** Spółki z sektora budowlanego/deweloperskiego w dołkach cyklu potrafią tracić **-30% do -40%**.\n* **Wartość pozycji w zły scenariusz:** Pozycja 3 316,50 PLN może spaść do poziomu ok. **1 990 PLN**. Ryzyko jest mitygowane brakiem podatku od dywidend, które amortyzują spadek wyceny rynkowej.\n\n---\n\n## CZEGO KATEGORYCZNIE NIE ROBIĆ (PRZY TYM PROFILU)\n\n1. **Nie kupuj kanadyjskich akcji preferowanych ze skanera (`CPD.TO`, `DIVS.TO`):** Posiadają co prawda niską zmienność (3,1% - 4,6%), ale wiążą się z podwójnym ryzykiem walutowym (CAD), wysokim podatkiem u źródła od dywidend zagranicznych oraz niską płynnością na rynku lokalnym.\n2. **Nie uśredniaj w dół wysokozmiennych polskich spółek (np. `CRI.WA`, `CTX.WA`):** Masz już w nich zamrożony kapitał, a ich zmienność (43% - 67%) wykracza poza profil zrównoważony. Dalsze wpłacanie tam środków zniszczy dywersyfikację portfela.\n3. **Nie kupuj jednostek S&P 500 (`SXR8.DE` / `CSPX.L`) obok `VWCE.DE`:** Posiadasz już znaczną ekspozycję na amerykański sektor technologiczny poprzez `CNDX.L` (ok. 2 780 PLN w portfelu). Dodanie S&P 500 spowoduje dublowanie największych spółek (Apple, Microsoft, Nvidia) i niepotrzebną koncentrację w USA.\n\n---\n\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi",
+   "risk": "zrownowazony",
+   "amount": 10000.0,
+   "account": "zwykle",
+   "exclusions": "krypto i cfd odpadaja.",
+   "profile": "Rdzeń portfela na lata"
+  },
+  "model": "gemini-3.6-flash",
+  "tickers": [
+   {
+    "ticker": "VWCE.DE",
+    "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "price": 170.5,
+    "currency": "EUR"
+   },
+   {
+    "ticker": "1AT.WA",
+    "name": "Atal S.A.",
+    "price": 60.29999923706055,
+    "currency": "PLN"
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4218.3,
+   "sp500": 7770.57
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ }
+]

@@ -121,7 +121,8 @@ export default function Advisor() {
       const history = [result.answer, ...followUps.map((f) => `Pytanie: ${f.q}\n${f.a}`)]
         .join('\n\n')
         .slice(-6000)
-      const data = await call({ ...base(), question: q, previous_analysis: history })
+      // journal_id - dopytanie dokleja się do tej samej porady w Dzienniku, a nie tworzy nowej
+      const data = await call({ ...base(), question: q, previous_analysis: history, journal_id: result.journal_id })
       setFollowUps((prev) => [...prev, { q, a: data.answer, verified: data.verified }])
     } catch (e) {
       setFollowUps((prev) => [...prev, { q, a: `**Nie udało się odpowiedzieć:** ${e.message}`, verified: [] }])
@@ -285,6 +286,7 @@ export default function Advisor() {
                 </span>
               )}
               {result.interpreted.exclusions && <span> · bez: {result.interpreted.exclusions}</span>}
+              {result.journal_id && <span className="hl-adv-saved"> · ✓ zapisane w Dzienniku porad</span>}
             </div>
           )}
 

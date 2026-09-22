@@ -77,6 +77,7 @@ class AdvisorRequest(BaseModel):
     exclusions: str = ""
     use_portfolio: bool = True
     previous_analysis: str = ""
+    journal_id: str | None = None     # dopytanie trafia do tego samego wpisu w Dzienniku porad
 
 
 # ============================================================================
@@ -317,7 +318,8 @@ def setup_advisor(app, ask_fn, persona="", markdown_rules="", disclaimer="",
                   portfolio_fn=None, portfolio_context_fn=None, watchlist_fn=None,
                   price_fn=None, name_fn=None, currency_fn=None,
                   snapshot_fn=None, indexes=None, fx_fn=None,
-                  earnings_fn=None, news_fn=None, search_index_fn=None, download_fn=None):
+                  earnings_fn=None, news_fn=None, search_index_fn=None, download_fn=None,
+                  journal_save_fn=None, journal_append_fn=None):
     import screener
 
     @app.post("/api/advisor/ask")
@@ -436,7 +438,22 @@ def setup_advisor(app, ask_fn, persona="", markdown_rules="", disclaimer="",
             v["fit_reason"] = reason
             v["from_scanner"] = v["ticker"] in candidate_set
 
+        # 4. Dziennik porad - zapis z ceną każdej spółki z dnia porady.
+        #    Dopytanie w tej samej rozmowie dokleja się do istniejącego wpisu.
+        question_text = req.question.strip() or "W co ulokować te środki?"
+        snap = [v for v in verified if v["ok"]]
+        journal_id = None
+        if req.journal_id and journal_append_fn:
+            journal_id = journal_append_fn(req.journal_id, question_text, answer, snap)
+        if journal_id is None and journal_save_fn:
+            journal_id = journal_save_fn(
+                "doradca", question_text, answer, snap,
+                brief={"horizon": horizon, "risk": risk, "amount": req.amount,
+                       "account": req.account, "exclusions": exclusions, "profile": profile["label"]},
+            )
+
         return {
+            "journal_id": journal_id,
             "answer": answer,
             "verified": verified,
             "unverified_count": sum(1 for v in verified if not v["ok"]),

@@ -15,6 +15,7 @@ import Sidebar, { findTab } from './Sidebar'
 import TickerSearch from './TickerSearch'
 import Advisor from './Advisor'
 import BrokerPanel from './BrokerPanel'
+import JournalPanel from './JournalPanel'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -31,6 +32,7 @@ function App() {
   const [horizon, setHorizon] = useState('sredni')
   const [chartData, setChartData] = useState([])
   const [aiAnalysis, setAiAnalysis] = useState('')
+  const [journalSaved, setJournalSaved] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('analiza')
@@ -91,6 +93,7 @@ function App() {
       const data = await response.json()
       setChartData(data.chart_data)
       setAiAnalysis(data.ai_analysis)
+      setJournalSaved(!!data.journal_id)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -267,6 +270,11 @@ function App() {
                     </h3>
                   </div>
                   <MarkdownView>{aiAnalysis}</MarkdownView>
+                  {journalSaved && (
+                    <div className="hl-adv-hint" style={{ marginTop: 12 }}>
+                      ✓ Zapisane w Dzienniku porad z dzisiejszą ceną — za kilka tygodni zobaczysz tam, czy werdykt się sprawdził.
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -282,6 +290,7 @@ function App() {
           {activeTab === 'alerty' && <PriceAlerts />}
           {activeTab === 'sprzedaze' && <SalesHistory />}
           {activeTab === 'dane' && <BackupPanel />}
+          {activeTab === 'dziennik' && <JournalPanel />}
           {activeTab === 'broker' && <BrokerPanel />}
           {activeTab === 'automat' && <AutomationPanel />}
         </main>

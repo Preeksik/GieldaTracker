@@ -28,6 +28,7 @@ export const NAV_GROUPS = [
       { key: 'doradca', icon: '✦', label: 'Doradca' },
       { key: 'analiza', icon: '◈', label: 'Spółka' },
       { key: 'rekomendacje', icon: '◆', label: 'Portfel AI' },
+      { key: 'dziennik', icon: '✎', label: 'Dziennik porad' },
     ],
   },
   {

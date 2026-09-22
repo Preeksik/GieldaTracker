@@ -286,5 +286,47 @@
   "exchange": "GPW",
   "type": "akcje",
   "seen": "2026-09-22T17:44:32.205285+00:00"
+ },
+ "ATALF": {
+  "name": "American Tungsten and Antimony Ltd",
+  "exchange": "OQB",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801179+00:00"
+ },
+ "ATYM.L": {
+  "name": "Atalaya Mining Copper, S.A.",
+  "exchange": "Londyn",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801188+00:00"
+ },
+ "ATALREAL.NS": {
+  "name": "Atal Realtech Limited",
+  "exchange": "NSI",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801191+00:00"
+ },
+ "1UY.DU": {
+  "name": "ATAL SA",
+  "exchange": "DUS",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801193+00:00"
+ },
+ "E5S1.SG": {
+  "name": "Atalaya Mining PLC",
+  "exchange": "Stuttgart",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801195+00:00"
+ },
+ "E5S1.F": {
+  "name": "Atalaya Mining Copper, S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801197+00:00"
+ },
+ "1AT.WA": {
+  "name": "Atal S.A.",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-09-22T18:07:26.801199+00:00"
  }
 }
