@@ -42,6 +42,10 @@ from broker import setup_broker, broker_prompt_block
 # Dziennik porad AI - każda porada z datą i cenami z tamtego dnia (osobny moduł journal.py).
 from journal import setup_journal, journal_save, journal_append
 
+# Radar gorących spółek - sygnały z ESPI, SEC Form 4, Reddita i mediów (osobny moduł radar.py).
+from radar import setup_radar
+import search as _search_mod
+
 from ai_models import (
     setup_ai_models,
     generate as ai_generate,
@@ -3471,6 +3475,35 @@ setup_search(
 
 # Koszty maklerskie - endpointy /api/broker/*
 setup_broker(app, fx_fn=get_fx_rate)
+
+
+def _radar_known_companies():
+    """Spółki z portfela, watchlisty i wyszukiwarki - Radar rozpoznaje je w nagłówkach."""
+    out = []
+    try:
+        for e in load_portfolio():
+            out.append((e.get("ticker"), e.get("name")))
+    except Exception:
+        pass
+    try:
+        for t, v in known_symbols().items():
+            out.append((t, (v or {}).get("name")))
+    except Exception:
+        pass
+    return [(t, n) for t, n in out if t and n]
+
+
+# Radar - endpointy /api/radar/*, zbieranie sygnałów w tle co 20 min (Bankier co 5 min)
+setup_radar(
+    app,
+    scheduler=scheduler,
+    ask_fn=call_gemini,
+    persona=ANALYST_PERSONA,
+    markdown_rules=MARKDOWN_FORMAT_RULES,
+    yahoo_fn=lambda q: _search_mod._yahoo_entries(q, limit=6)[0],
+    earnings_fn=get_next_earnings_date,
+    extra_known_fn=_radar_known_companies,
+)
 
 # Dziennik porad - endpointy /api/journal/*
 from ai_models import snapshot_state as _ai_state

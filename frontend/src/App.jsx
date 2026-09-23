@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import PortfolioTracker from './PortfolioTracker'
 import PortfolioReport from './PortfolioReport'
-import PortfolioNews from './PortfolioNews'
 import DividendCalendar from './DividendCalendar'
 import PriceAlerts from './PriceAlerts'
 import SalesHistory from './SalesHistory'
@@ -16,6 +15,7 @@ import TickerSearch from './TickerSearch'
 import Advisor from './Advisor'
 import BrokerPanel from './BrokerPanel'
 import JournalPanel from './JournalPanel'
+import RadarPanel from './RadarPanel'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -285,7 +285,7 @@ function App() {
           {activeTab === 'rekomendacje' && <PortfolioReport />}
           {activeTab === 'briefing' && <MorningDigest />}
           {activeTab === 'espi' && <EspiScanner />}
-          {activeTab === 'newsy' && <PortfolioNews />}
+          {activeTab === 'newsy' && <RadarPanel />}
           {activeTab === 'dywidendy' && <DividendCalendar />}
           {activeTab === 'alerty' && <PriceAlerts />}
           {activeTab === 'sprzedaze' && <SalesHistory />}
