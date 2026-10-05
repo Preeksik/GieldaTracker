@@ -84,7 +84,134 @@ class AdvisorRequest(BaseModel):
 # WYCIĄGANIE SYMBOLI Z ODPOWIEDZI
 # ============================================================================
 
+STANCE_WORDS = {
+    "KUP": "kup", "KUPUJ": "kup", "DOKUP": "kup", "DOKUPUJ": "kup", "ZWIEKSZ": "kup", "ZWIĘKSZ": "kup",
+    "TRZYMAJ": "trzymaj", "SPRZEDAJ": "sprzedaj", "REDUKUJ": "sprzedaj", "ZREDUKUJ": "sprzedaj",
+    "ZMNIEJSZ": "sprzedaj", "UNIKAJ": "unikaj", "OMIJAJ": "unikaj",
+    "NEUTRALNIE": "neutralnie", "NEUTRALNY": "neutralnie", "OBSERWUJ": "neutralnie",
+}
+AMOUNT_RE = re.compile(r"(?<![\w.])(\d{1,3}(?:[ \u00a0.,]\d{3})+|\d+(?:[.,]\d+)?)(?!\d)(?![\d.,]*\s*%)")
+
+
+def ticker_line_rule(currency="PLN"):
+    """Instrukcja dla modelu: ostatnia linia z symbolami, zaleceniem i kwotą (do Dziennika porad)."""
+    return (
+        "\nNa samym końcu, w osobnej linii, wypisz KAŻDY symbol, o którym piszesz, razem z zaleceniem "
+        "i kwotą, w formacie:\n"
+        f"TICKERY: SYMBOL ZALECENIE KWOTA, SYMBOL ZALECENIE KWOTA\n"
+        "ZALECENIE to jedno z: KUP, DOKUP, TRZYMAJ, SPRZEDAJ, UNIKAJ. "
+        f"KWOTA w {currency}, tylko gdy podałeś konkretną kwotę dla tej pozycji - inaczej ją pomiń. "
+        "Spółki, przed którymi ostrzegasz, oznacz UNIKAJ, a nie KUP.\n"
+        f"Przykład: TICKERY: CDR.WA KUP 2000, VWCE.DE KUP 3000, PKN.WA SPRZEDAJ, ALE.WA UNIKAJ\n"
+    )
+
+
+STANCE_LINE_RE = re.compile(r"^\s*\**NASTAWIENIE\**\s*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+VERDICT_RE = re.compile(r"\*\*\s*(KUP|KUPUJ|DOKUP|TRZYMAJ|SPRZEDAJ|REDUKUJ|ZREDUKUJ|UNIKAJ)\b[^*]{0,30}\*\*")
+
+STANCE_RULE = (
+    "\nNa samym końcu, w osobnej linii, wypisz swoje zalecenie dla tej spółki w formacie:\n"
+    "NASTAWIENIE: KUP | TRZYMAJ | SPRZEDAJ | UNIKAJ | NEUTRALNIE\n"
+    "(jedno słowo; NEUTRALNIE, gdy pytanie nie dotyczyło decyzji)\n"
+)
+
+
+def extract_stance(text):
+    """
+    Zalecenie z analizy jednej spółki: linia 'NASTAWIENIE: ...', a gdy jej brak -
+    pierwszy wytłuszczony werdykt (**SPRZEDAJ**) z początku odpowiedzi.
+    Zwraca (stance albo None, tekst_bez_linii).
+    """
+    if not text:
+        return None, ""
+    stance, clean = None, text
+    m = STANCE_LINE_RE.search(text)
+    if m:
+        clean = STANCE_LINE_RE.sub("", text).rstrip()
+        for w in re.findall(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+", m.group(1)):
+            if w.upper() in STANCE_WORDS:
+                stance = STANCE_WORDS[w.upper()]
+                break
+    if stance is None:
+        v = VERDICT_RE.search(text[:1500])
+        if v:
+            stance = STANCE_WORDS.get(v.group(1).upper())
+    return stance, clean
+
+
+def _parse_amount(raw):
+    t = raw.replace("\u00a0", " ").strip()
+    if re.fullmatch(r"\d{1,3}(?:[ .,]\d{3})+", t):
+        t = re.sub(r"[ .,]", "", t)          # 2 000 / 2.000 / 2,000 -> 2000
+    try:
+        v = float(t.replace(",", "."))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def _split_items(line):
+    """Dzieli 'A KUP 2000, B (KUP, 3000 zł); C' po przecinkach i średnikach - ale nie w nawiasach
+    i nie w liczbach ('2,5' albo '2,000' - przecinek bez spacji między cyframi)."""
+    items, depth, cur = [], 0, ""
+    for i, ch in enumerate(line):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]" and depth > 0:
+            depth -= 1
+        in_number = ch == "," and cur[-1:].isdigit() and line[i + 1:i + 2].isdigit()
+        if ch in ",;" and depth == 0 and not in_number:
+            items.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    items.append(cur)
+    return [x.strip() for x in items if x.strip()]
+
+
+def extract_ticker_plan(text):
+    """
+    Zwraca ([{ticker, stance, amount}], tekst_bez_linii_TICKERY).
+    stance: kup / trzymaj / sprzedaj / unikaj / neutralnie albo None, gdy model go nie podał.
+    """
+    if not text:
+        return [], ""
+    plan, clean = [], text
+    m = TICKER_LINE_RE.search(text)
+    if m:
+        clean = TICKER_LINE_RE.sub("", text).rstrip()
+        for part in _split_items(m.group(1)):
+            words = [w.strip(",;!") for w in re.sub(r"[()\[\]=:*`_]", " ", part).split()]
+            words = [w for w in words if w]
+            if not words:
+                continue
+            sym = words[0].strip(".").upper()
+            if (not sym or sym in STOPWORDS or sym in STANCE_WORDS or len(sym) > 12 or sym == "BRAK"
+                    or not re.search(r"[A-Z]", sym)):
+                continue
+            rest = " ".join(words[1:])
+            stance = next((STANCE_WORDS[w.upper()] for w in words[1:] if w.upper() in STANCE_WORDS), None)
+            am = AMOUNT_RE.search(rest)
+            plan.append({"ticker": sym, "stance": stance, "amount": _parse_amount(am.group(1)) if am else None})
+    else:
+        legacy, clean = extract_tickers_legacy(text)
+        plan = [{"ticker": t, "stance": None, "amount": None} for t in legacy]
+
+    seen, out = set(), []
+    for p in plan:
+        if p["ticker"] not in seen:
+            seen.add(p["ticker"])
+            out.append(p)
+    return out[:MAX_VERIFIED], clean
+
+
 def extract_tickers(text):
+    """Same symbole (zgodność wsteczna)."""
+    plan, clean = extract_ticker_plan(text)
+    return [p["ticker"] for p in plan], clean
+
+
+def extract_tickers_legacy(text):
     """
     Zwraca (lista_symboli, tekst_bez_linii_TICKERY).
 
@@ -390,8 +517,7 @@ def setup_advisor(app, ask_fn, persona="", markdown_rules="", disclaimer="",
             "'cena do sprawdzenia' zamiast zgadywać - aplikacja i tak dopisze realną cenę.\n"
             "- Nie udawaj pewności tam, gdzie jej nie ma. Jeśli brakuje informacji o inwestorze, "
             "powiedz jakiej i jak zmieniłaby odpowiedź.\n"
-            "\nNa samym końcu, w osobnej linii, wypisz wszystkie wymienione symbole w formacie:\n"
-            "TICKERY: SYM1, SYM2, SYM3\n"
+            + ticker_line_rule(req.currency or "PLN")
         )
 
         blocks = [
@@ -419,8 +545,8 @@ def setup_advisor(app, ask_fn, persona="", markdown_rules="", disclaimer="",
         blocks.append(rules + markdown_rules + disclaimer)
 
         raw = ask_fn("\n\n".join(b for b in blocks if b), timeout=90)
-        tickers, answer = extract_tickers(raw)
-        verified = verify_tickers(tickers, price_fn, name_fn, currency_fn)
+        plan, answer = extract_ticker_plan(raw)
+        verified = verify_tickers([p["ticker"] for p in plan], price_fn, name_fn, currency_fn)
 
         # 3. Kod sprawdza model: czy każda propozycja pasuje do profilu.
         try:
@@ -441,7 +567,11 @@ def setup_advisor(app, ask_fn, persona="", markdown_rules="", disclaimer="",
         # 4. Dziennik porad - zapis z ceną każdej spółki z dnia porady.
         #    Dopytanie w tej samej rozmowie dokleja się do istniejącego wpisu.
         question_text = req.question.strip() or "W co ulokować te środki?"
-        snap = [v for v in verified if v["ok"]]
+        by_sym = {p["ticker"]: p for p in plan}
+        for v in verified:
+            v["stance"] = by_sym.get(v["ticker"], {}).get("stance")
+        snap = [{**v, "amount": by_sym.get(v["ticker"], {}).get("amount"),
+                 "amount_currency": req.currency or "PLN"} for v in verified if v["ok"]]
         journal_id = None
         if req.journal_id and journal_append_fn:
             journal_id = journal_append_fn(req.journal_id, question_text, answer, snap)

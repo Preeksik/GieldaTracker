@@ -25,6 +25,20 @@ function ago(days) {
 }
 
 const pct = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`)
+const zl = (v, sign = false) =>
+  v == null ? '—' : `${sign && v > 0 ? '+' : ''}${Math.round(v).toLocaleString('pl-PL')} zł`
+const STANCE = {
+  kup: { label: 'kup', cls: 'hl-jr-st-buy' },
+  trzymaj: { label: 'trzymaj', cls: 'hl-jr-st-hold' },
+  sprzedaj: { label: 'sprzedaj', cls: 'hl-jr-st-sell' },
+  unikaj: { label: 'unikaj', cls: 'hl-jr-st-sell' },
+  neutralnie: { label: 'bez zalecenia', cls: 'hl-jr-st-none' },
+}
+function StanceTag({ stance }) {
+  const st = STANCE[stance]
+  if (!st) return null
+  return <span className={`hl-jr-st ${st.cls}`}>{st.label}</span>
+}
 const cls = (v) => (v == null ? '' : v > 0 ? 'hl-up' : v < 0 ? 'hl-down' : '')
 
 async function api(path, opts) {
@@ -79,9 +93,11 @@ function Entry({ e, sources, onChange }) {
           {r.rows?.length > 0 && (
             <div className="hl-jr-tickers">
               {r.rows.map((t) => (
-                <span key={t.ticker} className="hl-jr-tk" title={`${t.name || t.ticker}: ${t.price} → ${t.now ?? '?'} ${t.currency || ''}`}>
+                <span key={t.ticker} className="hl-jr-tk"
+                  title={`${t.name || t.ticker}: ${t.price} → ${t.now ?? '?'} ${t.currency || ''} (kurs ${pct(t.change_pct)})`}>
                   <b>{t.ticker}</b>
-                  <span className={cls(t.change_pct)}>{pct(t.change_pct)}</span>
+                  <StanceTag stance={t.stance} />
+                  <span className={cls(t.effect_pct ?? null)}>{t.effect_pct != null ? pct(t.effect_pct) : pct(t.change_pct)}</span>
                 </span>
               ))}
             </div>
@@ -91,7 +107,14 @@ function Entry({ e, sources, onChange }) {
         <div className="hl-jr-score">
           {r.avg_change_pct != null ? (
             <>
-              <div className={`hl-jr-avg ${cls(r.avg_change_pct)}`}>{pct(r.avg_change_pct)}</div>
+              <div className={`hl-jr-avg ${cls(r.avg_change_pct)}`} title={r.weighted ? 'Średnia ważona kwotami z porady' : 'Zwykła średnia — porada nie podała kwot'}>
+                {pct(r.avg_change_pct)}
+              </div>
+              {r.money && (
+                <div className={`hl-jr-money ${cls(r.money.result_pln)}`} title={`na ${zl(r.money.invested_pln)} z porady`}>
+                  {zl(r.money.result_pln, true)}
+                </div>
+              )}
               {r.vs_market_pct != null && (
                 <div className="hl-jr-vs">
                   <span className={cls(r.vs_market_pct)}>{r.vs_market_pct > 0 ? '+' : ''}{r.vs_market_pct.toFixed(2)} pp</span> vs {ref?.label}
@@ -120,9 +143,12 @@ function Entry({ e, sources, onChange }) {
                 <thead>
                   <tr>
                     <th>Spółka</th>
+                    <th>Zalecenie</th>
+                    <th style={{ textAlign: 'right' }}>Kwota</th>
                     <th style={{ textAlign: 'right' }}>W dniu porady</th>
                     <th style={{ textAlign: 'right' }}>Dziś</th>
-                    <th style={{ textAlign: 'right' }}>Zmiana</th>
+                    <th style={{ textAlign: 'right' }}>Kurs</th>
+                    <th style={{ textAlign: 'right' }} title="Kurs z uwzględnieniem kierunku: przy SPRZEDAJ/UNIKAJ spadek kursu to zysk porady">Wynik porady</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -131,17 +157,25 @@ function Entry({ e, sources, onChange }) {
                       <td><span className="hl-adv-vtick" style={{ minWidth: 0, marginRight: 8 }}>{t.ticker}</span>{t.name}
                         {t.added_at && <span className="hl-adv-vmeta"> · dodana w dopytaniu {new Date(t.added_at).toLocaleDateString('pl-PL')}</span>}
                       </td>
+                      <td><StanceTag stance={t.stance} />{!t.stance && <span className="hl-adv-vmeta">—</span>}</td>
+                      <td className="hl-num" style={{ textAlign: 'right' }}>{t.amount_pln ? zl(t.amount_pln) : '—'}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{t.price} {t.currency}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{t.now ?? '—'} {t.now != null ? t.currency : ''}</td>
                       <td className={`hl-num ${cls(t.change_pct)}`} style={{ textAlign: 'right' }}>{pct(t.change_pct)}</td>
+                      <td className={`hl-num ${cls(t.effect_pct)}`} style={{ textAlign: 'right' }}>
+                        {t.effect_pct != null ? pct(t.effect_pct) : <span className="hl-adv-vmeta">nie liczy się</span>}
+                      </td>
                     </tr>
                   ))}
                   {Object.values(r.benchmarks || {}).map((b) => (
                     <tr key={b.label} className="hl-jr-bench">
                       <td>{b.label} <span className="hl-adv-vmeta">· rynek</span></td>
+                      <td></td>
+                      <td></td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{b.then ?? '—'}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{b.now ?? '—'}</td>
                       <td className={`hl-num ${cls(b.change_pct)}`} style={{ textAlign: 'right' }}>{pct(b.change_pct)}</td>
+                      <td></td>
                     </tr>
                   ))}
                 </tbody>
@@ -231,9 +265,10 @@ export default function JournalPanel() {
       <div className="hl-panel" style={{ padding: '22px 24px', marginBottom: 18 }}>
         <h2 style={{ margin: '0 0 6px', fontSize: 17 }}>Dziennik porad</h2>
         <p className="hl-adv-hint" style={{ margin: '0 0 16px' }}>
-          Każda porada z Doradcy i analiza spółki zapisuje się sama — z datą i cenami z tamtej
-          chwili. Automatycznie, bo przy ręcznym zapisie zostawałyby głównie trafione porady
-          i bilans byłby fałszywie optymistyczny. Niepotrzebne usuniesz ręcznie.
+          Każda porada AI zapisuje się sama — z Doradcy, Portfela AI, analizy spółki i analiz pozycji —
+          z datą, cenami z tamtej chwili, zaleceniem i kwotą. Automatycznie, bo przy ręcznym zapisie
+          zostawałyby głównie trafione porady i bilans byłby fałszywie optymistyczny. Porada
+          „sprzedaj” jest trafna, gdy kurs spadł — tak też jest liczona.
         </p>
 
         {s && s.total > 0 && (
@@ -247,6 +282,30 @@ export default function JournalPanel() {
               <span>średnio vs rynek</span>
             </div>
             <div><b>{s.mature ? `${s.beat_market}/${s.mature}` : '—'}</b><span>pobiło rynek</span></div>
+            {s.money && (
+              <div title={`Gdybyś zrobił dokładnie to, co radziło AI, za ${zl(s.money.invested_pln)} z ${s.money.entries} porad`}>
+                <b className={cls(s.money.result_pln)}>{zl(s.money.result_pln, true)}</b>
+                <span>wynik na {zl(s.money.invested_pln)}</span>
+              </div>
+            )}
+            {s.money && (
+              <div title="O ile lepiej lub gorzej niż te same pieniądze w indeksie (WIG20 / S&P 500)">
+                <b className={cls(s.money.vs_market_pln)}>{zl(s.money.vs_market_pln, true)}</b>
+                <span>ponad rynek</span>
+              </div>
+            )}
+          </div>
+        )}
+        {s && Object.keys(s.by_source || {}).length > 1 && (
+          <div className="hl-jr-sources">
+            {Object.entries(s.by_source).map(([k, v]) => (
+              <span key={k}>
+                <b>{data.sources?.[k] || k}</b> {v.beat_market}/{v.mature} pobiło rynek ·{' '}
+                <span className={cls(v.avg_vs_market_pct)}>
+                  {v.avg_vs_market_pct > 0 ? '+' : ''}{v.avg_vs_market_pct?.toFixed(2)} pp
+                </span>
+              </span>
+            ))}
           </div>
         )}
         {s && s.mature > 0 && s.mature < 10 && (
@@ -271,7 +330,7 @@ export default function JournalPanel() {
 
       {data && data.entries.length === 0 && (
         <div className="hl-panel" style={{ padding: 28, textAlign: 'center', color: 'var(--text-dim)' }}>
-          {q || source ? 'Nic nie pasuje do wyszukiwania.' : 'Dziennik jest pusty. Zadaj pytanie w Doradcy albo przeanalizuj spółkę — porada zapisze się tu sama.'}
+          {q || source ? 'Nic nie pasuje do wyszukiwania.' : 'Dziennik jest pusty. Zadaj pytanie w Doradcy, Portfelu AI albo przeanalizuj spółkę lub pozycję — porada zapisze się tu sama.'}
         </div>
       )}
 

@@ -34,7 +34,8 @@ from automation import setup_automation, send_telegram_alert
 from search import setup_search, known_symbols
 
 # Doradca - otwarte pytanie inwestycyjne, działa też przy pustym portfelu.
-from advisor import setup_advisor
+from advisor import (setup_advisor, extract_ticker_plan, extract_stance, verify_tickers,
+                     ticker_line_rule, STANCE_RULE)
 
 # Koszty maklerskie - tabele opłat brokerów i Twój profil (osobny moduł broker.py).
 from broker import setup_broker, broker_prompt_block
@@ -160,6 +161,7 @@ class PositionAnalysisRequest(BaseModel):
     custom_note: str = ""  # np. "rozważam czasowe wyjście pod konferencję Nvidii"
     previous_analysis: str = ""  # wypełnione tylko przy pytaniu uzupełniającym
     follow_up_question: str = ""  # jeśli podane, generujemy odpowiedź na to pytanie zamiast pełnej analizy
+    journal_id: str | None = None  # dopytanie trafia do tego samego wpisu w Dzienniku porad
 
 
 def get_company_name(ticker):
@@ -2516,9 +2518,56 @@ def run_horizon_analysis(position_facts, horizon, custom_note, previous_analysis
             "i dlaczego, biorąc pod uwagę zmienność i płynność tego waloru."
             + MARKDOWN_FORMAT_RULES
             + DISCLAIMER_RULE
+            + STANCE_RULE
         )
 
     return call_gemini(prompt, timeout=45)
+
+
+HORIZON_LABELS = {"krotki": "krótkoterminowo", "sredni": "średnioterminowo", "dlugi": "długoterminowo"}
+
+
+def journal_position_analysis(request, raw_text, ticker, name, price, currency, value_pln, label):
+    """
+    Analiza pozycji to też porada - zapisujemy ją w Dzienniku z ceną z tej chwili,
+    zaleceniem (SPRZEDAJ / TRZYMAJ / DOKUP) i wartością pozycji jako wagą.
+    Dopytanie dokleja się do wpisu z pierwszej analizy. Zwraca (tekst_bez_linii, journal_id).
+    """
+    stance, text = extract_stance(raw_text)
+    if request.follow_up_question:
+        jid = journal_append(request.journal_id, request.follow_up_question, text) if request.journal_id else None
+        return text, jid
+    question = f"{label}: co zrobić z pozycją {name} ({ticker}) {HORIZON_LABELS.get(request.horizon, '')}?"
+    if request.custom_note:
+        question += f" Kontekst: {request.custom_note}"
+    jid = journal_save(
+        "pozycja", question, text,
+        [{"ticker": ticker, "name": name, "price": price, "currency": currency,
+          "stance": stance, "amount_pln": value_pln}],
+        brief={"horizon": request.horizon if request.horizon in HORIZON_LABELS else "sredni"},
+    )
+    return text, jid
+
+
+def journal_from_plan(source, question, raw_text, brief, journal_id=None, currency="PLN"):
+    """
+    Odpowiedź z listą spółek (linia 'TICKERY: ...') -> wpis w Dzienniku z cenami z tej chwili,
+    zaleceniem i kwotą dla każdej spółki. Dopytanie w tej samej rozmowie dokleja się do wpisu.
+    Zwraca (tekst_bez_linii, journal_id). Dziennik nigdy nie blokuje odpowiedzi.
+    """
+    plan, text = extract_ticker_plan(raw_text)
+    try:
+        verified = verify_tickers([p["ticker"] for p in plan], get_current_price, get_company_name, get_currency)
+    except Exception:
+        logger.exception("Nie udało się sprawdzić symboli do Dziennika porad")
+        verified = []
+    by_sym = {p["ticker"]: p for p in plan}
+    snap = [{**v, "stance": by_sym[v["ticker"]]["stance"], "amount": by_sym[v["ticker"]]["amount"],
+             "amount_currency": currency} for v in verified if v["ok"]]
+    jid = journal_append(journal_id, question, text, snap) if journal_id else None
+    if jid is None:
+        jid = journal_save(source, question, text, snap, brief=brief)
+    return text, jid
 
 
 def build_trend_summary(ticker, period, quote_currency):
@@ -2599,11 +2648,16 @@ def analyze_position(entry_id: str, request: PositionAnalysisRequest):
         position_facts, request.horizon, request.custom_note,
         request.previous_analysis, request.follow_up_question
     )
+    analysis_text, journal_id = journal_position_analysis(
+        request, analysis_text, ticker, entry.get("name") or ticker, current_price, quote_currency,
+        value_pln, "Analiza transakcji",
+    )
 
     return {
         "ticker": ticker,
         "horizon": request.horizon,
         "analysis": analysis_text,
+        "journal_id": journal_id,
     }
 
 
@@ -2673,12 +2727,17 @@ def analyze_ticker(ticker: str, request: PositionAnalysisRequest):
         position_facts, request.horizon, request.custom_note,
         request.previous_analysis, request.follow_up_question
     )
+    analysis_text, journal_id = journal_position_analysis(
+        request, analysis_text, ticker, company_name, current_price, quote_currency,
+        value_pln, "Analiza pozycji",
+    )
 
     return {
         "ticker": ticker,
         "horizon": request.horizon,
         "analysis": analysis_text,
         "lots_analyzed": len(ticker_entries),
+        "journal_id": journal_id,
     }
 
 
@@ -2816,15 +2875,20 @@ def portfolio_diversification():
         "popularny ticker pasujący do roli - podaj go jako przykład."
         + MARKDOWN_FORMAT_RULES
         + DISCLAIMER_RULE
+        + ticker_line_rule("PLN")
     )
 
     report_text = call_gemini(prompt)
-    return {"report": report_text}
+    report_text, journal_id = journal_from_plan(
+        "portfel", "Analiza dywersyfikacji portfela", report_text, brief={"horizon": "dlugi"},
+    )
+    return {"report": report_text, "journal_id": journal_id}
 
 
 class PortfolioQuestionRequest(BaseModel):
     question: str
     previous_analysis: str = ""  # kontekst z poprzednich pytań/odpowiedzi w tej samej rozmowie
+    journal_id: str | None = None  # dopytanie trafia do tego samego wpisu w Dzienniku porad
 
 
 @app.post("/api/portfolio/ask")
@@ -2873,6 +2937,7 @@ def portfolio_ask(request: PortfolioQuestionRequest):
             + ask_rules
             + MARKDOWN_FORMAT_RULES
             + DISCLAIMER_RULE
+            + ticker_line_rule("PLN")
         )
     else:
         prompt = (
@@ -2885,10 +2950,15 @@ def portfolio_ask(request: PortfolioQuestionRequest):
             + ask_rules
             + MARKDOWN_FORMAT_RULES
             + DISCLAIMER_RULE
+            + ticker_line_rule("PLN")
         )
 
     answer_text = call_gemini(prompt)
-    return {"answer": answer_text}
+    answer_text, journal_id = journal_from_plan(
+        "portfel", request.question, answer_text, brief={"horizon": "sredni"},
+        journal_id=request.journal_id,
+    )
+    return {"answer": answer_text, "journal_id": journal_id}
 
 
 class WatchlistAddRequest(BaseModel):
@@ -3430,17 +3500,20 @@ def analyze_stock(request: AnalyzeRequest):
         "Konkretne ceny: wsparcie, opór, poziom unieważniający tezę."
         + MARKDOWN_FORMAT_RULES
         + DISCLAIMER_RULE
+        + STANCE_RULE
     )
 
     # 2. Wywołanie Gemini - przez wspólny funnel z automatycznym fallbackiem modeli
     ai_text = call_gemini(prompt, timeout=45)
+    stance, ai_text = extract_stance(ai_text)
 
     # Dziennik porad: analiza spółki też jest poradą - zapisujemy ją z ceną zamknięcia
     # z dnia analizy, żeby dało się potem sprawdzić, czy werdykt się sprawdził.
     last_close = chart_data[-1]["close"] if chart_data else None
     journal_id = journal_save(
         "spolka", request.question, ai_text,
-        [{"ticker": request.ticker, "name": company_name, "price": last_close, "currency": quote_currency}],
+        [{"ticker": request.ticker, "name": company_name, "price": last_close, "currency": quote_currency,
+          "stance": stance}],
         brief={"horizon": {"krotki": "krotki", "dlugi": "dlugi"}.get(request.horizon, "sredni")},
     )
 
@@ -3512,6 +3585,7 @@ setup_journal(
     price_fn=get_current_price,
     snapshot_fn=get_index_snapshot,
     model_fn=lambda: (_ai_state().get("last_used") or {}).get("model"),
+    fx_fn=lambda currency: get_fx_rate(currency, {}),
 )
 
 # Doradca - endpoint /api/advisor/ask

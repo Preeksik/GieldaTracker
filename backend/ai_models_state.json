@@ -2,32 +2,24 @@
   "mode": "mocny",
   "manual_model": "gemini-3.8-flash",
   "cooldowns": {
-    "gemini-3.8-flash": "2026-09-23T21:31:25.471015+00:00",
-    "gemini-3.7-flash": "2026-09-23T21:31:33.000462+00:00"
+    "gemini-3.6-flash": "2026-10-02T12:36:36.380581+00:00",
+    "gemini-3.8-flash": "2026-10-02T12:39:37.232138+00:00",
+    "gemini-3.7-flash": "2026-10-02T12:39:38.828023+00:00"
   },
   "usage": {
-    "2026-09-20": {
-      "gemini-3.6-flash": 2,
-      "gemini-3.8-flash": 2,
-      "gemini-3.7-flash": 1,
-      "gemini-3.5-flash": 1
-    },
-    "2026-09-22": {
-      "gemini-3-flash-preview": 4,
-      "gemini-3.6-flash": 2
-    },
-    "2026-09-23": {
-      "gemini-3.6-flash": 1
+    "2026-10-02": {
+      "gemini-3.6-flash": 1,
+      "gemini-3.5-flash": 2
     }
   },
   "last_used": {
-    "model": "gemini-3.6-flash",
-    "at": "2026-09-23T21:26:52.223618+00:00"
+    "model": "gemini-3.5-flash",
+    "at": "2026-10-02T12:35:04.765748+00:00"
   },
   "last_fallback": {
-    "at": "2026-09-23T21:26:52.223627+00:00",
+    "at": "2026-10-02T12:35:04.765756+00:00",
     "wanted": "gemini-3.8-flash",
-    "used": "gemini-3.6-flash",
+    "used": "gemini-3.5-flash",
     "attempts": [
       {
         "model": "gemini-3.8-flash",
@@ -40,10 +32,90 @@
         "skipped": false,
         "status": 503,
         "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 2 min"
       }
     ]
   },
   "recent": [
+    {
+      "at": "2026-10-02T12:35:04.769432+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": "gemini-3.5-flash",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 2 min"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-02T12:32:16.786933+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": "gemini-3.5-flash",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 3 min"
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 3 min"
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-02T12:29:14.162951+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": "gemini-3.6-flash",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
     {
       "at": "2026-09-23T21:26:52.227330+00:00",
       "wanted": "gemini-3.8-flash",

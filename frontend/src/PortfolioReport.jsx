@@ -9,12 +9,15 @@ function PortfolioReport() {
   const [diversification, setDiversification] = useState('')
   const [diversificationLoading, setDiversificationLoading] = useState(false)
   const [diversificationError, setDiversificationError] = useState('')
+  const [diversificationSaved, setDiversificationSaved] = useState(false)
 
   // Wątek pytań o cały portfel
   const [thread, setThread] = useState([]) // [{question, answer}]
   const [question, setQuestion] = useState('')
   const [questionLoading, setQuestionLoading] = useState(false)
   const [questionError, setQuestionError] = useState('')
+  // Id wpisu w Dzienniku porad - dopytania w tej rozmowie doklejają się do niego
+  const [journalId, setJournalId] = useState(null)
 
   const runDiversification = async () => {
     setDiversificationLoading(true)
@@ -28,6 +31,7 @@ function PortfolioReport() {
       }
       const data = await res.json()
       setDiversification(data.report)
+      setDiversificationSaved(!!data.journal_id)
     } catch (err) {
       setDiversificationError(err.message)
     } finally {
@@ -54,7 +58,7 @@ function PortfolioReport() {
       const res = await fetch(`${API_URL}/api/portfolio/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, previous_analysis: previousAnalysis }),
+        body: JSON.stringify({ question, previous_analysis: previousAnalysis, journal_id: journalId }),
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
@@ -62,6 +66,7 @@ function PortfolioReport() {
       }
       const data = await res.json()
       setThread([...thread, { question, answer: data.answer }])
+      if (data.journal_id) setJournalId(data.journal_id)
       setQuestion('')
     } catch (err) {
       setQuestionError(err.message)
@@ -122,6 +127,11 @@ function PortfolioReport() {
           }}
         >
           <MarkdownView>{diversification}</MarkdownView>
+          {diversificationSaved && (
+            <div className="hl-adv-hint" style={{ marginTop: 12 }}>
+              ✓ Zapisane w Dzienniku porad z dzisiejszymi cenami.
+            </div>
+          )}
         </div>
       )}
 
@@ -150,6 +160,13 @@ function PortfolioReport() {
           </div>
         </div>
       ))}
+
+      {journalId && thread.length > 0 && (
+        <div className="hl-adv-hint" style={{ marginBottom: 12 }}>
+          ✓ Ta rozmowa zapisuje się w Dzienniku porad — z cenami, zaleceniami i kwotami z planu.
+          Za kilka tygodni zobaczysz tam, ile by to dało w złotówkach.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
         <input

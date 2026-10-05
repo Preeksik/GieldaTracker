@@ -560,6 +560,31 @@
   cursor: pointer;
 }
 
+.hl-rd-score-unit { font-size: 10px; color: var(--text-dim); margin-top: -5px; }
+
+.hl-rd-guide { margin-top: 14px; }
+.hl-rd-guide-toggle {
+  padding: 0; border: none; background: none; cursor: pointer;
+  color: var(--accent); font-family: inherit; font-size: 13px; font-weight: 600;
+}
+.hl-rd-guide-body {
+  margin-top: 10px; padding: 14px 16px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: rgba(15, 23, 42, 0.5);
+  font-size: 13px; line-height: 1.6; color: var(--text-muted);
+}
+.hl-rd-guide-body p { margin: 0 0 10px; }
+.hl-rd-guide-body p:last-child { margin-bottom: 0; }
+.hl-rd-guide-body b { color: var(--text); }
+.hl-rd-guide-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 12px 0;
+}
+.hl-rd-guide-grid > div {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border: 1px solid rgba(31, 41, 55, 0.8); border-radius: 7px;
+}
+.hl-rd-guide-grid span { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.hl-rd-guide-points { font-size: 12px; color: var(--text-dim); }
+
 .hl-rd-weak {
   display: block;
   width: 100%;
@@ -621,6 +646,22 @@
 }
 
 /* ---------- Dziennik porad ---------- */
+
+.hl-jr-st {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; vertical-align: 1px;
+}
+.hl-jr-st-buy { color: #34d399; background: rgba(52, 211, 153, 0.12); }
+.hl-jr-st-hold { color: #93c5fd; background: rgba(147, 197, 253, 0.12); }
+.hl-jr-st-sell { color: #fb7185; background: rgba(251, 113, 133, 0.12); }
+.hl-jr-st-none { color: var(--text-dim); background: rgba(148, 163, 184, 0.1); }
+td > .hl-jr-st { margin-left: 0; }
+.hl-jr-money { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; margin-top: 2px; }
+.hl-jr-sources {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px;
+  font-size: 12px; color: var(--text-dim);
+}
+.hl-jr-sources b { color: var(--text-muted); font-weight: 600; }
 
 .hl-adv-saved { color: var(--accent); }
 

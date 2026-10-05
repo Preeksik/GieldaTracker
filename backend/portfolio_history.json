@@ -148,5 +148,23 @@
     "total_cost": 14359.07,
     "total_value": 16024.37,
     "total_profit": 1665.29
+  },
+  {
+    "timestamp": "2026-10-02 14:27",
+    "total_cost": 14395.42,
+    "total_value": 16310.24,
+    "total_profit": 1914.82
+  },
+  {
+    "timestamp": "2026-10-02 14:57",
+    "total_cost": 14386.12,
+    "total_value": 16335.14,
+    "total_profit": 1949.03
+  },
+  {
+    "timestamp": "2026-10-02 15:27",
+    "total_cost": 14387.72,
+    "total_value": 16347.88,
+    "total_profit": 1960.16
   }
 ]

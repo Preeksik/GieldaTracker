@@ -356,6 +356,7 @@ function PortfolioTracker() {
           horizon,
           previous_analysis: contextText,
           follow_up_question: followUpQuestion,
+          journal_id: analysisResult.journal_id,
         }),
       })
       if (!res.ok) {
@@ -427,6 +428,7 @@ function PortfolioTracker() {
           horizon: tickerHorizon,
           previous_analysis: contextText,
           follow_up_question: tickerFollowUpQuestion,
+          journal_id: tickerAnalysisResult.journal_id,
         }),
       })
       if (!res.ok) {
@@ -896,6 +898,11 @@ function PortfolioTracker() {
                               }}
                             >
                               <MarkdownView>{tickerAnalysisResult.analysis}</MarkdownView>
+                              {tickerAnalysisResult.journal_id && (
+                                <div className="hl-adv-hint" style={{ marginTop: 10 }}>
+                                  ✓ Zapisane w Dzienniku porad z dzisiejszą ceną — tam zobaczysz, czy werdykt się sprawdził.
+                                </div>
+                              )}
                             </div>
 
                             {tickerFollowUps.map((f, idx) => (
@@ -1157,6 +1164,11 @@ function PortfolioTracker() {
                                     }}
                                   >
                                     <MarkdownView>{analysisResult.analysis}</MarkdownView>
+                                    {analysisResult.journal_id && (
+                                      <div className="hl-adv-hint" style={{ marginTop: 10 }}>
+                                        ✓ Zapisane w Dzienniku porad z dzisiejszą ceną — tam zobaczysz, czy werdykt się sprawdził.
+                                      </div>
+                                    )}
                                   </div>
 
                                   {followUps.map((f, idx) => (
