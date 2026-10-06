@@ -328,5 +328,47 @@
   "exchange": "GPW",
   "type": "akcje",
   "seen": "2026-09-22T18:07:26.801199+00:00"
+ },
+ "MSFT": {
+  "name": "Microsoft Corporation",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-05T21:06:10.954426+00:00"
+ },
+ "MSFU": {
+  "name": "Direxion Daily MSFT Bull 2X Shares",
+  "exchange": "NASDAQ",
+  "type": "ETF",
+  "seen": "2026-10-05T21:06:10.954450+00:00"
+ },
+ "MSFT.TO": {
+  "name": "Microsoft Corporation",
+  "exchange": "TOR",
+  "type": "akcje",
+  "seen": "2026-10-05T21:06:10.954455+00:00"
+ },
+ "MSFL": {
+  "name": "GraniteShares 2x Long MSFT Daily ETF",
+  "exchange": "NASDAQ",
+  "type": "ETF",
+  "seen": "2026-10-05T21:06:10.954459+00:00"
+ },
+ "MSFO": {
+  "name": "YieldMax MSFT Option Income Strategy ETF",
+  "exchange": "NYSE Arca",
+  "type": "ETF",
+  "seen": "2026-10-05T21:06:10.954462+00:00"
+ },
+ "MSFT34Q.SA": {
+  "name": "MICROSOFT   DRN",
+  "exchange": "SAO",
+  "type": "akcje",
+  "seen": "2026-10-05T21:06:10.954465+00:00"
+ },
+ "MSFT.MX": {
+  "name": "Microsoft Corporation",
+  "exchange": "MEX",
+  "type": "akcje",
+  "seen": "2026-10-05T21:06:10.954468+00:00"
  }
 }

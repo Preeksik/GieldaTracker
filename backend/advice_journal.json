@@ -1,5 +1,182 @@
 [
  {
+  "id": "a64935b165b7",
+  "created_at": "2026-10-06T16:47:42.917071+00:00",
+  "source": "doradca",
+  "question": "PZU    3 000 zł    wysoka dywidenda\nGrupa Kęty    2 500 zł    stabilna dywidenda, prywatna spółka przemysłowa\nVWCE 3000 zł\n\nTak nie?",
+  "answer": "## Werdykt: Odrzucam Twoją propozycję (PZU, Kęty)\n\nTwoja propozycja podziału 8 500 PLN (3 000 PLN PZU, 2 500 PLN Kęty, 3 000 PLN VWCE) to błąd strukturalny dla Twojego profilu. \n\n*   **PZU i Grupa Kęty:** Odrzucam obie spółki. Nie ma ich na liście kandydatów ze skanera dla Twojego profilu. Co więcej, w obecnym portfelu masz już silną koncentrację na Polsce (iShares MSCI Poland UCITS ETF to 2 842.16 PLN, Voxel, Ambra, Creotech, DataWalk, VIGO Photonics), a Twoje spółki z GPW mają ograniczone płynności lub zbyt wysoką zmienność (np. DAT.WA ma zmienność 41%, CRI.WA 66%). Dokładanie kolejnych pojedynczych spółek z GPW niszczy globalną dywersyfikację, której potrzebujesz przy zrównoważonym profilu i długim horyzoncie.\n*   **Koszt transakcyjny:** Zakup ETF-u zagranicznego (np. VWCE.DE) za 3 000 PLN na XTB przy kwocie poniżej 100 000 EUR obrotu miesięcznie wiąże się z 0% prowizji maklerskiej. Ponieważ VWCE jest denominated w EUR, zapłacisz **0,5% prowizji za przewalutowanie** przy zakupie (15 PLN) i 0,5% przy sprzedaży. PZU i Kęty notowane są w PLN na GPW, więc nie generują kosztu przewalutowania, ale ze względu na ryzyko koncentracji kraju i brak dywersyfikacji ich nie kupujemy.\n\n## Docelowa alokacja 8 500 PLN\n\nWybieram wyłącznie aktywa z listy skanera pasujące do profilu (rdzeń portfela na lata, zrównoważony apetyt na ryzyko): **Vanguard FTSE All-World (VWCE.DE)** oraz **iShares Core MSCI World (EUNL.DE)**, aby rozbudować globalny rdzeń i ograniczyć ryzyko walutowe oraz geograficzne.\n\n*   **Vanguard FTSE All-World (VWCE.DE)**: 4 250 PLN (50% budżetu)\n*   **iShares Core MSCI World (Xetra) (EUNL.DE)**: 4 250 PLN (50% budżetu)\n\n### Szczegóły transakcji\n\n| Instrument | Symbol w systemie | Kwota (PLN) | % portfela | Cena dzisiejsza | Szacowana liczba sztuk |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| Vanguard FTSE All-World | VWCE.DE | 4 250.00 PLN | 50.0% | 173.56 EUR (ok. 758.74 PLN) | ~5.59 szt. |\n| iShares Core MSCI World | EUNL.DE | 4 250.00 PLN | 50.0% | 131.835 EUR (ok. 576.32 PLN) | ~7.37 szt. |\n\n*Uwaga dot. liczby sztuk:* Przeliczenie oparto na kursie EUR/PLN 4,3714. Dokładna liczba sztuk w momencie egzekucji zależy od aktualnego kursu walutowego i ceny rynkowej w sekundzie składania zlecenia.\n\n## Analiza ryzyka i scenariusze awaryjne\n\n*   **Vanguard FTSE All-World (VWCE.DE):**\n    *   *Zmienność:* 10.7%/rok.\n    *   *Co musi się stać, aby pozycja straciła:* Głęboka recesja globalna, krach na rynkach rozwiniętych (USA, Europa) oraz rynkach wschodzących (ponieważ VWCE obejmuje rynki Emerging Markets).\n    *   *Zły scenariusz:* W scenariuszu kryzysowym (np. spadek rynków akcji o 20-30%) wartość tej pozycji może spaść o ok. 850–1 275 PLN. Horyzont 3+ lat pozwala na pełne odrobienie strat.\n*   **iShares Core MSCI World (EUNL.DE):**\n    *   *Zmienność:* 9.9%/rok.\n    *   *Co musi się stać, aby pozycja straciła:* Korekta lub bessa na rynkach krajów rozwiniętych (silna ekspozycja na USA, Japonię, Wielką Brytanię, strefę euro).\n    *   *Zły scenariusz:* Podobnie jak wyżej, w warunkach silnej bessa na Wall Street spodziewany spadek wartości o 20-25% (ok. 850–1 062 PLN).\n\n## Czego NIE robić i dlaczego\n\n1.  **Nie kupuj pojedynczych spółek dywidendowych z GPW (PZU, Kęty):** Masz już w portfelu znaczną ekspozycję na Polskę (iShares MSCI Poland). Dodawanie kolejnych spółek krajowych zwiększa ryzyko specyficzne jednego kraju (regulacje, polityka fiskalna, ryzyko walutowe PLN).\n2.  **Nie stosuj dźwigni ani instrumentów pochodnych (CFD):** Przy horyzoncie długoterminowym i zrównoważonym profilu na IKE dźwignia finansowa drastycznie zwiększa ryzyko bankructwa pozycji przez koszty utrzymania pozycji (swapów) i zmienność.\n\nTICKERS: VWCE.DE KUP 4250, EUNL.DE KUP 4250, PZU.WA UNIKAJ, KTY.WA UNIKAJ\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi",
+   "risk": "zrownowazony",
+   "amount": 8500.0,
+   "account": "ike",
+   "exclusions": "",
+   "profile": "Rdzeń portfela na lata"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "DAT.WA",
+    "name": "DataWalk S.A.",
+    "price": 118.0,
+    "currency": "PLN",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "CRI.WA",
+    "name": "Creotech Instruments S.A.",
+    "price": 892.0,
+    "currency": "PLN",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "VWCE.DE",
+    "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "price": 173.55999755859375,
+    "currency": "EUR",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "EUNL.DE",
+    "name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+    "price": 131.8350067138672,
+    "currency": "EUR",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "PZU.WA",
+    "name": "Powszechny Zaklad Ubezpieczen SA",
+    "price": 71.9000015258789,
+    "currency": "PLN",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "KTY.WA",
+    "name": "Grupa Kety S.A.",
+    "price": 1292.0,
+    "currency": "PLN",
+    "stance": null,
+    "amount_pln": null
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4222.36,
+   "sp500": 7832.23
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
+  "id": "f33c6a06c3a8",
+  "created_at": "2026-10-05T21:14:38.486096+00:00",
+  "source": "doradca",
+  "question": "Plan: \n\nSpółka\tKwota\tRola\nPZU\t3 000 zł\twysoka dywidenda\nGrupa Kęty\t2 500 zł\tstabilna dywidenda, prywatna spółka przemysłowa\nMicrosoft\t1 500 zł\tduża spółka z USA pod wzrost\nNVidia          1500 zł     duża spółka AI\n\nPowiedz szczerze co sądzisz, dodajemy do portfela aż 8500PLN myśle że to jest dość dobry pomysł. Wszystko raczej w IKE.",
+  "answer": "## Ocena Twojego Planu i Realia Kosztowe\n\nTwój pomysł alokacji **8 500 PLN** w ramach **IKE** ma dobre fundamenty podatkowe (brak podatku Belki przy wypłacie po 60. roku życia premiuje zwłaszcza dywidendy i aktywa wzrostowe), ale Twój autorski plan zawiera pozycje, które **nie przeszły przez rygorystyczny skaner rynkowy** lub są niezgodne z dostarczonymi danymi. \n\nMusimy zweryfikować Twój plan z twardymi danymi i zasadami XTB (0% prowizji do 100 000 EUR obrotu miesięcznie, ale **0,5% kosztu przewalutowania przy zakupie i sprzedaży** dla aktywów zagranicznych).\n\n### Weryfikacja Twoich propozycji spoza skanera:\n*   **Grupa Kęty (KTY.WA)** – brak danych cenowych w dostarczonym skanerze. Zgodnie z zasadami: **cena do sprawdzenia**. Ponieważ to spółka z GPW, brak kosztów przewalutowania, ale wylatuje z oficjalnego portfela rekomendowanego ze względu na brak twardych danych w systemie.\n*   **Microsoft (MSFT)** i **NVidia (NVDA)** – amerykańskie spółki wzrostowe. Brak cen w dostarczonych danych (**cena do sprawdzenia**). Co ważniejsze: zakup na giełdzie w USA wiąże się z **prowizją za przewalutowanie 0,5% przy zakupie i 0,5% przy sprzedaży** (razem 1% kosztów transakcyjnych tylko na samej walucie). Przy horyzoncie długoterminowym to zjada część stopy zwrotu.\n*   **PZU (PZU.WA)** – znajduje się w Twoim skanerze! To jedyna spółka z Twojego planu, którą możemy przepracować w oparciu o pełne dane.\n\n---\n## Rekomendowany Portfel Alokacji 8 500 PLN (Zgodny ze Skanerem i Profilem)\n\nOpierając się na skanerze, profilu zrównoważonym, zasadach XTB oraz Twoim obecnym portfelu (gdzie masz już ekspozycję na ETF-y i Polskę poprzez IBCJ.DE), dzielę 8 500 PLN na sprawdzone aktywa o wysokiej jakości.\n\n| Instrument (Symbol Yahoo) | Rola w portfelu | Kwota (PLN) | % Portfela | Szacowana liczba sztuk |\n| :--- | :--- | :--- | :--- | :--- |\n| **PZU S.A. (PZU.WA)** | Wysoka dywidenda / Rdzeń GPW | **3 500.00 PLN** | 41.18% | ok. 49 szt. (po 71.4 PLN) |\n| **Atal S.A. (1AT.WA)** | Wzrost / Sektor deweloperski | **2 500.00 PLN** | 29.41% | ok. 41 szt. (po 60.5 PLN) |\n| **iShares MSCI Poland UCITS ETF (IBCJ.DE)** | Rdzeń portfela (zgodny z IKE) | **2 500.00 PLN** | 29.41% | ok. 67 szt. (po 36.97 EUR / ~161.7 PLN) |\n| **SUMA** | | **8 500.00 PLN** | **100.00%** | |\n\n*Uwaga kosztowa:* Zakup PZU.WA i 1AT.WA na GPW generuje **0.00 zł prowizji i 0.00 zł przewalutowania** (zakup w PLN). Zakup IBCJ.DE na Xetra (waluta EUR) wiąże się z kosztem przewalutowania 0,5% przy zakupie (~12.50 zł) oraz 0,5% przy sprzedaży.\n\n---\n## Szczegółowa Analiza i Ryzyka Pozycji\n\n### 1. PZU S.A. (PZU.WA)\n*   **Cena bazowa:** 71.40 PLN\n*   **Zmienność roczna:** 18.1% (umiarkowana, idealna do profilu zrównoważonego).\n*   **Momentum:** 3M +12.5%, 1M 0.0%, -3.6% od szczytu 52T.\n*   **Dlaczego wchodzi:** Stabilny gigant ubezpieczeniowy na GPW, generujący gotówkę wypłacaną w formie dywidend. Brak podatku Belki na IKE potęguje stopę dywidendy netto.\n*   **Ryzyko i czarny scenariusz:** Spadek wyceny w przypadku silnej przeceny na całym parkiecie GPW lub zmian regulacyjnych w sektorze finansowym. W złym scenariuszu (np. krach rynkowy -20%) tracisz ok. 700 PLN na tej pozycji, ale trzymasz spółkę dla dywidend.\n\n### 2. Atal S.A. (1AT.WA)\n*   **Cena bazowa:** 60.50 PLN\n*   **Zmienność roczna:** 19.4%\n*   **Momentum:** 1M +9.8%, 3M +5.2%, -1.1% od szczytu 52T (silny trend wzrostowy tuż pod szczytami).\n*   **Dlaczego wchodzi:** Jeden z najsilniejszych deweloperów mieszkaniowych. Silny popyt w 1M (+9.8%) potwierdza mocny sentyment instytucjonalny.\n*   **Ryzyko i czarny scenariusz:** Zatrzymanie akcji kredytowej lub pogorszenie makroekonomiczne w Polsce uderzające w rynek nieruchomości. W złym scenariuszu korekta o 15-20% oznacza stratę rzędu 375-500 PLN.\n\n### 3. iShares MSCI Poland UCITS ETF (IBCJ.DE)\n*   **Cena bazowa:** 36.97 EUR (ok. 161.73 PLN)\n*   **Zmienność roczna:** 18.1%\n*   **Momentum:** 1M +0.2%, 3M +14.0%, -2.8% od szczytu 52T.\n*   **Dlaczego wchodzi:** Inwestor już ma ten instrument i sprawdza się on znakomicie (w obecnym portfelu notuje zyski rzędu 38-44%). Zwiększenie ekspozycji buduje szeroki rdzeń polskiego rynku bez pojedynczego ryzyka spółkowego.\n*   **Ryzyko i czarny scenariusz:** Geopolityka regionu CEE. W przypadku eskalacji ryzyka geopolitycznego ETF może spaść o 25-30% (strata ok. 625-750 PLN na tej alokacji).\n\n---\n## Czego NIE robić przy tym profilu i dlaczego\n\n1.  **Nie kupuj spółek o wysokiej zmienności (>35%) i małej płynności** – Twój profil to \"rdzeń portfela na lata\" (zrównoważony). Dodawanie spółek biotechnologicznych czy skrajnie ryzykownych (jak dotychczasowe eksperymenty z DAT.WA czy CRI.WA o zmienności >40%) rozbija stabilność portfela.\n2.  **Unikaj rozdrabniania kapitału na 5-6 pozycji po 1 500 zł** – Przy kwocie 8 500 PLN podział na 4 lub więcej walut i giełd generuje niepotrzebne koszty przewalutowań (w USA/EU) oraz utrudnia zarządzanie. Skup się na maksymalnie 3 klarownych pozycjach.\n3.  **Nie ignoruj podatku w złym miejscu** – Trzymanie aktywów zagranicznych generujących wysokie koszty walutowe poza IKE ma mniejsze znaczenie, ale na IKE najlepiej pracują aktywa o wysokiej stopie dywidendy (PZU), całkowicie znosząc podatek, którego normalnie byś nie odzyskał.\n\n---\n\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi",
+   "risk": "zrownowazony",
+   "amount": 8500.0,
+   "account": "ike",
+   "exclusions": "Bez krypto, ETF, CFD (ETF Starczy puki co jest dobrze)",
+   "profile": "Rdzeń portfela na lata"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "PZU.WA",
+    "name": "Powszechny Zaklad Ubezpieczen SA",
+    "price": 71.4000015258789,
+    "currency": "PLN",
+    "stance": "kup",
+    "amount_pln": 3500.0
+   },
+   {
+    "ticker": "1AT.WA",
+    "name": "Atal S.A.",
+    "price": 60.5,
+    "currency": "PLN",
+    "stance": "kup",
+    "amount_pln": 2500.0
+   },
+   {
+    "ticker": "IBCJ.DE",
+    "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+    "price": 36.96500015258789,
+    "currency": "EUR",
+    "stance": "kup",
+    "amount_pln": 2500.0
+   },
+   {
+    "ticker": "KTY.WA",
+    "name": "Grupa Kety S.A.",
+    "price": 1261.0,
+    "currency": "PLN",
+    "stance": "unikaj",
+    "amount_pln": null
+   },
+   {
+    "ticker": "MSFT",
+    "name": "Microsoft Corporation",
+    "price": 525.1799926757812,
+    "currency": "USD",
+    "stance": "unikaj",
+    "amount_pln": null
+   },
+   {
+    "ticker": "NVDA",
+    "name": "NVIDIA Corporation",
+    "price": 238.89999389648438,
+    "currency": "USD",
+    "stance": "unikaj",
+    "amount_pln": null
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4155.28,
+   "sp500": 7773.95
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
+  "id": "d0b9ed4d6552",
+  "created_at": "2026-10-05T21:06:46.161873+00:00",
+  "source": "spolka",
+  "question": "Wrzucamy z 1,5k?",
+  "answer": "## Odpowiedź\n\n**TAK, WCHODZIMY, ALE W DWÓCH TRANSZACH PO 750 ZŁ (50% TERAZ / 50% NA KOREKCIE LUB PO WYNIKACH).**\n\n* **Kwota i koszty:** Przy kapitale **1 500 PLN** (w XTB kupisz akcje ułamkowe: łącznie ok. **0,71 akcji** przy kursie **525,18 USD**; jeśli mowa o **1 500 USD**, kupujesz **2 całe akcje** za **1 050,36 USD**, zostawiając resztę na drugą transzę).\n* **Koszty transakcyjne:** Prowizja maklerska wynosi **0,00 PLN** (obrót poniżej 100 000 EUR). Koszt przewalutowania w XTB to 0,5% przy kupnie (**7,50 PLN**) i 0,5% przy przyszłej sprzedaży. Rozbicie na dwie transze po 750 PLN kosztuje w sumie dokładnie tyle samo (**2 × 3,75 PLN = 7,50 PLN**), dlatego podział nie generuje żadnego dodatkowego kosztu, a eliminuje ryzyko wejścia całym kapitałem tuż pod 2-letnim oporem (**537,65 USD**) na 3 tygodnie przed raportem kwartalnym (**28.10.2026**).\n* **Plan działania:**\n  * **Transza 1 (750 PLN):** Wchodzisz natychmiast po cenie rynkowej (**525,18 USD**).\n  * **Transza 2 (750 PLN):** Ustawiasz zlecenie z limitem kupna na cofnięciu w strefę **498,00–501,00 USD** lub dokupujesz po publikacji wyników finansowych (**28.10.2026**), gdy rynek potwierdzi wybicie szczytu **537,65 USD**.\n\n---\n\n## Co mówią dane\n\n* **Struktura trendu:** Trend długoterminowy jest silnie wzrostowy (+30,3% w 2 lata). Kurs przeszedł modelową ścieżkę od dołka wyprzedaży **352,17 USD** (2026-06-25), przez lukę popytową z **389,81 USD** do **450,25 USD** (2026-07-30), aż po konsolidację w strefie 480–513 USD i obecny impuls w stronę szczytu.\n* **Bliskość 2-letniego sufitu:** Ostatnie zamknięcie wynosi **525,18 USD** (2026-10-05). Od 2-letniego maksimum (**537,65 USD**) dzieli spółkę zaledwie **2,37%**. Wejście całością kapitału w tym miejscu oznacza kupno pod samym oporem technicznym.\n* **Analiza wolumenu:** \n  * Reversal z czerwca został potwierdzony potężnym wolumenem instytucjonalnym (**186 201 600 akcji** w dniu 2026-06-26).\n  * Ostatnie podejście pod 525,18 USD (2026-10-05) odbyło się na wolumenie **26 287 910 akcji**, czyli nieco powyżej ostatniej średniej (22,48 mln), co potwierdza obecność popytu, ale wolumen ten nie jest na tyle spektakularny, by gwarantować przebicie 537,65 USD bez przystanku.\n* **Brak danych fundamentalnych:** W dostarczonych danych brak wskaźników wyceny (P/E, forward P/E, EPS, tempo wzrostu Azure). Decyzja opiera się wyłącznie na strukturze ceny, wolumenie i nadchodzącym katalizatorze wynikowym.\n\n---\n\n## Poziomy do obserwacji\n\n| Poziom cenowy | Rola techniczna | Znaczenie dla pozycji |\n| :--- | :--- | :--- |\n| **537,65 USD** | **Główny opór (2-letni szczyt)** | Trwałe wybicie i zamknięcie dnia powyżej tego poziomu otwiera drogę do swobodnej aprecjacji w fazie *price discovery*. |\n| **500,59 – 497,93 USD** | **Lokalne wsparcie (baza wybicia z września)** | Strefa docelowa dla Transzy 2 w razie korekty technicznej przed wynikami. |\n| **479,45 USD** | **Kluczowe wsparcie średnioterminowe** | Dołek z 2026-08-17; utrzymanie tego poziomu chroni trend wzrostowy. |\n| **449,39 – 450,25 USD** | **Poziom unieważnienia tezy (Stop Loss)** | Domknięcie luki popytowej z końca lipca. Zejście poniżej tej strefy neguje średnioterminowy trend wzrostowy i oznacza konieczność ucięcia pozycji. |\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.8-flash",
+  "tickers": [
+   {
+    "ticker": "MSFT",
+    "name": "Microsoft Corporation",
+    "price": 525.18,
+    "currency": "USD",
+    "stance": "kup",
+    "amount_pln": null
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4155.28,
+   "sp500": 7773.95
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
   "id": "75b3dfb2b497",
   "created_at": "2026-10-02T12:32:18.038410+00:00",
   "source": "doradca",

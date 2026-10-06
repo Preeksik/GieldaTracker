@@ -1,20 +1,23 @@
 {
-  "mode": "mocny",
-  "manual_model": "gemini-3.8-flash",
-  "cooldowns": {
-    "gemini-3.6-flash": "2026-10-02T12:36:36.380581+00:00",
-    "gemini-3.8-flash": "2026-10-02T12:39:37.232138+00:00",
-    "gemini-3.7-flash": "2026-10-02T12:39:38.828023+00:00"
-  },
+  "mode": "reczny",
+  "manual_model": "gemini-3.5-flash-lite",
+  "cooldowns": {},
   "usage": {
     "2026-10-02": {
       "gemini-3.6-flash": 1,
       "gemini-3.5-flash": 2
+    },
+    "2026-10-05": {
+      "gemini-3.8-flash": 1,
+      "gemini-3.5-flash-lite": 1
+    },
+    "2026-10-06": {
+      "gemini-3.5-flash-lite": 1
     }
   },
   "last_used": {
-    "model": "gemini-3.5-flash",
-    "at": "2026-10-02T12:35:04.765748+00:00"
+    "model": "gemini-3.5-flash-lite",
+    "at": "2026-10-06T16:47:38.769311+00:00"
   },
   "last_fallback": {
     "at": "2026-10-02T12:35:04.765756+00:00",
@@ -41,6 +44,93 @@
     ]
   },
   "recent": [
+    {
+      "at": "2026-10-06T16:47:38.774232+00:00",
+      "wanted": "gemini-3.5-flash-lite",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-05T21:14:37.395345+00:00",
+      "wanted": "gemini-3.5-flash-lite",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-05T21:14:12.745321+00:00",
+      "wanted": "antigravity-preview-05-2026",
+      "used": null,
+      "ok": false,
+      "attempts": [],
+      "error": "This model only supports Interactions API.",
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-05T21:13:18.007060+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": null,
+      "ok": false,
+      "attempts": [
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.5-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3-flash-preview",
+          "skipped": false,
+          "status": 504,
+          "reason": "Przekroczony czas odpowiedzi."
+        },
+        {
+          "model": "gemini-2.5-flash",
+          "skipped": false,
+          "status": 404,
+          "reason": "Model niedostępny dla tego klucza: This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and improvemen"
+        },
+        {
+          "model": "gemini-3.1-pro-preview",
+          "skipped": true,
+          "reason": "limit prób w jednym żądaniu"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-05T21:06:46.157474+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": "gemini-3.8-flash",
+      "ok": true,
+      "attempts": [],
+      "error": null,
+      "catalog_error": null
+    },
     {
       "at": "2026-10-02T12:35:04.769432+00:00",
       "wanted": "gemini-3.8-flash",
