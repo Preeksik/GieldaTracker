@@ -134,7 +134,7 @@ function PortfolioTracker() {
         throw new Error(errData?.detail || 'Nie udało się zaimportować historii XTB.')
       }
       setXtbResult(await res.json())
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setXtbError(err.message)
     } finally {
@@ -164,6 +164,13 @@ function PortfolioTracker() {
     fetchPortfolio()
   }, [])
 
+  // Po każdej zmianie portfela odświeżamy też wykres historii i wartość u góry
+  const [historyVersion, setHistoryVersion] = useState(0)
+  const refreshAll = () => {
+    fetchPortfolio()
+    setHistoryVersion((v) => v + 1)
+  }
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
@@ -191,7 +198,7 @@ function PortfolioTracker() {
       })
       if (!res.ok) throw new Error('Nie udało się dodać pozycji.')
       setForm({ ticker: '', quantity: '', buy_price: '', currency: '', account: 'zwykle', buy_date: '', note: '' })
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setError(err.message)
     }
@@ -218,7 +225,7 @@ function PortfolioTracker() {
       }
       const data = await res.json()
       setImportResult(data)
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -228,10 +235,22 @@ function PortfolioTracker() {
   }
 
   const handleDelete = async (id) => {
+    // Usunięcie to NIE sprzedaż: pozycja znika z całej historii, jakby nigdy jej nie było,
+    // i nie trafia do zakładki Sprzedaże. Jedno kliknięcie było za łatwe do pomylenia.
+    const pos = positions.find((p) => p.id === id)
+    const label = pos ? `${pos.name || pos.ticker} (${pos.quantity} szt.)` : 'tę pozycję'
+    const ok = window.confirm(
+      `Usunąć ${label}?\n\n` +
+        'Usunięcie kasuje pozycję tak, jakby nigdy jej nie było — znika też z wykresu historii ' +
+        'i nie trafia do Sprzedaży.\n\n' +
+        'Jeśli ją sprzedałeś, kliknij Anuluj i użyj „Sprzedaj".\n' +
+        'Usuń tylko pozycję dodaną przez pomyłkę.'
+    )
+    if (!ok) return
     try {
       const res = await fetch(`${API_URL}/api/portfolio/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Nie udało się usunąć pozycji.')
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setError(err.message)
     }
@@ -249,7 +268,7 @@ function PortfolioTracker() {
         body: JSON.stringify({ account: newAccount }),
       })
       if (!res.ok) throw new Error('Nie udało się zmienić konta.')
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setError(err.message)
     }
@@ -293,7 +312,7 @@ function PortfolioTracker() {
         throw new Error(errData?.detail || 'Nie udało się zapisać sprzedaży.')
       }
       setSellFormFor(null)
-      fetchPortfolio()
+      refreshAll()
     } catch (err) {
       setSellError(err.message)
     } finally {
@@ -453,7 +472,7 @@ function PortfolioTracker() {
 
   return (
     <div style={{ color: 'var(--text)' }}>
-      <PortfolioHistoryChart />
+      <PortfolioHistoryChart refreshKey={historyVersion} />
 
       <h2 style={{ marginBottom: '15px', fontSize: '20px', letterSpacing: '-0.3px' }}>💼 Mój Portfel</h2>
 

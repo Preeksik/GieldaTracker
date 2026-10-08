@@ -1,5 +1,34 @@
 [
  {
+  "id": "fa9d60627096",
+  "created_at": "2026-10-06T16:50:16.517287+00:00",
+  "source": "spolka",
+  "question": "Jak oceniasz aktualny trend spółki?",
+  "answer": "## Odpowiedź\nAktualny trend Grupy Kęty (KTY.WA) w horyzoncie długoterminowym jest **silnym trendem wzrostowym**, który testuje historyczne maksima. Spółka porusza się w szerokim kanale wzrostowym z dwuletnią stopą zwrotu na poziomie **+70.2%** (wzrost z **759.04 PLN** do **1292.00 PLN**). Ostatnia sesja z dnia 2026-10-06 zamknęła się na absolutnym szczycie badanego okresu wynoszącym **1292.00 PLN**, przy wolumenie **11 395** akcji.\n\n## Co mówią dane\n- **Struktura cenowa:** Kurs znajduje się na poziomie **1292.00 PLN** (stan na 2026-10-06), co oznacza zbliżenie do górnej granicy 2-letniego zakresu handlowego (**600.00-1292.00 PLN**).\n- **Dynamika i wolumen:** Średni wolumen dzienny z dostarczonych danych wynosi **16 934** akcje. Ostatnie sesje pokazują spadek płynności – np. wolumen z 2026-10-06 wyniósł **11 395** sztuk, a 2026-10-05 zanotowano zerowy wolumen (**0**), co wskazuje na lokalne wyczerpanie presji kupujących przy jednoczesnym braku silnej presji podażowej.\n- **Kluczowe ruchy w trendzie:** W ciągu ostatnich 90 sesji cena wzrosła z poziomu ok. **1171.38 PLN** (początek czerwca 2026) do **1292.00 PLN** na koniec okresu. Wyraźne impulsy popytowe miały miejsce m.in. 2026-09-15 przy obrocie **109 204** akcji (wzrost ceny do **1264.00 PLN**) oraz 2026-06-19 z rekordowym wolumenem **185 419** akcji przy cenie **1214.65 PLN**.\n\n## Poziomy do obserwacji\n- **Wsparcie główne:** **1213.00 PLN** (poziom testowany wielokrotnie we wrześniu 2026 roku, m.in. 10.09).\n- **Opór (Historyczne Maximum):** **1292.00 PLN** (szczyt z 2026-10-06). Przełamanie tego poziomu otwiera drogę do dalszych wzrostów bez istotnych barier podażowych.\n- **Poziom unieważniający tezę o silnym trendzie wzrostowym:** Spadek poniżej **1152.00 PLN** (minimum z 2026-09-14 przy wysokim wolumenie **36 644**), co zanegowałoby strukturę wyższych dołków.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "KTY.WA",
+    "name": "Grupa Kety S.A.",
+    "price": 1292.0,
+    "currency": "PLN",
+    "stance": "neutralnie",
+    "amount_pln": null
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4222.36,
+   "sp500": 7832.23
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
   "id": "a64935b165b7",
   "created_at": "2026-10-06T16:47:42.917071+00:00",
   "source": "doradca",

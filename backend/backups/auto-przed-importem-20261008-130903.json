@@ -1,0 +1,468 @@
+{
+  "format": "hossalab-backup",
+  "version": 1,
+  "created_at": "2026-10-08 13:09:03",
+  "data": {
+    "portfolio": [
+      {
+        "id": "bdfe3e46-0dd5-4de0-9536-075c5c7bec67",
+        "ticker": "VOX.WA",
+        "name": "Voxel S.A.",
+        "quantity": 5.0,
+        "buy_price": 120.6,
+        "currency": "PLN",
+        "account": "zwykle",
+        "buy_date": "2026-03-09",
+        "note": ""
+      },
+      {
+        "id": "0a2a331c-34bc-4e7c-bef6-bd1f6957a6f3",
+        "ticker": "VOX.WA",
+        "name": "Voxel S.A.",
+        "quantity": 5.0,
+        "buy_price": 123.0,
+        "currency": "PLN",
+        "account": "zwykle",
+        "buy_date": "2026-01-02",
+        "note": ""
+      },
+      {
+        "id": "cc3d0e3b-13bf-4ecf-8e39-7f870e3cc47c",
+        "ticker": "AMB.WA",
+        "name": "Ambra S.A.",
+        "quantity": 111.0,
+        "buy_price": 19.11,
+        "currency": "PLN",
+        "account": "zwykle",
+        "buy_date": "2026-04-23",
+        "note": ""
+      },
+      {
+        "id": "99332a39-781a-4453-b60f-3892da35636d",
+        "ticker": "AMB.WA",
+        "name": "Ambra S.A.",
+        "quantity": 27.0,
+        "buy_price": 18.39,
+        "currency": "PLN",
+        "account": "zwykle",
+        "buy_date": "2026-05-28",
+        "note": ""
+      },
+      {
+        "id": "bf30d8f3-0df5-48b2-82e6-815c4563fbbe",
+        "ticker": "CTX.WA",
+        "name": "Captor Therapeutics Spolka Akcyjna",
+        "quantity": 1.3,
+        "buy_price": 77.1,
+        "currency": "PLN",
+        "account": "ike",
+        "buy_date": "2026-06-19",
+        "note": ""
+      },
+      {
+        "id": "b4847be3-01fb-4cc9-bbc6-28342da1eaed",
+        "ticker": "CRI.WA",
+        "name": "Creotech Instruments S.A.",
+        "quantity": 2.0,
+        "buy_price": 808.0,
+        "currency": "PLN",
+        "account": "ike",
+        "buy_date": "2026-06-19",
+        "note": ""
+      },
+      {
+        "id": "7bf8b57c-a7af-475d-80d6-a88cf566cbf6",
+        "ticker": "DAT.WA",
+        "name": "DataWalk S.A.",
+        "quantity": 13.0,
+        "buy_price": 120.0,
+        "currency": "PLN",
+        "account": "ike",
+        "buy_date": "2026-06-19",
+        "note": ""
+      },
+      {
+        "id": "d92b62e4-b42a-48ee-a946-3d9093fc8204",
+        "ticker": "VGO.WA",
+        "name": "VIGO Photonics S.A.",
+        "quantity": 4.0,
+        "buy_price": 527.0,
+        "currency": "PLN",
+        "account": "ike",
+        "buy_date": "2026-06-19",
+        "note": ""
+      },
+      {
+        "id": "bb498e63-49dc-4733-8708-a04c8054d7fb",
+        "ticker": "VWCE.DE",
+        "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+        "quantity": 0.5485,
+        "buy_price": 146.32,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251112",
+        "note": ""
+      },
+      {
+        "id": "4279d8d2-2e3f-4403-b823-d36f31dfadf6",
+        "ticker": "VWCE.DE",
+        "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+        "quantity": 0.1012,
+        "buy_price": 141.56,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251114",
+        "note": ""
+      },
+      {
+        "id": "c0716e5a-7cca-402d-8706-46e090ed4b10",
+        "ticker": "VWCE.DE",
+        "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+        "quantity": 0.0411,
+        "buy_price": 140.0,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251121",
+        "note": ""
+      },
+      {
+        "id": "0a236321-b6e7-48cf-89c1-011186305e81",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.2774,
+        "buy_price": 1444.2,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251024",
+        "note": ""
+      },
+      {
+        "id": "ba626b6f-2aee-4cce-9f87-a854c32f0145",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.028,
+        "buy_price": 1444.6,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251024",
+        "note": ""
+      },
+      {
+        "id": "23f7ab94-9224-4710-85be-5052dee4d487",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.0226,
+        "buy_price": 1496.2,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251029",
+        "note": ""
+      },
+      {
+        "id": "d841985f-cc29-4ea2-b0fd-57cd5b84b2d9",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.0553,
+        "buy_price": 1446.6,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251106",
+        "note": ""
+      },
+      {
+        "id": "fee2b427-b20a-48b2-8cd2-65cbacf48169",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.042,
+        "buy_price": 1474.4,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251112",
+        "note": ""
+      },
+      {
+        "id": "04e9f669-53ab-4c5a-9991-fb478e655f9a",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.0078,
+        "buy_price": 1410.4,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251114",
+        "note": ""
+      },
+      {
+        "id": "67d12d80-7637-45db-92f8-c463f6356fe3",
+        "ticker": "CNDX.L",
+        "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+        "quantity": 0.0032,
+        "buy_price": 1381.4,
+        "currency": "USD",
+        "account": "zwykle",
+        "buy_date": "20251121",
+        "note": ""
+      },
+      {
+        "id": "aed7fbd1-dd53-473a-b8b9-d77d5c731e86",
+        "ticker": "IBCJ.DE",
+        "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+        "quantity": 1.091,
+        "buy_price": 26.7,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251029",
+        "note": ""
+      },
+      {
+        "id": "8952bfa4-d447-48d4-a2fa-f51a0f409bae",
+        "ticker": "IBCJ.DE",
+        "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+        "quantity": 1.7496,
+        "buy_price": 26.465,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251106",
+        "note": ""
+      },
+      {
+        "id": "96842a70-b6cd-4a0a-8501-edb224451bfc",
+        "ticker": "IBCJ.DE",
+        "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+        "quantity": 1.6736,
+        "buy_price": 26.645,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251112",
+        "note": ""
+      },
+      {
+        "id": "fbd6482c-8a35-4e3c-9642-193e52ea3ca5",
+        "ticker": "IBCJ.DE",
+        "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+        "quantity": 0.3051,
+        "buy_price": 26.105,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251114",
+        "note": ""
+      },
+      {
+        "id": "ceeefd63-1ffe-40f9-a22a-2732395c5456",
+        "ticker": "IBCJ.DE",
+        "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+        "quantity": 0.1246,
+        "buy_price": 25.66,
+        "currency": "EUR",
+        "account": "zwykle",
+        "buy_date": "20251121",
+        "note": ""
+      }
+    ],
+    "sales": [],
+    "watchlist": [
+      "1AT.WA"
+    ],
+    "alerts": [
+      {
+        "id": "13f806e0-10f4-4ef1-9cad-7a86fa669685",
+        "ticker": "1AT.WA",
+        "name": "Atal S.A.",
+        "currency": "PLN",
+        "condition": "below",
+        "target_price": 55.0,
+        "created_at": "2026-09-16 18:27",
+        "triggered": false,
+        "triggered_at": null,
+        "triggered_price": null
+      }
+    ],
+    "history": [
+      {
+        "timestamp": "2026-09-13 22:41",
+        "total_cost": 6602.23,
+        "total_value": 6655.65,
+        "total_profit": 53.42
+      },
+      {
+        "timestamp": "2026-09-13 22:42",
+        "total_cost": 6602.23,
+        "total_value": 6655.65,
+        "total_profit": 53.42
+      },
+      {
+        "timestamp": "2026-09-14 00:00",
+        "total_cost": 6602.23,
+        "total_value": 6655.65,
+        "total_profit": 53.42
+      },
+      {
+        "timestamp": "2026-09-15 19:27",
+        "total_cost": 12507.49,
+        "total_value": 24847.21,
+        "total_profit": 12339.72
+      },
+      {
+        "timestamp": "2026-09-15 19:57",
+        "total_cost": 14117.21,
+        "total_value": 16230.38,
+        "total_profit": 2113.16
+      },
+      {
+        "timestamp": "2026-09-15 20:28",
+        "total_cost": 14287.34,
+        "total_value": 15313.87,
+        "total_profit": 1026.53
+      },
+      {
+        "timestamp": "2026-09-15 23:14",
+        "total_cost": 14283.7,
+        "total_value": 15309.28,
+        "total_profit": 1025.58
+      },
+      {
+        "timestamp": "2026-09-15 23:59",
+        "total_cost": 14283.41,
+        "total_value": 15308.94,
+        "total_profit": 1025.54
+      },
+      {
+        "timestamp": "2026-09-16 17:13",
+        "total_cost": 14306.0,
+        "total_value": 15301.16,
+        "total_profit": 995.16
+      },
+      {
+        "timestamp": "2026-09-16 17:43",
+        "total_cost": 14308.2,
+        "total_value": 15301.51,
+        "total_profit": 993.3
+      },
+      {
+        "timestamp": "2026-09-16 18:16",
+        "total_cost": 14306.84,
+        "total_value": 15301.03,
+        "total_profit": 994.19
+      },
+      {
+        "timestamp": "2026-09-17 23:09",
+        "total_cost": 14314.71,
+        "total_value": 15494.09,
+        "total_profit": 1179.38
+      },
+      {
+        "timestamp": "2026-09-18 13:11",
+        "total_cost": 14326.17,
+        "total_value": 15627.55,
+        "total_profit": 1301.38
+      },
+      {
+        "timestamp": "2026-09-18 14:06",
+        "total_cost": 14329.33,
+        "total_value": 15621.78,
+        "total_profit": 1292.45
+      },
+      {
+        "timestamp": "2026-09-18 14:36",
+        "total_cost": 14328.57,
+        "total_value": 15589.25,
+        "total_profit": 1260.68
+      },
+      {
+        "timestamp": "2026-09-18 15:06",
+        "total_cost": 14326.93,
+        "total_value": 15562.64,
+        "total_profit": 1235.71
+      },
+      {
+        "timestamp": "2026-09-18 23:33",
+        "total_cost": 14321.65,
+        "total_value": 15555.33,
+        "total_profit": 1233.68
+      },
+      {
+        "timestamp": "2026-09-19 13:55",
+        "total_cost": 14321.65,
+        "total_value": 15555.33,
+        "total_profit": 1233.68
+      },
+      {
+        "timestamp": "2026-09-20 02:34",
+        "total_cost": 6602.23,
+        "total_value": 6487.89,
+        "total_profit": -114.34
+      },
+      {
+        "timestamp": "2026-09-20 03:06",
+        "total_cost": 6602.23,
+        "total_value": 6487.89,
+        "total_profit": -114.34
+      },
+      {
+        "timestamp": "2026-09-21 03:38",
+        "total_cost": 6602.23,
+        "total_value": 6487.89,
+        "total_profit": -114.34
+      },
+      {
+        "timestamp": "2026-09-22 19:29",
+        "total_cost": 14320.24,
+        "total_value": 16132.74,
+        "total_profit": 1812.5
+      },
+      {
+        "timestamp": "2026-09-22 20:04",
+        "total_cost": 14317.44,
+        "total_value": 16129.22,
+        "total_profit": 1811.78
+      },
+      {
+        "timestamp": "2026-09-23 22:48",
+        "total_cost": 14361.23,
+        "total_value": 16026.89,
+        "total_profit": 1665.65
+      },
+      {
+        "timestamp": "2026-09-23 23:18",
+        "total_cost": 14359.07,
+        "total_value": 16024.37,
+        "total_profit": 1665.29
+      },
+      {
+        "timestamp": "2026-10-02 14:27",
+        "total_cost": 14395.42,
+        "total_value": 16310.24,
+        "total_profit": 1914.82
+      },
+      {
+        "timestamp": "2026-10-02 14:57",
+        "total_cost": 14386.12,
+        "total_value": 16335.14,
+        "total_profit": 1949.03
+      },
+      {
+        "timestamp": "2026-10-02 15:27",
+        "total_cost": 14387.72,
+        "total_value": 16347.88,
+        "total_profit": 1960.16
+      },
+      {
+        "timestamp": "2026-10-05 23:04",
+        "total_cost": 14399.25,
+        "total_value": 16618.05,
+        "total_profit": 2218.8
+      },
+      {
+        "timestamp": "2026-10-06 18:46",
+        "total_cost": 14383.6,
+        "total_value": 16695.17,
+        "total_profit": 2311.57
+      },
+      {
+        "timestamp": "2026-10-08 12:53",
+        "total_cost": 14407.47,
+        "total_value": 16433.26,
+        "total_profit": 2025.78
+      }
+    ]
+  }
+}

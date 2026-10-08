@@ -49,7 +49,7 @@
   },
   {
     "timestamp": "2026-09-16 17:13",
-    "total_cost": 14306.0,
+    "total_cost": 14306,
     "total_value": 15301.16,
     "total_profit": 995.16
   },
@@ -72,111 +72,9 @@
     "total_profit": 1179.38
   },
   {
-    "timestamp": "2026-09-18 13:11",
-    "total_cost": 14326.17,
-    "total_value": 15627.55,
-    "total_profit": 1301.38
-  },
-  {
-    "timestamp": "2026-09-18 14:06",
-    "total_cost": 14329.33,
-    "total_value": 15621.78,
-    "total_profit": 1292.45
-  },
-  {
-    "timestamp": "2026-09-18 14:36",
-    "total_cost": 14328.57,
-    "total_value": 15589.25,
-    "total_profit": 1260.68
-  },
-  {
-    "timestamp": "2026-09-18 15:06",
-    "total_cost": 14326.93,
-    "total_value": 15562.64,
-    "total_profit": 1235.71
-  },
-  {
-    "timestamp": "2026-09-18 23:33",
-    "total_cost": 14321.65,
-    "total_value": 15555.33,
-    "total_profit": 1233.68
-  },
-  {
-    "timestamp": "2026-09-19 13:55",
-    "total_cost": 14321.65,
-    "total_value": 15555.33,
-    "total_profit": 1233.68
-  },
-  {
-    "timestamp": "2026-09-20 02:34",
-    "total_cost": 6602.23,
-    "total_value": 6487.89,
-    "total_profit": -114.34
-  },
-  {
-    "timestamp": "2026-09-20 03:06",
-    "total_cost": 6602.23,
-    "total_value": 6487.89,
-    "total_profit": -114.34
-  },
-  {
-    "timestamp": "2026-09-21 03:38",
-    "total_cost": 6602.23,
-    "total_value": 6487.89,
-    "total_profit": -114.34
-  },
-  {
-    "timestamp": "2026-09-22 19:29",
-    "total_cost": 14320.24,
-    "total_value": 16132.74,
-    "total_profit": 1812.5
-  },
-  {
-    "timestamp": "2026-09-22 20:04",
-    "total_cost": 14317.44,
-    "total_value": 16129.22,
-    "total_profit": 1811.78
-  },
-  {
-    "timestamp": "2026-09-23 22:48",
-    "total_cost": 14361.23,
-    "total_value": 16026.89,
-    "total_profit": 1665.65
-  },
-  {
-    "timestamp": "2026-09-23 23:18",
-    "total_cost": 14359.07,
-    "total_value": 16024.37,
-    "total_profit": 1665.29
-  },
-  {
-    "timestamp": "2026-10-02 14:27",
-    "total_cost": 14395.42,
-    "total_value": 16310.24,
-    "total_profit": 1914.82
-  },
-  {
-    "timestamp": "2026-10-02 14:57",
-    "total_cost": 14386.12,
-    "total_value": 16335.14,
-    "total_profit": 1949.03
-  },
-  {
-    "timestamp": "2026-10-02 15:27",
-    "total_cost": 14387.72,
-    "total_value": 16347.88,
-    "total_profit": 1960.16
-  },
-  {
-    "timestamp": "2026-10-05 23:04",
-    "total_cost": 14399.25,
-    "total_value": 16618.05,
-    "total_profit": 2218.8
-  },
-  {
-    "timestamp": "2026-10-06 18:46",
-    "total_cost": 14383.6,
-    "total_value": 16695.17,
-    "total_profit": 2311.57
+    "timestamp": "2026-10-08 13:09",
+    "total_cost": 14410.37,
+    "total_value": 16425.5,
+    "total_profit": 2015.13
   }
 ]

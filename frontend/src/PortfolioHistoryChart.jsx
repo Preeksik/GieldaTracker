@@ -55,7 +55,10 @@ function rebaseToRange(points) {
   return points.map((p) => ({ date: p.date, value: (p.value / base) * 100 }))
 }
 
-function PortfolioHistoryChart() {
+// refreshKey: rodzic (Pozycje) zwiększa go po każdej zmianie portfela - dodaniu, sprzedaży,
+// usunięciu, imporcie. Wtedy wykres i wartość u góry pobierają się od nowa. Wcześniej wykres
+// ładował historię tylko raz, przy wejściu na zakładkę, i pokazywał stan sprzed zmiany.
+function PortfolioHistoryChart({ refreshKey = 0 }) {
   const [history, setHistory] = useState([])
   const [events, setEvents] = useState([])
   const [liveHistory, setLiveHistory] = useState([])
@@ -73,8 +76,9 @@ function PortfolioHistoryChart() {
 
   const containerRef = useRef(null)
 
-  const fetchAll = async () => {
-    setLoading(true)
+  // silent = odświeżenie w tle: stary wykres zostaje na ekranie, dopóki nie przyjdą nowe dane
+  const fetchAll = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const [fullRes, liveRes] = await Promise.all([
@@ -86,6 +90,7 @@ function PortfolioHistoryChart() {
         throw new Error(errData?.detail || 'Nie udało się odtworzyć historii portfela.')
       }
       const fullData = await fullRes.json()
+      setError('')
       setHistory(fullData.history || [])
       setEvents(fullData.events || [])
 
@@ -122,8 +127,10 @@ function PortfolioHistoryChart() {
   }
 
   useEffect(() => {
-    fetchAll()
-  }, [])
+    fetchAll(refreshKey > 0)
+    if (refreshKey > 0 && mode === 'bench') fetchBenchmarks(activeBenchmarks)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   useEffect(() => {
     if (mode === 'bench') fetchBenchmarks(activeBenchmarks)

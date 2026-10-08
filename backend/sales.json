@@ -1,1 +1,36 @@
-[]
+[
+  {
+    "id": "7d95d4ee-6cf3-4f1d-911a-9391a2655b7d",
+    "ticker": "IBCJ.DE",
+    "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+    "account": "zwykle",
+    "quantity": 5.0,
+    "buy_date": "20251029",
+    "buy_price": 26.71,
+    "buy_currency": "EUR",
+    "sell_date": "2026-10-07",
+    "sell_price": 36.94,
+    "sell_currency": "EUR",
+    "cost_pln": 564.81,
+    "proceeds_pln": 806.79,
+    "realized_profit_pln": 241.98,
+    "recorded_at": "2026-10-08 13:09"
+  },
+  {
+    "id": "acf1e8c4-2a75-41e8-ad2f-0c489345816b",
+    "ticker": "IBCJ.DE",
+    "name": "iShares MSCI Poland UCITS ETF USD (Acc)",
+    "account": "zwykle",
+    "quantity": 0.4082,
+    "buy_date": "20251029",
+    "buy_price": 26.71,
+    "buy_currency": "EUR",
+    "sell_date": "2026-10-08",
+    "sell_price": 36.945,
+    "sell_currency": "EUR",
+    "cost_pln": 46.11,
+    "proceeds_pln": 66.04,
+    "realized_profit_pln": 19.93,
+    "recorded_at": "2026-10-08 13:11"
+  }
+]
