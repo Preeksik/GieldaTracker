@@ -14,6 +14,7 @@ import io
 import re
 import logging
 import smtplib
+import shutil
 from email.mime.text import MIMEText
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
@@ -36,7 +37,7 @@ from search import setup_search, known_symbols
 # Doradca - otwarte pytanie inwestycyjne, działa też przy pustym portfelu.
 from xtb_import import (read_tables as xtb_read_tables, parse_records as xtb_parse_records,
                         merge as xtb_merge, xtb_to_yahoo,
-                        account_currency_from_filename as xtb_account_currency)
+                        account_currency_from_filename as xtb_account_currency, fix_saved_ticker)
 from advisor import (setup_advisor, extract_ticker_plan, extract_stance, verify_tickers,
                      ticker_line_rule, STANCE_RULE)
 
@@ -630,6 +631,52 @@ def load_sales():
 def save_sales(sales):
     _atomic_json_write(SALES_FILE, sales)
     _reconstructed_history_cache.update(data=None, computed_at=None)
+
+
+def fix_saved_xtb_tickers():
+    """
+    Jednorazowa poprawka przy starcie: symbole w formacie XTB zapisane w danych (np. 'CNDX.UK'
+    ze starego importu) zamieniamy na symbole Yahoo ('CNDX.L'). Bez tego Yahoo zwraca 404
+    i pozycja nie ma ceny ani historii. Przed zmianą pliku zostaje kopia *.przed-poprawka.bak.
+    """
+    targets = [(PORTFOLIO_FILE, "list_of_dicts"), (SALES_FILE, "list_of_dicts"),
+               (ALERTS_FILE, "list_of_dicts"), (WATCHLIST_FILE, "list_of_str")]
+    for path, kind in targets:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(data, list):
+            continue
+        changed = []
+        if kind == "list_of_str":
+            new = []
+            for t in data:
+                fixed = fix_saved_ticker(t) if isinstance(t, str) else t
+                if fixed != t:
+                    changed.append(f"{t} -> {fixed}")
+                if fixed not in new:
+                    new.append(fixed)
+            data = new
+        else:
+            for item in data:
+                if isinstance(item, dict) and isinstance(item.get("ticker"), str):
+                    fixed = fix_saved_ticker(item["ticker"])
+                    if fixed != item["ticker"]:
+                        changed.append(f"{item['ticker']} -> {fixed}")
+                        item["ticker"] = fixed
+        if changed:
+            backup = path + ".przed-poprawka.bak"
+            try:
+                if not os.path.exists(backup):
+                    shutil.copy2(path, backup)
+                _atomic_json_write(path, data)
+                logger.info("Poprawione symbole XTB w %s: %s", os.path.basename(path), ", ".join(sorted(set(changed))))
+            except OSError:
+                logger.exception("Nie udało się poprawić symboli w %s", path)
 
 
 def load_watchlist():
@@ -3639,3 +3686,10 @@ setup_advisor(
     journal_save_fn=journal_save,
     journal_append_fn=journal_append,
 )
+
+
+# Symbole w formacie XTB z dawnych importów (CNDX.UK, VOX.PL) -> Yahoo. Raz przy starcie.
+try:
+    fix_saved_xtb_tickers()
+except Exception:
+    logger.exception("Poprawka symboli XTB nie powiodła się")

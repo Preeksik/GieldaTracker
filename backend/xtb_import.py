@@ -50,6 +50,20 @@ def xtb_to_yahoo(symbol):
     return s
 
 
+# Sufiksy, których Yahoo NIE używa - takie symbole w zapisanych danych to na pewno format XTB.
+# Inne (np. .BE) poprawiamy tylko w świeżo importowanym pliku: u Yahoo .BE to giełda w Berlinie.
+SAFE_TO_FIX = {"PL", "US", "UK"}
+
+
+def fix_saved_ticker(symbol):
+    """Poprawka symboli już zapisanych w aplikacji: 'CNDX.UK' -> 'CNDX.L', 'VOX.PL' -> 'VOX.WA'."""
+    s = (symbol or "").strip().upper()
+    m = re.fullmatch(r"([A-Z0-9][A-Z0-9\-]*)\.([A-Z]{2})", s)
+    if m and m.group(2) in SAFE_TO_FIX:
+        return xtb_to_yahoo(s)
+    return symbol
+
+
 def ticker_from_cell(text):
     """Symbol z komórki: 'NASDAQ 100 ETF (CNDX.UK)', 'VOX.PL', 'VOX.PL, Voxel SA'. None, gdy brak."""
     t = (text or "").strip()
@@ -405,7 +419,8 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
     """
     now = now or datetime.now()
     tmap = ticker_map or {}
-    norm = lambda t: tmap.get(xtb_to_yahoo(t), xtb_to_yahoo(t))
+    norm = lambda t: tmap.get(xtb_to_yahoo(t), xtb_to_yahoo(t))          # symbole z pliku
+    norm_saved = lambda t: tmap.get(fix_saved_ticker(t), fix_saved_ticker(t))   # symbole już zapisane
     acc_of = lambda x: x.get("account") or "zwykle"
     cur_cache, name_cache = {}, {}
     res = {"open_added": 0, "closed_added": 0, "duplicates": 0, "in_sync": [], "mismatches": [],
@@ -426,6 +441,10 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
 
     for r in records:
         r["ticker"] = norm(r["ticker"])
+    # Zapisane wcześniej pozycje w formacie XTB (CNDX.UK) też poprawiamy - inaczej zostałyby
+    # uznane za zgodne z plikiem i dalej nie miałyby cen.
+    for x in list(entries) + list(sales):
+        x["ticker"] = norm_saved(x["ticker"])
 
     # ---------------- zamknięte ----------------
     closed = [r for r in records if r["kind"] == "closed"]
@@ -434,7 +453,7 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
         days.setdefault((r["ticker"], r["account"], r["close_date"]), []).append(r)
     app_days = {}
     for s in sales:
-        k = (norm(s["ticker"]), acc_of(s), s.get("sell_date"))
+        k = (s["ticker"], acc_of(s), s.get("sell_date"))
         app_days.setdefault(k, []).append(_q(s["quantity"]))
 
     for key, rows in days.items():
@@ -481,7 +500,7 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
             xtb_open.setdefault((r["ticker"], r["account"]), []).append(r)
     app_open = {}
     for e in entries:
-        app_open.setdefault((norm(e["ticker"]), acc_of(e)), []).append(e)
+        app_open.setdefault((e["ticker"], acc_of(e)), []).append(e)
 
     def add_lot(r):
         t = r["ticker"]
