@@ -114,18 +114,23 @@ function PortfolioTracker() {
   const [xtbError, setXtbError] = useState('')
   const [xtbAccount, setXtbAccount] = useState('zwykle')
 
-  const handleXtbImport = async (e) => {
-    const file = e.target.files[0]
+  // Plik zostaje w pamięci, żeby "Ustaw jak w XTB" mogło wysłać go drugi raz z sync=true
+  const [xtbFile, setXtbFile] = useState(null)
+
+  const handleXtbImport = async (e) => runXtbImport(e.target.files[0], false, e)
+
+  const runXtbImport = async (file, sync, e) => {
     if (!file) return
     setXtbLoading(true)
     setXtbResult(null)
     setXtbError('')
+    setXtbFile(file)
 
     const formData = new FormData()
     formData.append('file', file)
 
     try {
-      const res = await fetch(`${API_URL}/api/portfolio/import-xtb-history?account=${xtbAccount}`, {
+      const res = await fetch(`${API_URL}/api/portfolio/import-xtb-history?account=${xtbAccount}&sync=${sync}`, {
         method: 'POST',
         body: formData,
       })
@@ -139,7 +144,7 @@ function PortfolioTracker() {
       setXtbError(err.message)
     } finally {
       setXtbLoading(false)
-      e.target.value = ''
+      if (e?.target) e.target.value = ''
     }
   }
 
@@ -590,7 +595,7 @@ function PortfolioTracker() {
             {xtbLoading ? 'Importuję historię...' : '📊 Importuj historię XTB'}
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx"
               onChange={handleXtbImport}
               disabled={xtbLoading}
               style={{ display: 'none' }}
@@ -611,7 +616,9 @@ function PortfolioTracker() {
 
         <div style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
           <strong>Zwykły CSV</strong>: tylko otwarte pozycje (ticker, ilość, cena, data). <strong>Historia XTB</strong>:
-          pełen eksport z platformy — otwarte pozycje trafią do portfela, zamknięte do zakładki Sprzedaże.
+          eksport z platformy (Historia → Eksport, plik .xlsx albo .csv) — zamknięte pozycje trafią do Sprzedaży,
+          otwarte porównam z portfelem. Ponowny import niczego nie dubluje. Każdy rachunek XTB (zwykły, IKE, IKZE)
+          ma osobny plik — wybierz konto na liście obok.
         </div>
 
         {importResult && (
@@ -631,12 +638,70 @@ function PortfolioTracker() {
         )}
 
         {xtbResult && (
-          <div style={{ marginTop: '10px', color: 'var(--up)' }}>
-            ✅ Zaimportowano z XTB: {xtbResult.imported_open_positions} otwartych pozycji,{' '}
-            {xtbResult.imported_closed_positions} zamkniętych (→ zakładka Sprzedaże).
-            <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Tickery: {xtbResult.tickers.join(', ')}</div>
-            {xtbResult.errors.length > 0 && (
-              <div style={{ color: 'var(--warn)', marginTop: '5px', fontSize: '12px' }}>
+          <div className="hl-xtb-result">
+            <div style={{ color: 'var(--up)', fontWeight: 600 }}>
+              ✅ Z XTB: {xtbResult.imported_closed_positions} zamkniętych pozycji → Sprzedaże
+              {xtbResult.imported_open_positions > 0 && `, ${xtbResult.imported_open_positions} zakupów → portfel`}
+              {xtbResult.duplicates_skipped > 0 && (
+                <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}> · pominięto {xtbResult.duplicates_skipped} już zapisanych</span>
+              )}
+            </div>
+            {xtbResult.in_sync?.length > 0 && (
+              <div className="hl-xtb-line">✓ Zgodne z XTB: {xtbResult.in_sync.join(', ')}</div>
+            )}
+            {xtbResult.replaced?.length > 0 && (
+              <div className="hl-xtb-line">
+                ↻ Ustawione jak w XTB: {xtbResult.replaced.map((m) => `${m.ticker} ${m.app_qty} → ${m.xtb_qty} szt.`).join(', ')}
+              </div>
+            )}
+            {xtbResult.mismatches?.length > 0 && (
+              <div className="hl-xtb-warn">
+                <div>
+                  <b>Różna ilość w aplikacji i w XTB</b> — nic nie zmieniłem, sprawdź:
+                </div>
+                <ul>
+                  {xtbResult.mismatches.map((m) => (
+                    <li key={m.ticker + m.account}>
+                      {m.name || m.ticker} ({m.ticker}): w aplikacji <b>{m.app_qty}</b> szt., w XTB <b>{m.xtb_qty}</b> szt.
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  className="hl-btn hl-btn-sm"
+                  disabled={xtbLoading || !xtbFile}
+                  onClick={() => {
+                    if (window.confirm('Zastąpić Twoje wpisy dla tych spółek zakupami z XTB (z prawdziwymi datami i cenami)?')) {
+                      runXtbImport(xtbFile, true)
+                    }
+                  }}
+                >
+                  Ustaw jak w XTB
+                </button>
+              </div>
+            )}
+            {xtbResult.not_in_xtb?.length > 0 && (
+              <div className="hl-xtb-line" style={{ color: 'var(--warn)' }}>
+                W aplikacji, ale nie na tym rachunku XTB: {xtbResult.not_in_xtb.map((m) => `${m.ticker} (${m.app_qty} szt.)`).join(', ')}
+                {' '}— sprzedane albo trzymane u innego brokera?
+              </div>
+            )}
+            {xtbResult.renamed?.length > 0 && (
+              <div className="hl-xtb-line">
+                Symbole przetłumaczone po nazwie: {xtbResult.renamed.map((r) => `${r.from} → ${r.to}`).join(', ')}
+              </div>
+            )}
+            {xtbResult.unknown_tickers?.length > 0 && (
+              <div className="hl-xtb-line" style={{ color: 'var(--warn)' }}>
+                Yahoo nie zna symboli: {xtbResult.unknown_tickers.join(', ')} — ceny tych spółek się nie pobiorą.
+              </div>
+            )}
+            {xtbResult.partial_days?.length > 0 && (
+              <div className="hl-xtb-line" style={{ color: 'var(--warn)' }}>
+                Częściowo pokrywające się sprzedaże: {xtbResult.partial_days.join(' · ')}
+              </div>
+            )}
+            {xtbResult.errors?.length > 0 && (
+              <div className="hl-xtb-line" style={{ color: 'var(--warn)' }}>
                 Pominięto {xtbResult.errors.length} wierszy: {xtbResult.errors.slice(0, 3).join(' · ')}
               </div>
             )}

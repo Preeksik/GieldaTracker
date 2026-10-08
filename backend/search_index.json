@@ -394,5 +394,167 @@
   "exchange": "SHZ",
   "type": "akcje",
   "seen": "2026-10-06T16:50:04.386234+00:00"
+ },
+ "PZU.WA": {
+  "name": "Powszechny Zaklad Ubezpieczen SA",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:10.146985+00:00"
+ },
+ "ETFPZUW20M40.WA": {
+  "name": "PZU ETF WIG20 TR & MWIG40 - Investment Certificates ETF",
+  "exchange": "GPW",
+  "type": "ETF",
+  "seen": "2026-10-08T11:24:10.147006+00:00"
+ },
+ "ETFPZULONGDUR.WA": {
+  "name": "PZU ETF Obligacji Skarbowych - INVESTMENT CERTIFICATES ETF",
+  "exchange": "GPW",
+  "type": "ETF",
+  "seen": "2026-10-08T11:24:10.147009+00:00"
+ },
+ "PZUAKORD.WA": {
+  "name": "Pzu Fundusz Inwestycyjny Zamkniety Akord",
+  "exchange": "GPW",
+  "type": "fundusz",
+  "seen": "2026-10-08T11:24:10.147012+00:00"
+ },
+ "ETFPZUWORLD.WA": {
+  "name": "PZU Etf Msci World Pcif - Investment Certificates ETF",
+  "exchange": "GPW",
+  "type": "ETF",
+  "seen": "2026-10-08T11:24:10.147015+00:00"
+ },
+ "ETFPZUCASH.WA": {
+  "name": "Pzu Etf Obligacji Skarbowych Zmiennokuponowych Portfelowy Fundusz Inwestycyjny Zamkniety",
+  "exchange": "GPW",
+  "type": "ETF",
+  "seen": "2026-10-08T11:24:10.147018+00:00"
+ },
+ "PZULEGATO.WA": {
+  "name": "Towarzystwo Funduszy Inwestycyjnych PZU SA - PZU Fundusz Inwestycyjny Zamkniety Legato",
+  "exchange": "GPW",
+  "type": "fundusz",
+  "seen": "2026-10-08T11:24:10.147021+00:00"
+ },
+ "NOC": {
+  "name": "Northrop Grumman Corporation",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390849+00:00"
+ },
+ "GGAL": {
+  "name": "Grupo Financiero Galicia S.A.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390859+00:00"
+ },
+ "SUPV": {
+  "name": "Grupo Supervielle S.A.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390861+00:00"
+ },
+ "CIB": {
+  "name": "Grupo Cibest S.A.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390864+00:00"
+ },
+ "BIMBOA.MX": {
+  "name": "Grupo Bimbo, S.A.B. de C.V.",
+  "exchange": "MEX",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390866+00:00"
+ },
+ "IGN1L.VS": {
+  "name": "AB Ignitis grupe",
+  "exchange": "LIT",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390869+00:00"
+ },
+ "KOG.OL": {
+  "name": "Kongsberg Gruppen ASA",
+  "exchange": "OSL",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:47.390871+00:00"
+ },
+ "GKI.WA": {
+  "name": "Grupa Kapitalowa IMMOBILE S.A.",
+  "exchange": "GPW",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166189+00:00"
+ },
+ "GQ2.F": {
+  "name": "Grupa Kety S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166205+00:00"
+ },
+ "GQ2.MU": {
+  "name": "Grupa Kety SA",
+  "exchange": "Monachium",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166208+00:00"
+ },
+ "GQ2.DU": {
+  "name": "Grupa Kety SA",
+  "exchange": "DUS",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166210+00:00"
+ },
+ "PLKETY000011.SG": {
+  "name": "Grupa Kety S.A.",
+  "exchange": "Stuttgart",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166214+00:00"
+ },
+ "2EK.F": {
+  "name": "Grupa Klepsydra S.A.",
+  "exchange": "Frankfurt",
+  "type": "akcje",
+  "seen": "2026-10-08T11:24:48.166216+00:00"
+ },
+ "VWCE.DE": {
+  "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+  "exchange": "Xetra",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987141+00:00"
+ },
+ "VWCE.MI": {
+  "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+  "exchange": "Mediolan",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987150+00:00"
+ },
+ "VWCE.AS": {
+  "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+  "exchange": "Amsterdam",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987153+00:00"
+ },
+ "VWCE.MU": {
+  "name": "Vanguard FTSE All-World U.ETF R",
+  "exchange": "Monachium",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987155+00:00"
+ },
+ "VWCED.XD": {
+  "name": "Vanguard FTSE All-World UCITS E",
+  "exchange": "DXE",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987158+00:00"
+ },
+ "VWCE.DU": {
+  "name": "Vanguard FTSE All-World U.ETF R",
+  "exchange": "DUS",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987160+00:00"
+ },
+ "VWCEA.XD": {
+  "name": "Vanguard FTSE All-World UCITS E",
+  "exchange": "DXE",
+  "type": "ETF",
+  "seen": "2026-10-08T11:27:03.987163+00:00"
  }
 }
