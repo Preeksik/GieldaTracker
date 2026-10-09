@@ -38,6 +38,7 @@ from search import setup_search, known_symbols
 from xtb_import import (read_tables as xtb_read_tables, parse_records as xtb_parse_records,
                         merge as xtb_merge, xtb_to_yahoo,
                         account_currency_from_filename as xtb_account_currency, fix_saved_ticker)
+from review import setup_review
 from advisor import (setup_advisor, extract_ticker_plan, extract_stance, verify_tickers,
                      ticker_line_rule, STANCE_RULE)
 
@@ -2815,6 +2816,27 @@ def analyze_ticker(ticker: str, request: PositionAnalysisRequest):
     }
 
 
+def get_instrument_profile(ticker):
+    """Typ (akcja/ETF), kraj, sektor, nazwa i stopa dywidendy z Yahoo - do Przeglądu portfela."""
+    try:
+        info = yf.Ticker(ticker).info or {}
+    except Exception:
+        logger.warning("Nie udało się pobrać profilu %s", ticker)
+        return {}
+    dy = info.get("trailingAnnualDividendYield")   # ułamek: 0.045 = 4,5%
+    dy = dy * 100 if isinstance(dy, (int, float)) and dy == dy else None
+    if dy is None:
+        raw = info.get("dividendYield")   # nowsze yfinance podają tu już procent
+        dy = raw if isinstance(raw, (int, float)) and raw == raw else None
+    return {
+        "quote_type": info.get("quoteType"),
+        "country": info.get("country"),
+        "sector": info.get("sector"),
+        "name": info.get("longName") or info.get("shortName"),
+        "dividend_yield": round(dy, 2) if dy is not None else None,
+    }
+
+
 def get_sector_info(ticker):
     """Próbuje pobrać sektor/branżę/kraj notowania spółki - potrzebne do oceny dywersyfikacji."""
     try:
@@ -3693,3 +3715,30 @@ try:
     fix_saved_xtb_tickers()
 except Exception:
     logger.exception("Poprawka symboli XTB nie powiodła się")
+
+
+# Przegląd portfela - /api/review (liczby z kodu) i /api/review/ai (komentarz + Dziennik porad)
+def _review_fx_pct():
+    """Opłata za przewalutowanie dla każdego konta - z profilu w zakładce Broker i koszty."""
+    import broker as _broker
+    prof = _broker.load_profile()
+    out = {}
+    for acc in VALID_ACCOUNTS:
+        sched = _broker.schedule(prof["accounts"].get(acc) or "xtb", prof) or {}
+        out[acc] = sched.get("fx_pct")
+    return out
+
+
+setup_review(
+    app,
+    portfolio_fn=lambda: get_portfolio(),
+    sales_fn=lambda: load_sales(),
+    profile_fn=lambda t: get_instrument_profile(t),
+    fx_pct_fn=_review_fx_pct,
+    ask_fn=lambda prompt, timeout=90: call_gemini(prompt, timeout=timeout),
+    journal_fn=lambda question, raw: journal_from_plan("portfel", question, raw, brief={"horizon": "dlugi"}),
+    persona=ANALYST_PERSONA,
+    markdown_rules=MARKDOWN_FORMAT_RULES,
+    disclaimer=DISCLAIMER_RULE,
+    ticker_rule=ticker_line_rule("PLN"),
+)

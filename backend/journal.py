@@ -46,7 +46,7 @@ BENCHMARKS = [
 HORIZON_DAYS = {"krotki": 60, "sredni": 365, "dlugi": 1095, None: 90}
 HORIZON_LABEL = {"krotki": "krótki", "sredni": "średni", "dlugi": "długi"}
 
-SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Portfel AI", "pozycja": "Analiza pozycji"}
+SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Przegląd portfela", "pozycja": "Analiza pozycji"}
 
 PRICE_TTL = 600
 
