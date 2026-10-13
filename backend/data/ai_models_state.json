@@ -1,44 +1,319 @@
 {
   "mode": "reczny",
-  "manual_model": "gemini-3.5-flash-lite",
-  "cooldowns": {},
+  "manual_model": "gemini-4-argon",
+  "cooldowns": {
+    "gemini-3.8-flash": "2026-10-13T21:21:54.612587+00:00",
+    "gemini-3.7-flash": "2026-10-13T21:21:56.117278+00:00",
+    "gemini-3.6-flash": "2026-10-13T21:22:00.481120+00:00",
+    "gemini-3.5-flash": "2026-10-13T21:22:07.930461+00:00",
+    "gemini-3-flash-preview": "2026-10-13T21:22:38.112206+00:00",
+    "gemini-2.5-flash": "2026-10-14T03:17:38.568648+00:00",
+    "gemini-3.1-pro-preview": "2026-10-14T07:00:00.000734+00:00",
+    "gemini-3.1-pro-preview-customtools": "2026-10-14T07:00:00.000721+00:00",
+    "gemini-2.5-pro": "2026-10-14T03:18:41.960555+00:00",
+    "gemini-4-argon": "2026-10-14T07:00:00.000728+00:00"
+  },
   "usage": {
     "2026-10-06": {
       "gemini-3.5-flash-lite": 2
     },
     "2026-10-13": {
-      "gemini-3.5-flash-lite": 1
+      "gemini-3.5-flash-lite": 4
     }
   },
   "last_used": {
     "model": "gemini-3.5-flash-lite",
-    "at": "2026-10-13T21:13:46.283732+00:00"
+    "at": "2026-10-13T21:20:30.937082+00:00"
   },
   "last_fallback": {
-    "at": "2026-10-02T12:35:04.765756+00:00",
-    "wanted": "gemini-3.8-flash",
-    "used": "gemini-3.5-flash",
+    "at": "2026-10-13T21:18:59.102740+00:00",
+    "wanted": "gemini-4-argon",
+    "used": "gemini-3.5-flash-lite",
     "attempts": [
       {
-        "model": "gemini-3.8-flash",
+        "model": "gemini-4-argon",
         "skipped": false,
-        "status": 503,
-        "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        "status": 429,
+        "reason": "limit dobowy: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor yo"
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 3 min"
       },
       {
         "model": "gemini-3.7-flash",
-        "skipped": false,
-        "status": 503,
-        "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 3 min"
       },
       {
         "model": "gemini-3.6-flash",
         "skipped": true,
-        "reason": "kwarantanna jeszcze 2 min"
+        "reason": "kwarantanna jeszcze 4 min"
+      },
+      {
+        "model": "gemini-3.5-flash",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 4 min"
+      },
+      {
+        "model": "gemini-3-flash-preview",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 4 min"
+      },
+      {
+        "model": "gemini-2.5-flash",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 359 min"
+      },
+      {
+        "model": "gemini-3.1-pro-preview",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 582 min"
+      },
+      {
+        "model": "gemini-3.1-pro-preview-customtools",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 582 min"
+      },
+      {
+        "model": "gemini-2.5-pro",
+        "skipped": true,
+        "reason": "kwarantanna jeszcze 360 min"
       }
     ]
   },
   "recent": [
+    {
+      "at": "2026-10-13T21:20:30.940934+00:00",
+      "wanted": "gemini-4-argon",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-4-argon",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 580 min"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 2 min"
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 2 min"
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 2 min"
+        },
+        {
+          "model": "gemini-3.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 2 min"
+        },
+        {
+          "model": "gemini-3-flash-preview",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 3 min"
+        },
+        {
+          "model": "gemini-2.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 358 min"
+        },
+        {
+          "model": "gemini-3.1-pro-preview",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 580 min"
+        },
+        {
+          "model": "gemini-3.1-pro-preview-customtools",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 580 min"
+        },
+        {
+          "model": "gemini-2.5-pro",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 359 min"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-13T21:18:59.106651+00:00",
+      "wanted": "gemini-4-argon",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-4-argon",
+          "skipped": false,
+          "status": 429,
+          "reason": "limit dobowy: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor yo"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 3 min"
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 3 min"
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3-flash-preview",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-2.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 359 min"
+        },
+        {
+          "model": "gemini-3.1-pro-preview",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 582 min"
+        },
+        {
+          "model": "gemini-3.1-pro-preview-customtools",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 582 min"
+        },
+        {
+          "model": "gemini-2.5-pro",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 360 min"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-13T21:18:44.377308+00:00",
+      "wanted": "gemini-3.1-pro-preview",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [
+        {
+          "model": "gemini-3.1-pro-preview",
+          "skipped": false,
+          "status": 429,
+          "reason": "limit dobowy: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor yo"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-3-flash-preview",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 4 min"
+        },
+        {
+          "model": "gemini-2.5-flash",
+          "skipped": true,
+          "reason": "kwarantanna jeszcze 359 min"
+        },
+        {
+          "model": "gemini-3.1-pro-preview-customtools",
+          "skipped": false,
+          "status": 429,
+          "reason": "limit dobowy: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor yo"
+        },
+        {
+          "model": "gemini-2.5-pro",
+          "skipped": false,
+          "status": 404,
+          "reason": "Model niedostępny dla tego klucza: This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use models/gemini-3.1-pro-preview for the latest features and improv"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
+    {
+      "at": "2026-10-13T21:17:38.572625+00:00",
+      "wanted": "gemini-3.8-flash",
+      "used": null,
+      "ok": false,
+      "attempts": [
+        {
+          "model": "gemini-3.8-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3.5-flash",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-3-flash-preview",
+          "skipped": false,
+          "status": 503,
+          "reason": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        },
+        {
+          "model": "gemini-2.5-flash",
+          "skipped": false,
+          "status": 404,
+          "reason": "Model niedostępny dla tego klucza: This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and improvemen"
+        },
+        {
+          "model": "gemini-3.1-pro-preview",
+          "skipped": true,
+          "reason": "limit prób w jednym żądaniu"
+        }
+      ],
+      "error": null,
+      "catalog_error": null
+    },
     {
       "at": "2026-10-13T21:13:46.288061+00:00",
       "wanted": "gemini-3.5-flash-lite",

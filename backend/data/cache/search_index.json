@@ -556,5 +556,95 @@
   "exchange": "DXE",
   "type": "ETF",
   "seen": "2026-10-08T11:27:03.987163+00:00"
+ },
+ "CTVA": {
+  "name": "Corteva, Inc.",
+  "exchange": "NYSE",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525934+00:00"
+ },
+ "CTNM": {
+  "name": "Contineum Therapeutics, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525944+00:00"
+ },
+ "CTSH": {
+  "name": "Cognizant Technology Solutions Corporation",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525947+00:00"
+ },
+ "CTAS": {
+  "name": "Cintas Corporation",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525949+00:00"
+ },
+ "CTM": {
+  "name": "Castellum, Inc.",
+  "exchange": "NYSE American",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525951+00:00"
+ },
+ "CTMX": {
+  "name": "CytomX Therapeutics, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525953+00:00"
+ },
+ "CTNT": {
+  "name": "Cheetah Net Supply Chain Service Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.525954+00:00"
+ },
+ "CTXR": {
+  "name": "Citius Pharmaceuticals, Inc.",
+  "exchange": "NASDAQ",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852222+00:00"
+ },
+ "CTXXF": {
+  "name": "CEMATRIX Corporation",
+  "exchange": "OQB",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852232+00:00"
+ },
+ "CTXDF": {
+  "name": "Cantex Mine Development Corp.",
+  "exchange": "OQB",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852235+00:00"
+ },
+ "CTXAY": {
+  "name": "Ampol Limited",
+  "exchange": "PNK",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852237+00:00"
+ },
+ "17966.HK": {
+  "name": "CTXIAMI@EC2705A",
+  "exchange": "HKG",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852240+00:00"
+ },
+ "CTX-USD": {
+  "name": "Cryptex Finance USD",
+  "exchange": "CCC",
+  "type": "krypto",
+  "seen": "2026-10-13T21:20:10.852242+00:00"
+ },
+ "15073.HK": {
+  "name": "CTXTAPI@EC2701A",
+  "exchange": "HKG",
+  "type": "akcje",
+  "seen": "2026-10-13T21:20:10.852244+00:00"
+ },
+ "CTX.WA": {
+  "name": "Captor Therapeutics Spolka Akcyjna",
+  "exchange": "",
+  "type": "",
+  "seen": "2026-10-13T21:20:12.876692+00:00"
  }
 }

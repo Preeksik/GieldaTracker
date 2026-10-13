@@ -1,5 +1,108 @@
 [
  {
+  "id": "dfa1a21a7d6f",
+  "created_at": "2026-10-13T21:20:30.944454+00:00",
+  "source": "pozycja",
+  "question": "Analiza transakcji: co zrobić z pozycją Captor Therapeutics (CTX.WA) długoterminowo?",
+  "answer": "## Werdykt\n**SPRZEDAJ** – spółka charakteryzuje się chroniczną słabością trendu długoterminowego, skrajnie niską płynnością utrudniającą wyjście z pozycji oraz brakiem kluczowych danych fundamentalnych i kalendarza wydarzeń.\n\n## Wycena\n* **Status:** Sprawiedliwie do lekko przewartościowanej w obecnym układzie sił rynkowych.\n* **Uzasadnienie:** Cena na poziomie **60.0 PLN** znajduje się w dolnej połowie 2-letniego przedziału wahań (**31.40 - 87.60 PLN**), będąc jednocześnie poniżej ceny zakupu inwestora wynoszącej **77.1 PLN** (strata **-22.18%**). \n* **Analiza wolumenu i trendu:** Średni dzienny wolumen na poziomie **6,612** sztuk (ostatnio **6,101**) przy posiadanych przez inwestora zaledwie **1.3 sztuki** teoretycznie umożliwia transakcję, ale tak marginalny obrót giełdowy odzwierciedla brak zainteresowania instytucjonalnego. 2-letnia stopa zwrotu wynosząca **-17.4%** (spadek z 72.60 PLN) potwierdza dominację trendu spadkowego. Brak danych o najbliższym raporcie finansowym uniemożliwia wycenę fundamentalną opartą na twardych wskaźnikach – z tego powodu poleganie na czystej spekulacji przy tej płynności jest błędem.\n\n## Prawdopodobieństwo\n* **Szacunek:** **~35% szans na wzrost** do poziomu ceny zakupu (**77.1 PLN**) w horyzoncie 12 miesięcy.\n* **Uzasadnienie:** Niska płynność (średnio ok. 6,1-6,6 tys. akcji dziennie) generuje wysoki spread i ryzyko utknięcia z kapitałem. Brak struktury wyższych dołków w 2-letnim horyzoncie cenowym oraz brak danych o katalizatorach biznesowych (raportach) oznaczają, że spółka porusza się w próżni informacyjnej, gdzie kapitał ucieka w stronę płynniejszych aktywów GPW.\n\n## Plan działania\n* **Cena cięcia straty (Stop Loss / natychmiastowa wyprzedaż):** **Obecna cena rynkowa (60.0 PLN)** – natychmiastowe zamknięcie pozycji. Przy posiadaniu **1.3 sztuki** i wartości rynkowej pakietu wynoszącej **78.0 PLN**, koszty prowizji XTB wynoszą **0.00 zł** (ponieważ obrót mieści się w limitach darmowych do 100 000 EUR miesięcznie, a transakcja dotyczy GPW bez kosztów przewalutowania).\n* **Cena dokupienia:** **Brak (nie dokupować)**. Średnienie strat w spółce o malejącym trendzie i minimalnej płynności narusza zasady zarządzania ryzykiem.\n* **Cena realizacji zysku:** Nie dotyczy obecnej pozycji generującej stratę.\n\n## Elastyczność kapitału\n* **Decyzja:** Należy **całkowicie wyjść z tej pozycji** i nie wracać do niej w najbliższym roku.\n* **Uzasadnienie:** Zaangażowany kapitał (ok. **78 PLN**) jest zamrożony w aktywie o zerowej dynamice wzrostowej. Utrzymywanie pozycji \"na siłę\" z powodu straty (efekt dyspozycji) blokuje środki, które na tym samym rynku GPW można przeznaczyć na spółki o silnym trendzie wzrostowym i wysokiej płynności, gdzie koszty transakcyjne w XTB (0% do 100k EUR) pozwalają na efektywne zarządzanie portfelem bez obciążeń prowizyjnych.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "CTX.WA",
+    "name": "Captor Therapeutics",
+    "price": 60.0,
+    "currency": "PLN",
+    "stance": "sprzedaj",
+    "amount_pln": 78.0
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4225.0,
+   "sp500": 7805.45
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
+  "id": "e68e40a7d84a",
+  "created_at": "2026-10-13T21:19:00.101785+00:00",
+  "source": "portfel",
+  "question": "Przegląd portfela",
+  "answer": "## Ocena\nPortfel jest rażąco przeważony geograficznie na Polskę, co przy kapitałowej bazie rzędu **25 128 zł** generuje nadmierne ryzyko systemowe, dlatego oceniam go na **3/10**.\n\n## Największe ryzyko\n**71.4%** kapitału zamrożone jest w jednym regionie (Polska), co całkowicie niweluje dywersyfikację globalną.\n\n## Co poprawić\n- **Sprzedaj** część polskich akcji o wartości **3 800 zł** (zmniejszając zaangażowanie w spółki o najsłabszym momentum lub najmniejszej wadze, np. CTX.WA) i przenieś te środki na IKE, kupując ETF na rynki rozwinięte, aby zbliżyć się do limitu wpłat i optymalizować podatki.\n- **Przeznacz** **2 500 zł** z gotówki lub najbliższych nadwyżek na dokupienie globalnego ETF (VWCE.DE), aby podnieść wagę segmentu światowego kosztem Polski.\n- **Zrestrukturyzuj** pozycję w Captor Therapeutics (CTX.WA) o wartości portfelowej **0.3%** i wyniku **-22.2%** – całkowicie zamknij tę pozycję i uwolnij kapitał.\n\n## Koszty i podatki\nKoszt przewalutowania na poziomie ok. **203 zł** rocznie przy obrocie **40 601 zł** wynika z częstego handlu instrumentami w EUR i USD na zwykłym koncie; aby to ograniczyć, należy zaprzestać mikrotransakcji w walutach obcych i realizować wpłaty bezpośrednio w PLN na walutowe subkonta XTB przed zakupem. Podatek Belki od zrealizowanego zysku (**685 zł**) na zwykłym koncie oznacza konieczność zapłaty ok. **130 zł** podatku, dlatego nowe transakcje zyskowe należy bezwzględnie otwierać w ramach wolnego limitu IKE.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*\nTICKERS: CTX.WA SPRZEDAJ 75, VWCE.DE KUP 2500",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "CTX.WA",
+    "name": "Captor Therapeutics Spolka Akcyjna",
+    "price": 60.0,
+    "currency": "PLN",
+    "stance": null,
+    "amount_pln": null
+   },
+   {
+    "ticker": "VWCE.DE",
+    "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "price": 172.60000610351562,
+    "currency": "EUR",
+    "stance": null,
+    "amount_pln": null
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4225.0,
+   "sp500": 7805.45
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
+  "id": "bed73171e1d2",
+  "created_at": "2026-10-13T21:18:45.348750+00:00",
+  "source": "portfel",
+  "question": "Przegląd portfela",
+  "answer": "## Ocena\nPortfel jest niebezpiecznie skoncentrowany geograficznie i strukturalnie, przez co zasługuje na ocenę **4/10**.\n\n## Największe ryzyko\n**71.4%** kapitału zamrożone jest w jednym kraju (Polska), co naraża całe oszczędności na lokalny szok polityczno-walutowy.\n\n## Co poprawić\n- Sprzedaj akcje **Datawalk (DAT.WA)** za kwotę **1508 zł** (6.0% portfela) z powodu ujemnego wyniku (-3.5%) i przenieś środki na globalne rynki.\n- Zredukuj pozycję w **Captor Therapeutics (CTX.WA)** o kwotę **75 zł** (likwidacja niemal całej pozycji wynoszącej 0.3% portfela przy stracie -22.2%).\n- Przenieś systematycznie środki z akcji polskich na rachunek **IKE**, wykorzystując limit wpłat, aby chronić zyski przed podatkiem Belki.\n\n## Koszty i podatki\nKoszty przewalutowania wyniosły aż **203 zł** w ciągu 12 miesięcy przy obrocie 40 600 zł (koszt 0.5% w jedną stronę), co wynika z częstego handlu na walutach obcych. Aby ograniczyć ten koszt, należy ograniczyć liczbę transakcji walutowych na koncie zwykłym i kupować ETF-y denominowane w PLN lub bezpośrednio w walucie docelowej bez częstego rebalancingu. Podatek Belki (ok. **130 zł** od 685 zł zysku zrealizowanego) można zmniejszyć, przenosząc zyskowne instrumenty dywidendowe na konto **IKE**, gdzie zyski są zwolnione z podatku dochodowego.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "DAT.WA",
+    "name": "DataWalk S.A.",
+    "price": 115.80000305175781,
+    "currency": "PLN",
+    "stance": "sprzedaj",
+    "amount_pln": 1508.0
+   },
+   {
+    "ticker": "CTX.WA",
+    "name": "Captor Therapeutics Spolka Akcyjna",
+    "price": 60.0,
+    "currency": "PLN",
+    "stance": "sprzedaj",
+    "amount_pln": 75.0
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4225.0,
+   "sp500": 7805.45
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
   "id": "7ce4a636828a",
   "created_at": "2026-10-13T21:13:48.022630+00:00",
   "source": "portfel",
