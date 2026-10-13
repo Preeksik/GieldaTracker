@@ -25,6 +25,9 @@ from dotenv import load_dotenv
 
 load_dotenv()  # wczytuje zmienne z pliku .env leżącego obok main.py
 
+# Najpierw ścieżki: przy pierwszym starcie przenosi pliki danych do backend\data.
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 # Automatyzacja i powiadomienia Telegram (osobny moduł automation.py).
 # Import po load_dotenv(), żeby token z .env był już dostępny.
 from automation import setup_automation, send_telegram_alert
@@ -38,6 +41,7 @@ from search import setup_search, known_symbols
 from xtb_import import (read_tables as xtb_read_tables, parse_records as xtb_parse_records,
                         merge as xtb_merge, xtb_to_yahoo,
                         account_currency_from_filename as xtb_account_currency, fix_saved_ticker)
+from review import setup_review
 from advisor import (setup_advisor, extract_ticker_plan, extract_stance, verify_tickers,
                      ticker_line_rule, STANCE_RULE)
 
@@ -75,26 +79,24 @@ API_KEY = os.environ.get("GOOGLE_API_KEY", "WKLEJ_TU_SWOJ_KLUCZ_JESLI_NIE_UZYWAS
 MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Plik, w którym trzymamy pozycje portfela (prosty JSON, bez bazy danych)
-PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio.json")
+PORTFOLIO_FILE = data_path("portfolio.json")
 
 # Plik z historią ZREALIZOWANYCH sprzedaży (do liczenia realnego zysku i PIT-38)
-SALES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sales.json")
+SALES_FILE = data_path("sales.json")
 
 # Plik z watchlistą - spółki obserwowane pod kątem nadchodzących wydarzeń/raportów,
 # NIEZALEŻNIE od tego, czy są w portfelu (np. Nvidia, o której inwestor myśli, ale jej nie ma)
-WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
+WATCHLIST_FILE = data_path("watchlist.json")
 
 # Plik z alertami cenowymi
-ALERTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.json")
+ALERTS_FILE = data_path("alerts.json")
 
 # Plik z historią wysłanych powiadomień o odcięciu dywidendy (ticker + data odcięcia) -
 # żeby przy każdym cyklicznym sprawdzeniu nie wysyłać tego samego maila kilka razy.
-DIVIDEND_CUTOFF_NOTIFICATIONS_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "dividend_cutoff_notifications.json"
-)
+DIVIDEND_CUTOFF_NOTIFICATIONS_FILE = data_path("dividend_cutoff_notifications.json")
 
 # Plik z historią wartości portfela w czasie (snapshoty co ~30 min, gdy backend działa)
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_history.json")
+HISTORY_FILE = data_path("portfolio_history.json")
 
 # Wszystkie pliki z danymi użytkownika w jednym miejscu - używane przez kopię zapasową.
 # Klucz = nazwa w pliku backupu, wartość = ścieżka na dysku.
@@ -109,7 +111,7 @@ DATA_FILES = {
 
 # Folder na automatyczne migawki robione PRZED każdym importem - żeby pomyłkowe
 # wgranie cudzego backupu nie skasowało bezpowrotnie Twoich danych.
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
+BACKUP_DIR = data_path("backups")
 BACKUP_FORMAT_VERSION = 1
 
 # Konfiguracja e-mail (opcjonalna) - jeśli nie ustawisz tych zmiennych w .env,
@@ -2815,6 +2817,27 @@ def analyze_ticker(ticker: str, request: PositionAnalysisRequest):
     }
 
 
+def get_instrument_profile(ticker):
+    """Typ (akcja/ETF), kraj, sektor, nazwa i stopa dywidendy z Yahoo - do Przeglądu portfela."""
+    try:
+        info = yf.Ticker(ticker).info or {}
+    except Exception:
+        logger.warning("Nie udało się pobrać profilu %s", ticker)
+        return {}
+    dy = info.get("trailingAnnualDividendYield")   # ułamek: 0.045 = 4,5%
+    dy = dy * 100 if isinstance(dy, (int, float)) and dy == dy else None
+    if dy is None:
+        raw = info.get("dividendYield")   # nowsze yfinance podają tu już procent
+        dy = raw if isinstance(raw, (int, float)) and raw == raw else None
+    return {
+        "quote_type": info.get("quoteType"),
+        "country": info.get("country"),
+        "sector": info.get("sector"),
+        "name": info.get("longName") or info.get("shortName"),
+        "dividend_yield": round(dy, 2) if dy is not None else None,
+    }
+
+
 def get_sector_info(ticker):
     """Próbuje pobrać sektor/branżę/kraj notowania spółki - potrzebne do oceny dywersyfikacji."""
     try:
@@ -3693,3 +3716,30 @@ try:
     fix_saved_xtb_tickers()
 except Exception:
     logger.exception("Poprawka symboli XTB nie powiodła się")
+
+
+# Przegląd portfela - /api/review (liczby z kodu) i /api/review/ai (komentarz + Dziennik porad)
+def _review_fx_pct():
+    """Opłata za przewalutowanie dla każdego konta - z profilu w zakładce Broker i koszty."""
+    import broker as _broker
+    prof = _broker.load_profile()
+    out = {}
+    for acc in VALID_ACCOUNTS:
+        sched = _broker.schedule(prof["accounts"].get(acc) or "xtb", prof) or {}
+        out[acc] = sched.get("fx_pct")
+    return out
+
+
+setup_review(
+    app,
+    portfolio_fn=lambda: get_portfolio(),
+    sales_fn=lambda: load_sales(),
+    profile_fn=lambda t: get_instrument_profile(t),
+    fx_pct_fn=_review_fx_pct,
+    ask_fn=lambda prompt, timeout=90: call_gemini(prompt, timeout=timeout),
+    journal_fn=lambda question, raw: journal_from_plan("portfel", question, raw, brief={"horizon": "dlugi"}),
+    persona=ANALYST_PERSONA,
+    markdown_rules=MARKDOWN_FORMAT_RULES,
+    disclaimer=DISCLAIMER_RULE,
+    ticker_rule=ticker_line_rule("PLN"),
+)

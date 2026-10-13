@@ -30,10 +30,12 @@ from copy import deepcopy
 
 from pydantic import BaseModel
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROFILE_FILE = os.path.join(BASE_DIR, "broker_profile.json")
+PROFILE_FILE = data_path("broker_profile.json")
 
 CHECKED = "2026-09-21"   # dzień, w którym sprawdzono tabele niżej
 

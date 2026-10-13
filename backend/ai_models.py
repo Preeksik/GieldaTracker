@@ -36,12 +36,14 @@ import requests
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 load_dotenv()
 
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(BASE_DIR, "ai_models_state.json")
+STATE_FILE = data_path("ai_models_state.json")
 
 API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
@@ -148,7 +150,7 @@ def _persist():
     state = _get_state()
     tmp_path = None
     try:
-        fd, tmp_path = tempfile.mkstemp(dir=BASE_DIR, prefix=".ai_models_", suffix=".tmp")
+        fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(STATE_FILE), prefix=".ai_models_", suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
             f.flush()

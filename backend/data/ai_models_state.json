@@ -3,21 +3,16 @@
   "manual_model": "gemini-3.5-flash-lite",
   "cooldowns": {},
   "usage": {
-    "2026-10-02": {
-      "gemini-3.6-flash": 1,
-      "gemini-3.5-flash": 2
-    },
-    "2026-10-05": {
-      "gemini-3.8-flash": 1,
-      "gemini-3.5-flash-lite": 1
-    },
     "2026-10-06": {
       "gemini-3.5-flash-lite": 2
+    },
+    "2026-10-13": {
+      "gemini-3.5-flash-lite": 1
     }
   },
   "last_used": {
     "model": "gemini-3.5-flash-lite",
-    "at": "2026-10-06T16:50:16.510469+00:00"
+    "at": "2026-10-13T21:13:46.283732+00:00"
   },
   "last_fallback": {
     "at": "2026-10-02T12:35:04.765756+00:00",
@@ -44,6 +39,15 @@
     ]
   },
   "recent": [
+    {
+      "at": "2026-10-13T21:13:46.288061+00:00",
+      "wanted": "gemini-3.5-flash-lite",
+      "used": "gemini-3.5-flash-lite",
+      "ok": true,
+      "attempts": [],
+      "error": null,
+      "catalog_error": null
+    },
     {
       "at": "2026-10-06T16:50:16.514142+00:00",
       "wanted": "gemini-3.5-flash-lite",

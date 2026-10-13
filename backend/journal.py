@@ -31,10 +31,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-JOURNAL_FILE = os.path.join(BASE_DIR, "advice_journal.json")
+JOURNAL_FILE = data_path("advice_journal.json")
 
 BENCHMARKS = [
     {"key": "wig20", "label": "WIG20", "tickers": ["WIG20.WA", "^WIG20"]},
@@ -46,7 +48,7 @@ BENCHMARKS = [
 HORIZON_DAYS = {"krotki": 60, "sredni": 365, "dlugi": 1095, None: 90}
 HORIZON_LABEL = {"krotki": "krótki", "sredni": "średni", "dlugi": "długi"}
 
-SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Portfel AI", "pozycja": "Analiza pozycji"}
+SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Przegląd portfela", "pozycja": "Analiza pozycji"}
 
 PRICE_TTL = 600
 

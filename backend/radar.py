@@ -54,10 +54,12 @@ import xml.etree.ElementTree as ET
 import requests
 from pydantic import BaseModel
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STORE_FILE = os.path.join(BASE_DIR, "radar_store.json")
+STORE_FILE = cache_path("radar_store.json")
 
 RETENTION_DAYS = 14
 COLLECT_EVERY_MINUTES = 20
@@ -67,6 +69,8 @@ NAME_RETRY_DAYS = 7
 MAX_YAHOO_LOOKUPS = 15
 MAX_SEC_FILINGS = 60
 SEC_DELAY = 0.2            # 5 zapytań/s - połowa limitu SEC (10/s)
+APE_MIN_MENTIONS = 10      # mniej wzmianek na Reddicie na dobę = szum
+CONFIRM_MIN_SCORE = 10     # premie za kurs/obroty/raport tylko przy realnym sygnale
 
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -434,9 +438,13 @@ def ape_weight(r):
     Sufit ~28 pkt celowo poniżej dużego zakupu insidera (30-40): pieniądze osoby
     z zarządu to mocniejszy sygnał niż komentarze anonimowych użytkowników.
     """
-    w = 10 if r["rank"] <= 10 else 6 if r["rank"] <= 30 else 3 if r["rank"] <= 100 else 0
     before = max(r["mentions_24h_ago"], 1)
     growth = r["mentions"] / before
+    # Poniżej 10 wzmianek na dobę to szum: skok z miejsca #620 na #37 przy 3 wzmiankach
+    # (wcześniej 1) wygląda spektakularnie w procentach, a nie znaczy nic.
+    if r["mentions"] < APE_MIN_MENTIONS:
+        return 0, growth
+    w = 10 if r["rank"] <= 10 else 6 if r["rank"] <= 30 else 3 if r["rank"] <= 100 else 0
     if r["mentions"] >= 30 and growth >= 2:
         w += 12
     elif r["mentions"] >= 20 and growth >= 1.5:
@@ -977,17 +985,21 @@ def aggregate(store, market="all", kind="all", limit=40):
         if len(types) >= 3 or (len(types) >= 2 and len(sources) >= 3):
             bonuses.append(("Potwierdzone w kilku niezależnych źródłach", 10))
 
+        # Ruch kursu, obroty i bliski raport to POTWIERDZENIE sygnału, a nie sygnał sam w sobie.
+        # Bez tej bramki spółka z 3 wzmiankami na Reddicie wskakiwała na szczyt tylko dlatego,
+        # że jej kurs akurat mocno się ruszył - a takich spółek jest codziennie kilkadziesiąt.
+        confirmed = score >= CONFIRM_MIN_SCORE
         m = (store["market"].get(g["ticker"]) or {}).get("m") if g["ticker"] else None
-        if m and m.get("vol_ratio"):
+        if confirmed and m and m.get("vol_ratio"):
             vr = m["vol_ratio"]
             if vr >= 3:
-                bonuses.append((f"Wolumen {vr:.1f}× średniej z 3 miesięcy", 18))
+                bonuses.append((f"Obroty {vr:.1f}× większe niż zwykle", 18))
             elif vr >= 2:
-                bonuses.append((f"Wolumen {vr:.1f}× średniej", 12))
+                bonuses.append((f"Obroty {vr:.1f}× większe niż zwykle", 12))
             elif vr >= 1.5:
-                bonuses.append((f"Wolumen {vr:.1f}× średniej", 6))
-        if m and m.get("ret_5d") is not None and abs(m["ret_5d"]) >= 8:
-            bonuses.append((f"Kurs {m['ret_5d']:+.1f}% w 5 sesji", 10 if abs(m["ret_5d"]) >= 15 else 5))
+                bonuses.append((f"Obroty {vr:.1f}× większe niż zwykle", 6))
+        if confirmed and m and m.get("ret_5d") is not None and abs(m["ret_5d"]) >= 8:
+            bonuses.append((f"Kurs {m['ret_5d']:+.1f}% w tydzień", 10 if abs(m["ret_5d"]) >= 15 else 5))
 
         e = (store["earnings"].get(g["ticker"]) or {}).get("date") if g["ticker"] else None
         days_to = None
@@ -995,7 +1007,7 @@ def aggregate(store, market="all", kind="all", limit=40):
             ed = _parse_date(e + "T00:00:00+00:00")
             if ed:
                 days_to = (ed - now).days
-                if 0 <= days_to <= 21:
+                if confirmed and 0 <= days_to <= 21:
                     bonuses.append((f"Raport za {days_to} dni ({e})", 8))
 
         total = score + sum(b for _, b in bonuses)

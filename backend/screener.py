@@ -33,10 +33,12 @@ import threading
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CACHE_FILE = os.path.join(BASE_DIR, "screener_cache.json")
+CACHE_FILE = cache_path("screener_cache.json")
 METRICS_TTL = 12 * 3600
 CATALYST_TTL = 6 * 3600
 BATCH = 25

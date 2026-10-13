@@ -25,6 +25,8 @@ import requests
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 # Wczytujemy .env TUTAJ, a nie polegamy na main.py: ten moduł bywa importowany
 # zanim main.py zdąży wywołać load_dotenv(), a wtedy token byłby jeszcze pusty
 # i Telegram zgłaszałby się jako niepodłączony mimo poprawnej konfiguracji.
@@ -33,8 +35,8 @@ load_dotenv()
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AUTOMATION_CONFIG_FILE = os.path.join(BASE_DIR, "automation_config.json")
-AUTOMATION_RESULTS_FILE = os.path.join(BASE_DIR, "automation_results.json")
+AUTOMATION_CONFIG_FILE = data_path("automation_config.json")
+AUTOMATION_RESULTS_FILE = data_path("automation_results.json")
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")

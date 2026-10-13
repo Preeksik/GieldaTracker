@@ -34,10 +34,12 @@ from datetime import datetime, timezone
 
 import requests
 
+from paths import data_path, cache_path  # pliki danych w backend\data (przenoszone przy starcie)
+
 logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INDEX_FILE = os.path.join(BASE_DIR, "search_index.json")
+INDEX_FILE = cache_path("search_index.json")
 
 YAHOO_SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search"
 # Yahoo odrzuca domyślny User-Agent pythona, więc podajemy przeglądarkowy.

@@ -1,5 +1,106 @@
 [
  {
+  "id": "7ce4a636828a",
+  "created_at": "2026-10-13T21:13:48.022630+00:00",
+  "source": "portfel",
+  "question": "Analiza dywersyfikacji portfela",
+  "answer": "## Ocena ogólna\n\nPortfel charakteryzuje się nadmierną fragmentacją pozycji przy jednoczesnym silnym skumulowaniu ryzyka geograficznego i walutowego, co w skali **4/10** odzwierciedla chaotyczną dywersyfikację i wysokie koszty operacyjne wynikające z zarządzania dziesiątkami mikro-pakietów.\n\n## Koncentracja ryzyka\n\n* **Ekspozycja krajowa (Polska / PLN):** Łącznie **55.27%** portfela (13 891.13 PLN) uwikłane jest w polskie akcje i walutę PLN.\n* **Ekspozycja sektorowa:** Dominują usługi finansowe (**12.31%** PZU) oraz materiały podstawowe i przemysł (Kęty **10.27%**, Vigo **8.66%**, Creotech **7.0%**).\n* **Największa pojedyncza pozycja:** PZU (PZU.WA) stanowi **12.31%** portfela (3 094.56 PLN), co stanowi bezpieczny próg jednostkowy, jednak problemem jest rozbicie ekspozycji globalnych (np. FTSE All-World na 5 transz, NASDAQ 100 na 9 transz, MSCI Poland na 7 transz).\n\n## Ryzyko walutowe i stopy procentowe\n\n* **Ekspozycja na EUR:** Łącznie **24.33%** portfela (6 114.73 PLN; obejmuje VWCE.DE oraz MSCI Poland IBCJ.DE). Przy 10% wzroście/spadku kursu EUR/PLN, portfel zyskuje lub traci **611.47 PLN**.\n* **Ekspozycja na USD:** Łącznie **13.56%** portfela (3 406.88 PLN; ETF CNDX.L). Przy 10% ruchu USD/PLN, portfel zyskuje lub traci **340.69 PLN**.\n* **Wrażliwość na stopy procentowe:** Sektor finansowy (PZU) oraz technologiczny (Datawalk, Vigo) i biotechnologiczny (Captor) są wysoce wrażliwe na koszt pieniądza. Wysokie stopy procentowe szkodzą spółkom wzrostowym (dyskontowanie przyszłych zysków w dół), ale wspierają wyniki finansowe ubezpieczycieli (wyższe dochody z portfela obligacyjnego PZU). Spadki stóp pomogą technologią, a uderzą w marży odsetkowe sektora finansowego.\n\n## Czego brakuje\n\nW portfelu brakuje rynków wschodzących poza Polską (np. Azja, Ameryka Łacińska) oraz bezpośredniej ekspozycji na surowce twarde (np. złoto, energia) czy obligacje skarbowe jako tarczy antyinflacyjnej. Zbyt duże rozdrobnienie funduszy ETF (wielokrotne zakupy tych samych tickerów) utrudnia rebalansowanie portfela.\n\n## Plan naprawczy\n\n* **Konsolidacja ETF-ów globalnych:** Sprzedaj wszystkie rozdrobnione ułamkowe pozycje NASDAQ 100 (CNDX.L) oraz FTSE All-World (VWCE.DE) i połącz je w dwie spójne pozycje, eliminując mikroskopijne pakiety generujące ryzyko prowizyjne przy ewentualnym wyjściu powyżej limitów XTB.\n* **Redukcja małych pozycji spekulacyjnych:** Całkowicie zamknij pozycję w Captor Therapeutics (CTX.WA) o wartości **78.0 PLN** i uwolniony kapitał przelej na skalowanie pozycji bazowych.\n* **Zasilenie rynków rozwiniętych:** Nowy kapitał (lub środki ze sprzedaży mikro-pakietów) alokuj w całości w szeroki ETF na rynki rozwinięte (np. VWCE.DE), aby zredukować dominację Polski z poziomu ponad 55% do poniżej 40%.\n\n*Analiza edukacyjna, nie porada inwestycyjna.*",
+  "brief": {
+   "horizon": "dlugi"
+  },
+  "model": "gemini-3.5-flash-lite",
+  "tickers": [
+   {
+    "ticker": "PZU.WA",
+    "name": "Powszechny Zaklad Ubezpieczen SA",
+    "price": 73.68000030517578,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 3094.56
+   },
+   {
+    "ticker": "KTY.WA",
+    "name": "Grupa Kety S.A.",
+    "price": 1290.0,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 2580.0
+   },
+   {
+    "ticker": "VGO.WA",
+    "name": "VIGO Photonics S.A.",
+    "price": 544.0,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 2176.0
+   },
+   {
+    "ticker": "CRI.WA",
+    "name": "Creotech Instruments S.A.",
+    "price": 880.0,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 1760.0
+   },
+   {
+    "ticker": "DAT.WA",
+    "name": "DataWalk S.A.",
+    "price": 115.80000305175781,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 1505.4
+   },
+   {
+    "ticker": "CTX.WA",
+    "name": "Captor Therapeutics Spolka Akcyjna",
+    "price": 60.0,
+    "currency": "PLN",
+    "stance": "sprzedaj",
+    "amount_pln": 78.0
+   },
+   {
+    "ticker": "AMB.WA",
+    "name": "Ambra S.A.",
+    "price": 20.299999237060547,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 2801.4
+   },
+   {
+    "ticker": "VOX.WA",
+    "name": "Voxel S.A.",
+    "price": 147.39999389648438,
+    "currency": "PLN",
+    "stance": "trzymaj",
+    "amount_pln": 1474.0
+   },
+   {
+    "ticker": "VWCE.DE",
+    "name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "price": 172.60000610351562,
+    "currency": "EUR",
+    "stance": "kup",
+    "amount_pln": 3836.5
+   },
+   {
+    "ticker": "CNDX.L",
+    "name": "iShares NASDAQ 100 UCITS ETF USD (Acc)",
+    "price": 1748.5999755859375,
+    "currency": "USD",
+    "stance": "trzymaj",
+    "amount_pln": 3406.88
+   }
+  ],
+  "benchmarks": {
+   "wig20": 4225.0,
+   "sp500": 7805.45
+  },
+  "followups": [],
+  "note": "",
+  "outcome": null,
+  "pinned": false
+ },
+ {
   "id": "fa9d60627096",
   "created_at": "2026-10-06T16:50:16.517287+00:00",
   "source": "spolka",
