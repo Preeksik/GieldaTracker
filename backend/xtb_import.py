@@ -290,6 +290,38 @@ def account_currency_from_filename(filename):
     return m.group(1) if m else None
 
 
+REOPEN_RE = re.compile(r"reopen\s+([A-Za-z0-9.\-]+)", re.IGNORECASE)
+
+
+def parse_reopen_corrections(tables):
+    """
+    Cofnięte sprzedaże. Gdy XTB anuluje sprzedaż (np. na prośbę klienta), w arkuszu
+    "Cash Operations" pojawia się wpis typu "Correction" z komentarzem "Corr Reopen IBCJ.DE",
+    który zabiera zysk ze sprzedaży, a pozycja wraca do otwartych - z nową datą, ale starą ceną.
+    Zwraca {symbol_Yahoo: data_korekty}.
+    """
+    out = {}
+    for header, rows in tables:
+        hs = [h for h in header if h]
+        c_type = _find_col(hs, ["type", "typ"])
+        c_comment = _find_col(hs, ["comment", "komentarz", "opis"])
+        c_time = _find_col(hs, ["time", "czas", "data", "date"])
+        if not (c_type and c_comment):
+            continue
+        for row in rows:
+            kind = str(row.get(c_type) or "").lower()
+            if "correct" not in kind and "korekt" not in kind:
+                continue
+            m = REOPEN_RE.search(str(row.get(c_comment) or ""))
+            if not m:
+                continue
+            sym = xtb_to_yahoo(m.group(1))
+            date = parse_date(row.get(c_time)) if c_time else None
+            if sym not in out or (date and (out[sym] is None or date > out[sym])):
+                out[sym] = date
+    return out
+
+
 def parse_records(tables, default_account="zwykle"):
     """
     Zwraca (transakcje, błędy, pominięte_short, czy_plik_ma_pozycje_otwarte).
@@ -390,6 +422,20 @@ def parse_records(tables, default_account="zwykle"):
                 })
             except Exception as e:   # jeden zły wiersz nie przerywa importu
                 errors.append(f"Wiersz {n}: {e}")
+
+    # Sprzedaż cofnięta przez XTB: jest korekta "Reopen" dla tej spółki, a sama sprzedaż ma
+    # wyzerowany wynik (wartość sprzedaży = wartość zakupu), choć cena zamknięcia jest inna.
+    reopens = parse_reopen_corrections(tables)
+    for r in records:
+        if r["kind"] != "closed" or r["ticker"] not in reopens:
+            continue
+        when = reopens[r["ticker"]]
+        zeroed = (r.get("xtb_profit") == 0
+                  or (r.get("purchase_value") and r.get("sale_value")
+                      and abs(r["purchase_value"] - r["sale_value"]) < 0.01))
+        if zeroed and (when is None or r["close_date"] <= when):
+            r["kind"] = "cancelled"
+            r["reopen_date"] = when
     return records, errors, shorts, has_open_table
 
 
@@ -424,7 +470,8 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
     acc_of = lambda x: x.get("account") or "zwykle"
     cur_cache, name_cache = {}, {}
     res = {"open_added": 0, "closed_added": 0, "duplicates": 0, "in_sync": [], "mismatches": [],
-           "replaced": [], "not_in_xtb": [], "partial_days": [], "tickers": set(), "unknown_tickers": set()}
+           "replaced": [], "not_in_xtb": [], "partial_days": [], "tickers": set(), "unknown_tickers": set(),
+           "cancelled_sales": [], "restored_lots": []}
 
     def currency(t):
         if t not in cur_cache:
@@ -445,6 +492,58 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
     # uznane za zgodne z plikiem i dalej nie miałyby cen.
     for x in list(entries) + list(sales):
         x["ticker"] = norm_saved(x["ticker"])
+
+    # ---------------- sprzedaże cofnięte przez XTB ----------------
+    # 1) Jeśli taka sprzedaż jest już w aplikacji (np. z wcześniejszego importu), usuwamy ją
+    #    razem z zyskiem - XTB ten zysk zabrał, więc nie ma też od czego płacić podatku.
+    # 2) Przywrócone partie w otwartych pozycjach mają datę korekty (np. 19.10), ale starą cenę.
+    #    Wpisujemy im pierwotną datę zakupu - tak, jakby sprzedaży nie było. Inaczej wykres
+    #    pokazałby kilkanaście dni "bez" tych jednostek, a okres trzymania liczyłby się od nowa.
+    cancelled = [r for r in records if r["kind"] == "cancelled"]
+    restored_by_key = {}
+    if cancelled:
+        by_day = {}
+        for r in cancelled:
+            by_day.setdefault((r["ticker"], r["account"], r["close_date"]), []).append(r)
+        for (t, acc, day), rows in by_day.items():
+            mine = [s for s in sales if s["ticker"] == t and acc_of(s) == acc and s.get("sell_date") == day]
+            want = Counter(_q(r["quantity"]) for r in rows)
+            total = sum(r["quantity"] for r in rows)
+            to_remove = []
+            for s in mine:
+                q = _q(s["quantity"])
+                if want[q] > 0:
+                    want[q] -= 1
+                    to_remove.append(s)
+            if not to_remove and mine and abs(sum(float(s["quantity"]) for s in mine) - total) < 1e-4:
+                to_remove = mine   # ręcznie wpisana jedna sprzedaż na łączną ilość
+            for s in to_remove:
+                sales.remove(s)
+                res["cancelled_sales"].append({"ticker": t, "sell_date": day, "quantity": s["quantity"],
+                                               "profit_removed": s.get("realized_profit_pln")})
+            if not to_remove:
+                res["cancelled_sales"].append({"ticker": t, "sell_date": day, "quantity": round(total, 6),
+                                               "profit_removed": None})
+
+        open_recs = [r for r in records if r["kind"] == "open"]
+        for c in cancelled:
+            lot = next((r for r in open_recs if not r.get("restored") and r["ticker"] == c["ticker"]
+                        and r["account"] == c["account"] and abs(r["quantity"] - c["quantity"]) < 1e-6
+                        and abs(r["open_price"] - c["open_price"]) < 1e-6 and r["open_date"] >= c["close_date"]), None)
+            if lot is None:
+                continue
+            lot["restored"] = True
+            lot["open_date"] = c["open_date"]
+            restored_by_key.setdefault((lot["ticker"], lot["account"]), []).append(lot)
+            res["restored_lots"].append({"ticker": lot["ticker"], "quantity": lot["quantity"],
+                                         "buy_date": c["open_date"], "reopened": c.get("reopen_date")})
+            # Partia z wcześniejszego importu, zapisana z datą korekty - też poprawiamy datę.
+            for e in entries:
+                if (e["ticker"] == c["ticker"] and acc_of(e) == c["account"]
+                        and abs(float(e["quantity"]) - c["quantity"]) < 1e-6
+                        and abs(float(e["buy_price"]) - c["open_price"]) < 1e-6
+                        and str(e.get("buy_date")) >= c["close_date"]):
+                    e["buy_date"] = c["open_date"]
 
     # ---------------- zamknięte ----------------
     closed = [r for r in records if r["kind"] == "closed"]
@@ -521,6 +620,11 @@ def merge(entries, sales, records, currency_fn, name_fn, fx_on_date_fn, has_open
             res["open_added"] += len(lots)
         elif abs(x_sum - a_sum) < 1e-4:
             res["in_sync"].append(t)
+        elif key in restored_by_key and abs(x_sum - a_sum - sum(r["quantity"] for r in restored_by_key[key])) < 1e-4:
+            # Brakuje dokładnie partii przywróconych po korekcie - dokładamy je, reszta się zgadza.
+            for r in restored_by_key[key]:
+                add_lot(r)
+            res["open_added"] += len(restored_by_key[key])
         elif sync:
             for e in mine:
                 entries.remove(e)

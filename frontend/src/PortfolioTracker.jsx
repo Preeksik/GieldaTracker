@@ -646,6 +646,25 @@ function PortfolioTracker() {
                 <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}> · pominięto {xtbResult.duplicates_skipped} już zapisanych</span>
               )}
             </div>
+            {xtbResult.cancelled_sales?.length > 0 && (
+              <div className="hl-xtb-line">
+                ↺ Sprzedaże cofnięte przez XTB (korekta):{' '}
+                {xtbResult.cancelled_sales
+                  .map((c) =>
+                    `${c.ticker} ${c.quantity} szt. z ${c.sell_date}` +
+                    (c.profit_removed != null
+                      ? ` — usunięta ze Sprzedaży razem z zyskiem ${c.profit_removed.toFixed(2)} zł`
+                      : ' — nie liczę jej jako sprzedaży'),
+                  )
+                  .join(' · ')}
+              </div>
+            )}
+            {xtbResult.restored_lots?.length > 0 && (
+              <div className="hl-xtb-line">
+                ↺ Przywrócone do portfela z pierwotną datą zakupu:{' '}
+                {xtbResult.restored_lots.map((l) => `${l.ticker} ${l.quantity} szt. (kupione ${l.buy_date})`).join(' · ')}
+              </div>
+            )}
             {xtbResult.in_sync?.length > 0 && (
               <div className="hl-xtb-line">✓ Zgodne z XTB: {xtbResult.in_sync.join(', ')}</div>
             )}

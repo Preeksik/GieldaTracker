@@ -2156,6 +2156,8 @@ async def import_xtb_history(file: UploadFile = File(...), account: str = "zwykl
         "replaced": result["replaced"],
         "not_in_xtb": result["not_in_xtb"],
         "partial_days": result["partial_days"],
+        "cancelled_sales": result["cancelled_sales"],
+        "restored_lots": result["restored_lots"],
         "renamed": [{"from": k, "to": v} for k, v in ticker_map.items()],
         "unknown_tickers": result["unknown_tickers"],
         "shorts_skipped": shorts,
