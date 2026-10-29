@@ -1,0 +1,7 @@
+# Laboratorium QuantPulse - etap 1 (dane). Instalacja z folderu backend:
+#   pip install -r lab/requirements-lab.txt
+pandas>=2.2
+numpy>=2.1
+yfinance>=0.2.54
+pyarrow>=21     # pliki Parquet; bez niego dane zapisują się jako csv.gz
+pytest>=8
