@@ -185,3 +185,38 @@ def test_no_connection_does_not_blacklist_symbols(tmp_path, small_universe):
     rep = st.update(progress=lambda *_: None)
     assert rep.get("brak_polaczenia") and not rep["puste"]
     assert st.status()["bez_danych"] == []
+
+
+def test_unfinished_session_is_not_saved(tmp_path, small_universe):
+    data = full_data(100)
+    last = data["PKO.WA"].index[-1]                   # "dziś"
+    during = (last + pd.Timedelta(hours=14)).tz_localize("Europe/Warsaw").tz_convert("UTC")
+    after = (last + pd.Timedelta(hours=18)).tz_localize("Europe/Warsaw").tz_convert("UTC")
+
+    st = ds.MarketStore(root=str(tmp_path), download_fn=FakeYahoo(data), sleep=lambda s: None,
+                        today=str(last.date()), now=during.tz_localize(None))
+    st.update(progress=lambda *_: None)
+    assert st.load("PKO.WA").index.max() < last           # GPW w trakcie sesji - dzień odcięty
+    assert st.load("AAPL").index.max() < last             # USA jeszcze przed/w trakcie sesji
+
+    # Wieczorem: dzień GPW jest już zamknięty, USA wciąż trwa (16:30 NY = 22:30 w Warszawie).
+    st2 = ds.MarketStore(root=str(tmp_path), download_fn=FakeYahoo(data), sleep=lambda s: None,
+                         today=str(last.date()), now=after.tz_localize(None))
+    rep = st2.update(progress=lambda *_: None)
+    assert st2.load("PKO.WA").index.max() == last and "PKO.WA" in rep["uzupelnione"]
+    assert st2.load("AAPL").index.max() < last
+    assert not rep["pelne_odswiezenie"]
+
+
+def test_intraday_row_saved_earlier_is_replaced_without_full_refresh(tmp_path, small_universe):
+    data = full_data(120)
+    intraday = {k: v.copy() for k, v in data.items()}
+    intraday["PKO.WA"].iloc[-1, intraday["PKO.WA"].columns.get_loc("Close")] *= 1.02   # cena z trakcie dnia
+    intraday["PKO.WA"].iloc[-1, intraday["PKO.WA"].columns.get_loc("Adj Close")] *= 1.02
+    st = store(tmp_path, FakeYahoo(intraday))           # stara wersja programu zapisała ten dzień
+    st.update(progress=lambda *_: None)
+
+    rep = store(tmp_path, FakeYahoo(data)).update(progress=lambda *_: None)
+    assert "PKO.WA" not in rep["pelne_odswiezenie"]
+    got = store(tmp_path, FakeYahoo({})).load("PKO.WA")
+    assert np.isclose(got["close"].iloc[-1], data["PKO.WA"]["Close"].iloc[-1])

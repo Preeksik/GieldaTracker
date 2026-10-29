@@ -60,6 +60,12 @@ Q_SPIKE = 16        # skok > 40%, który następnego dnia w dużej części wrac
 Q_SCALE = 32        # skok ceny ×50 albo /50 (zmiana jednostki, np. pensy -> funty)
 BAD = Q_MISSING | Q_NONPOS | Q_RANGE | Q_SPIKE | Q_SCALE
 
+# Kiedy sesja jest już zamknięta (czas lokalny giełdy, z zapasem na fixing i opóźnienie Yahoo).
+# Wcześniej dzisiejszy wiersz to notowanie w trakcie dnia - nie zapisujemy go.
+SESSION_CLOSE = {"PL": ("Europe/Warsaw", 17, 30), "US": ("America/New_York", 16, 30),
+                 "FX": ("UTC", 23, 59)}
+INDEX_MARKET = {"WIG20": "PL", "WIG": "PL"}
+
 FLAG_NAMES = {Q_MISSING: "brak ceny", Q_NONPOS: "cena <= 0", Q_RANGE: "niespójny zakres dnia",
               Q_ZERO_VOL: "zerowy wolumen", Q_SPIKE: "szpilka", Q_SCALE: "skok skali"}
 
@@ -190,11 +196,14 @@ def _safe_name(name):
 
 
 class MarketStore:
-    def __init__(self, root=None, download_fn=None, sleep=time.sleep, today=None, parquet=None):
+    def __init__(self, root=None, download_fn=None, sleep=time.sleep, today=None, parquet=None, now=None):
         self.root = root or default_root()
         self.download_fn = download_fn or yahoo_download
         self.sleep = sleep
         self.today = pd.Timestamp(today or datetime.now()).date()
+        # "Teraz" w UTC - do odcinania niedokończonej sesji. W testach można podać na sztywno.
+        t = pd.Timestamp(now) if now is not None else pd.Timestamp.now(tz="UTC")
+        self.now = t.tz_localize("UTC") if t.tz is None else t.tz_convert("UTC")
         self.parquet = HAS_PARQUET if parquet is None else parquet
         os.makedirs(self.root, exist_ok=True)
         self.meta_path = os.path.join(self.root, "_meta.json")
@@ -279,6 +288,29 @@ class MarketStore:
                 return {s: None for s in symbols}
         return {s: None for s in symbols}
 
+    @staticmethod
+    def market(name, kind):
+        if kind == "stock":
+            return U.market_of(name)
+        if kind == "fx":
+            return "FX"
+        return INDEX_MARKET.get(name, "US")
+
+    def last_closed_day(self, market):
+        """Ostatni dzień, którego sesja na pewno się skończyła (data lokalna giełdy)."""
+        tz, hh, mm = SESSION_CLOSE[market]
+        local = self.now.tz_convert(tz)
+        closed = (local.hour, local.minute) >= (hh, mm)
+        day = local.normalize().tz_localize(None)
+        return day if closed else day - pd.Timedelta(days=1)
+
+    def _trim(self, df, name, kind):
+        """Odcina dzisiejszy wiersz, jeśli sesja jeszcze trwa (Yahoo podaje wtedy ceny z trakcie dnia)."""
+        if df is None:
+            return None
+        df = df[df.index <= self.last_closed_day(self.market(name, kind))]
+        return df if len(df) else None
+
     def _full_start(self):
         return (self.today - timedelta(days=int(365.25 * YEARS) + 10)).isoformat()
 
@@ -304,10 +336,14 @@ class MarketStore:
             start = min(existing[n].index.max() for n, _, _ in chunk) - pd.Timedelta(days=OVERLAP_DAYS)
             got = self._fetch([self._symbol(n, c) for n, _, c in chunk], start.date().isoformat())
             for name, kind, cands in chunk:
-                new = got.get(self._symbol(name, cands))
+                raw_new = got.get(self._symbol(name, cands))
+                new = self._trim(raw_new, name, kind)
                 old = existing[name]
-                if new is None:
+                if raw_new is None:
                     report["bledy"].append(name)
+                    continue
+                if new is None:                  # przyszedł tylko niedokończony dzisiejszy dzień
+                    report["bez_zmian"].append(name)
                     continue
                 if self._history_changed(old, new):
                     refetch.append((name, kind, cands))
@@ -362,6 +398,7 @@ class MarketStore:
         return (self.meta.get(name) or {}).get("symbol") or cands[0]
 
     def _finish_full(self, name, kind, symbol, df, old, refetch, report):
+        df = self._trim(df, name, kind)
         if df is None:
             report["puste"].append(name)     # zapis do meta dopiero na końcu (patrz update)
             return
@@ -373,8 +410,9 @@ class MarketStore:
 
     @staticmethod
     def _history_changed(old, new):
-        """Czy Yahoo przeliczyło stare ceny (split, dywidenda) na zakładce?"""
-        common = old.index.intersection(new.index)
+        """Czy Yahoo przeliczyło stare ceny (split, dywidenda) na zakładce?
+        Ostatni zapisany dzień pomijamy - mógł zostać zapisany w trakcie sesji."""
+        common = old.index[old.index < old.index.max()].intersection(new.index)
         if len(common) == 0:
             return False
         a, b = old.loc[common], new.loc[common]
@@ -484,10 +522,26 @@ def main(argv=None):
     up.add_argument("--full", action="store_true", help="pobierz wszystko od nowa")
     up.add_argument("--only", default="", help="tylko te symbole, po przecinku")
     sub.add_parser("status", help="raport o stanie bazy")
+    sh = sub.add_parser("show", help="ostatnie notowania i podejrzane dni jednego instrumentu")
+    sh.add_argument("name", help="np. PKO.WA, AAPL, WIG20")
+    sh.add_argument("-n", type=int, default=8, help="ile ostatnich dni pokazać")
     args = p.parse_args(argv)
     logging.getLogger("yfinance").setLevel(logging.CRITICAL)   # yfinance krzyczy o każdym pustym symbolu
 
     store = MarketStore()
+    if args.cmd == "show":
+        df = store.load(args.name)
+        if df is None:
+            print(f"Brak zapisanych notowań dla {args.name}.")
+            return 1
+        pd.set_option("display.width", 140)
+        print(df.tail(args.n).round(4).to_string())
+        bad = df[df["quality"] != 0]
+        if len(bad):
+            print(f"\nOznaczone dni ({len(bad)}):")
+            for d, row in bad.tail(20).iterrows():
+                print(f"  {d.date()}  {', '.join(describe_flags(int(row['quality'])))}")
+        return 0
     if args.cmd == "update":
         only = [s for s in args.only.split(",") if s.strip()] or None
         print(f"Pobieram notowania do {store.root} (format: {'parquet' if store.parquet else 'csv.gz'})…")
