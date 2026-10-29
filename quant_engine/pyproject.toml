@@ -1,0 +1,16 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=3.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "quantpulse"
+version = "0.1.0"
+description = "Silnik obliczeń w C++20 dla laboratorium QuantPulse (HossaLab)"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26"]
+
+[tool.scikit-build]
+minimum-version = "0.10"
+cmake.version = ">=3.20"
+cmake.build-type = "Release"
+wheel.packages = ["python/quantpulse"]
