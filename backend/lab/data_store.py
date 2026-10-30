@@ -468,8 +468,11 @@ class MarketStore:
     # ---------- raport ----------
     def status(self):
         """Podsumowanie stanu bazy: liczby, braki, podejrzane dni, nieaktualne instrumenty."""
-        ok = {n: m for n, m in self.meta.items() if m.get("status") == "ok"}
-        empty = sorted(n for n, m in self.meta.items() if m.get("status") != "ok")
+        # tylko instrumenty z aktualnej listy (universe.py) - usunięte z listy nie wracają w raporcie
+        listed = {n for n, _, _ in items_from_universe()}
+        meta = {n: m for n, m in self.meta.items() if n in listed}
+        ok = {n: m for n, m in meta.items() if m.get("status") == "ok"}
+        empty = sorted(n for n, m in meta.items() if m.get("status") != "ok")
         last_by_market = {}
         for mk, idx in U.BENCHMARK.items():
             if idx in ok:

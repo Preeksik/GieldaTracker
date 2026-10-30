@@ -369,25 +369,37 @@ def report(ds, out=print):
 
     out("\nPierwszy rzut oka (tylko dane sprzed sejfu): IC = średnia dzienna korelacja rangowa cechy")
     out("z jutrzejszym wynikiem ponad rynek. |IC| 0.01–0.03 to w finansach już coś; |t| < 2 to szum.")
+    out("Trzy wersje: wszystkie wiersze | tylko dni z prawdziwym otwarciem jutro (Yahoo nie wpisało")
+    out("wczorajszego zamknięcia) | to samo, ale tylko płynniejsza połowa spółek danego dnia.")
+    out("Sygnał wart uwagi trzyma się we wszystkich trzech - jeśli znika w trzeciej, żyje w małych")
+    out("spółkach, gdzie i tak zjadłby go spread.")
+    variants = {}
+    for mk, g in research.groupby("market"):
+        real = g[g["open_suspect"] == 0]
+        med = real.groupby("date")["turnover_20"].transform("median")
+        variants[mk] = {"wszystkie": g, "prawdz. otwarcie": real, "+ płynne": real[real["turnover_20"] >= med]}
     rows = []
     for f in FEATURES:
         if f in MARKET_WIDE or research[f].nunique() < 3:
             continue
-        for mk in sorted(research["market"].unique()):
-            ic, t, n = daily_ic(research[research["market"] == mk], f)
-            rows.append((f, mk, ic, t))
-    tab = pd.DataFrame(rows, columns=["cecha", "rynek", "IC", "t"])
+        for mk, vs in variants.items():
+            for vname, d in vs.items():
+                ic, t, n = daily_ic(d, f)
+                rows.append((f, mk, vname, ic, t))
+    tab = pd.DataFrame(rows, columns=["cecha", "rynek", "wersja", "IC", "t"])
     if len(tab):
-        piv = tab.pivot(index="cecha", columns="rynek", values=["IC", "t"])
-        for f in [x for x in FEATURES if x in piv.index]:
-            cells = []
-            for mk in sorted(tab["rynek"].unique()):
-                ic, t = piv.loc[f, ("IC", mk)], piv.loc[f, ("t", mk)]
-                mark = " *" if abs(t) >= 3 else ""
-                cells.append(f"{mk} {ic:+.3f} (t {t:+.1f}){mark}")
-            out(f"  {FEATURE_INFO[f]:<36} " + "   ".join(cells))
-        n_f, n_m = tab["cecha"].nunique(), tab["rynek"].nunique()
-        out(f"  * |t| ≥ 3. Uwaga: {n_f} cech × {n_m} rynki = {n_f * n_m} prób - pojedyncza 'gwiazdka' może wyjść przypadkiem.")
+        cell = lambda ic, t: "     brak     " if np.isnan(ic) else f"{ic:+.3f} (t{t:+5.1f}){'*' if abs(t) >= 3 else ' '}"
+        for mk, vs in variants.items():
+            share = {k: len(v) / max(1, len(vs["wszystkie"])) for k, v in vs.items()}
+            out(f"\n  {mk:<36} " + "  ".join(f"{k:<16}" for k in vs))
+            out(f"  {'(udział wierszy)':<36} " + "  ".join(f"{share[k]:<16.0%}" for k in vs))
+            sub = tab[tab["rynek"] == mk].set_index(["cecha", "wersja"])
+            for f in [x for x in FEATURES if (x, "wszystkie") in sub.index]:
+                out(f"  {FEATURE_INFO[f]:<36} " + "  ".join(
+                    f"{cell(sub.loc[(f, v), 'IC'], sub.loc[(f, v), 't']):<16}" for v in vs))
+        n = len(tab)
+        out(f"\n  * |t| ≥ 3. Uwaga: to {n} prób naraz - kilka gwiazdek może wyjść przypadkiem; "
+            "liczą się te, które powtarzają się we wszystkich wersjach.")
         out("  Cechy całego rynku (" + ", ".join(FEATURE_INFO[f] for f in FEATURES if f in MARKET_WIDE) +
             ") są dla wszystkich spółek danego dnia takie same - nie da się ich tak ocenić; "
             "model może z nich korzystać w połączeniu z innymi cechami.")

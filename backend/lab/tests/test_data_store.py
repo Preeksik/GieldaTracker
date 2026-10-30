@@ -241,3 +241,11 @@ def test_short_index_saved_earlier_is_refetched(tmp_path, small_universe):
     st2 = store(tmp_path, FakeYahoo(data), today="2018-06-30")
     st2.update(progress=lambda *_: None)
     assert len(st2.load("WIG20")) == 600 and st2.status()["krotka_historia"] == {}
+
+
+def test_status_ignores_symbols_removed_from_universe(tmp_path, small_universe, monkeypatch):
+    st = store(tmp_path, FakeYahoo(full_data(200)))
+    st.update(progress=lambda *_: None)
+    assert st.status()["bez_danych"] == ["ZZZZ"]
+    monkeypatch.setattr(U, "USA", ["AAPL"])                 # ZZZZ usunięty z listy
+    assert st.status()["bez_danych"] == []
