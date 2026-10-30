@@ -220,3 +220,24 @@ def test_intraday_row_saved_earlier_is_replaced_without_full_refresh(tmp_path, s
     assert "PKO.WA" not in rep["pelne_odswiezenie"]
     got = store(tmp_path, FakeYahoo({})).load("PKO.WA")
     assert np.isclose(got["close"].iloc[-1], data["PKO.WA"]["Close"].iloc[-1])
+
+
+def test_index_picks_candidate_with_longest_history(tmp_path, small_universe):
+    data = full_data(600)
+    data["WIG20.WA"] = data["^WIG20"].iloc[-1:]            # Yahoo: tylko ostatnia sesja
+    st = store(tmp_path, FakeYahoo(data), today="2018-06-30")
+    st.update(progress=lambda *_: None)
+    assert st.meta["WIG20"]["symbol"] == "^WIG20" and len(st.load("WIG20")) == 600
+
+
+def test_short_index_saved_earlier_is_refetched(tmp_path, small_universe):
+    data = full_data(600)
+    short = dict(data)
+    short["^WIG20"] = data["^WIG20"].iloc[-1:]
+    st = store(tmp_path, FakeYahoo(short), today="2018-06-30")
+    st.update(progress=lambda *_: None)
+    assert len(st.load("WIG20")) == 1 and st.status()["krotka_historia"] == {"WIG20": 1}
+
+    st2 = store(tmp_path, FakeYahoo(data), today="2018-06-30")
+    st2.update(progress=lambda *_: None)
+    assert len(st2.load("WIG20")) == 600 and st2.status()["krotka_historia"] == {}

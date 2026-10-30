@@ -223,3 +223,21 @@ def test_holiday_rows_from_yahoo_are_dropped(tmp_path):
     assert pl[pl["date"] == before]["train_ok"].all() and len(pl[pl["date"] == before]) == len(PL)
     # USA (nie miało święta) - dzień zostaje
     assert hol in set(ds[ds["market"] == "US"]["date"])
+
+
+def test_index_without_history_falls_back_to_stock_average(tmp_path):
+    """WIG20.WA w Yahoo: tylko ostatnia sesja. Cechy rynku muszą się wtedy policzyć ze średniej spółek."""
+    def one_day(name, df):
+        return df.iloc[-1:] if name == "WIG20" else df
+
+    lines = []
+    ds = F.build_dataset(make_store(tmp_path, edit=one_day), progress=lines.append)
+    pl = ds[(ds["market"] == "PL") & ds["train_ok"]]
+    assert len(pl) > 1000 and pl["idx_ret_1"].notna().all()
+    assert any("średnia" in l for l in lines)
+    # zwrot "rynku" = średni zwrot spółek tego dnia (gdy wszystkie mają dane)
+    day = pl[pl["date"] == pl["date"].iloc[500]]
+    if len(day) == len(PL):
+        assert day["idx_ret_1"].iloc[0] == pytest.approx(day["ret_1"].mean(), abs=1e-12)
+    # USA ma pełny indeks - zostaje przy nim
+    assert any("US" in l and "indeks SP500" in l for l in lines)

@@ -50,6 +50,7 @@ YEARS = 10
 OVERLAP_DAYS = 15          # zakładka przy aktualizacji (dni kalendarzowe)
 CHUNK = 20                 # ile symboli w jednym zapytaniu do Yahoo
 PAUSE = 1.0                # przerwa między zapytaniami, sekundy
+MIN_INDEX_ROWS = 500       # indeks/waluta z krótszą historią = Yahoo podało tylko ostatnie dni (np. WIG20.WA)
 
 # Flagi jakości (bitowe). BAD = dzień, na którym model się nie uczy.
 Q_MISSING = 1       # brak którejś z cen
@@ -328,7 +329,8 @@ class MarketStore:
         full_items, inc_items = [], []
         for it in items:
             df = existing[it[0]]
-            (full_items if (full or df is None or df.empty) else inc_items).append(it)
+            too_short = it[1] != "stock" and df is not None and len(df) < MIN_INDEX_ROWS
+            (full_items if (full or df is None or df.empty or too_short) else inc_items).append(it)
 
         # Przyrostowo: od ostatniej zapisanej daty minus zakładka (jedna data startu na paczkę).
         refetch = []
@@ -368,16 +370,24 @@ class MarketStore:
                 self._finish_full(name, kind, cands[0], got.get(name), existing[name], refetch, report)
             progress(f"  pobrano {min(i + CHUNK, len(stocks))}/{len(stocks)} spółek")
             self.sleep(PAUSE)
-        # Indeksy i waluty po kolei - każdy ma kilku kandydatów na symbol.
+        # Indeksy i waluty po kolei - każdy ma kilku kandydatów na symbol. Bierzemy ten z NAJDŁUŻSZĄ
+        # historią: Yahoo dla części symboli (np. WIG20.WA) zwraca tylko ostatnią sesję.
         for name, kind, cands in [it for it in todo if it[1] != "stock"]:
-            df, used = None, cands[0]
+            best, used = None, cands[0]
             for sym in cands:
                 df = self._fetch([sym], start).get(sym)
-                used = sym
-                if df is not None:
+                if df is not None and (best is None or len(df) > len(best)):
+                    best, used = df, sym
+                if best is not None and len(best) >= MIN_INDEX_ROWS:
                     break
                 self.sleep(PAUSE)
-            self._finish_full(name, kind, used, df, existing[name], refetch, report)
+            old = existing[name]
+            if best is not None and old is not None and len(old) > len(best):
+                best = None          # nie zastępujemy dłuższej historii krótszą
+            if best is None and old is not None:
+                report["bez_zmian"].append(name)
+                continue
+            self._finish_full(name, kind, used, best, old, refetch, report)
 
         ok = sum(len(report[k]) for k in ("nowe", "uzupelnione", "pelne_odswiezenie", "bez_zmian"))
         if ok == 0 and (report["puste"] or report["bledy"]):
@@ -474,6 +484,8 @@ class MarketStore:
             "spolek_us": sum(1 for m in ok.values() if m.get("market") == "US"),
             "wierszy": sum(m["rows"] for m in ok.values()),
             "bez_danych": empty,
+            "krotka_historia": {n: m["rows"] for n, m in ok.items()
+                                if m.get("kind") != "stock" and m["rows"] < MIN_INDEX_ROWS},
             "nieaktualne": stale,
             "podejrzane_dni": {n: m["bad_rows"] for n, m in ok.items() if m.get("bad_rows")},
             "dziury": {n: m["gaps"] for n, m in ok.items() if m.get("gaps", 0) > 5},
@@ -506,6 +518,9 @@ def _print_status(st):
     if st["bez_danych"]:
         print(f"Bez danych w Yahoo ({len(st['bez_danych'])}) - jeśli powtórzy się przy kolejnym pobraniu, "
               f"usuń z lab/universe.py: {', '.join(st['bez_danych'])}")
+    if st.get("krotka_historia"):
+        print("Indeksy z krótką historią (Yahoo nie ma pełnych danych; cechy rynku policzą się wtedy "
+              "ze średniej spółek): " + ", ".join(f"{n} {r} dni" for n, r in st["krotka_historia"].items()))
     if st["nieaktualne"]:
         print(f"Nieaktualne (brak ostatniej sesji): {', '.join(st['nieaktualne'])}")
     if st["podejrzane_dni"]:

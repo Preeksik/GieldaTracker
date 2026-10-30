@@ -10,19 +10,22 @@ Uwaga o "survivorship bias": lista zawiera spółki notowane DZIŚ. Spółki, kt
 historycznych testów będą nieco zawyżone. Raporty laboratorium mówią o tym wprost.
 """
 
+# Usunięte 2026-10-30 (Yahoo dwa razy nie zwróciło danych): SPL.WA, CCC.WA, CMR.WA, GEA.WA,
+# TIM.WA, SEN.WA, BK. CMR i TIM zeszły z giełdy; CCC, SPL i BK są notowane - do sprawdzenia symbol.
+
 # GPW - największe i najpłynniejsze (WIG20, mWIG40, część sWIG80), symbole Yahoo (.WA)
 GPW = [
     # duże spółki
-    "PKO.WA", "PKN.WA", "PZU.WA", "PEO.WA", "KGH.WA", "LPP.WA", "DNP.WA", "ALE.WA", "CDR.WA", "SPL.WA",
-    "MBK.WA", "ALR.WA", "BDX.WA", "KRU.WA", "OPL.WA", "PGE.WA", "CPS.WA", "JSW.WA", "KTY.WA", "CCC.WA",
+    "PKO.WA", "PKN.WA", "PZU.WA", "PEO.WA", "KGH.WA", "LPP.WA", "DNP.WA", "ALE.WA", "CDR.WA",
+    "MBK.WA", "ALR.WA", "BDX.WA", "KRU.WA", "OPL.WA", "PGE.WA", "CPS.WA", "JSW.WA", "KTY.WA",
     "PCO.WA", "ZAB.WA", "TPE.WA", "ACP.WA", "ENA.WA", "BHW.WA", "ING.WA", "MIL.WA", "BNP.WA", "XTB.WA",
     # średnie spółki
     "11B.WA", "1AT.WA", "ABE.WA", "AMC.WA", "APR.WA", "ASB.WA", "ASE.WA", "ATT.WA", "BFT.WA", "BRS.WA",
-    "CAR.WA", "CMR.WA", "COG.WA", "DOM.WA", "DVL.WA", "EAT.WA", "EUR.WA", "GPW.WA", "GPP.WA", "LWB.WA",
+    "CAR.WA", "COG.WA", "DOM.WA", "DVL.WA", "EAT.WA", "EUR.WA", "GPW.WA", "GPP.WA", "LWB.WA",
     "MRB.WA", "NEU.WA", "PEP.WA", "STP.WA", "TEN.WA", "TXT.WA", "VRG.WA", "WPL.WA", "ZEP.WA", "PLW.WA",
     "HUG.WA", "ACG.WA", "SLV.WA", "APT.WA", "ARH.WA", "BOS.WA", "KGN.WA", "MAB.WA", "RVU.WA", "SNT.WA",
     "VOX.WA", "CRJ.WA", "DAT.WA", "AMB.WA", "QNT.WA", "TOR.WA", "MBR.WA", "ECH.WA", "STX.WA", "INK.WA",
-    "BIO.WA", "CBF.WA", "GEA.WA", "MCI.WA", "PXM.WA", "TIM.WA", "UNT.WA", "WLT.WA", "SEN.WA", "ERB.WA",
+    "BIO.WA", "CBF.WA", "MCI.WA", "PXM.WA", "UNT.WA", "WLT.WA", "ERB.WA",
 ]
 
 # USA - ok. 100 największych spółek (zbliżone do S&P 100)
@@ -36,7 +39,7 @@ USA = [
     "RTX", "UBER", "LOW", "HON", "UNP", "AMAT", "BLK", "SCHW", "C", "PLTR",
     "SBUX", "LMT", "DE", "BA", "MDT", "GILD", "BMY", "MO", "MDLZ", "CL",
     "SO", "DUK", "COP", "UPS", "FDX", "NKE", "INTC", "MU", "PYPL", "TGT",
-    "GM", "F", "MMM", "GD", "USB", "COF", "MET", "AIG", "BK", "CVS",
+    "GM", "F", "MMM", "GD", "USB", "COF", "MET", "AIG", "CVS",
 ]
 
 # Indeksy - tło rynku dla cech i punkt odniesienia dla wyników.

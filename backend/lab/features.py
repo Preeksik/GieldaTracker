@@ -42,6 +42,7 @@ from .data_store import MarketStore, BAD, Q_ZERO_VOL, HAS_PARQUET
 EPS = 1e-8
 VAULT_DAYS = 365          # ostatni rok - "sejf", nie oglądamy go aż do końcowego testu
 CAL_MIN_SHARE = 0.3       # dzień jest sesją rynku, jeśli notowała go co najmniej 30% spółek
+IDX_MIN_COVER = 0.8       # indeks z Yahoo musi mieć co najmniej 80% sesji, inaczej liczymy własny
 
 FEATURES = [
     "ret_1", "ret_5", "ret_20", "vol_20", "z_price_20", "z_volume_20", "mom_20",
@@ -86,7 +87,9 @@ def rsi(prices, n=14):
 def market_context(index_df, vix_df, market):
     """Cechy rynku na dzień (indeks: zwroty; VIX: zmiana, dla GPW przesunięta o dzień)."""
     ctx = pd.DataFrame(index=index_df.index)
-    ac = index_df["adj_close"]
+    # Indeksy nie wypłacają dywidend, więc zwykłe zamknięcie wystarcza - a Yahoo dla części
+    # indeksów (np. WIG20) zostawia kolumnę "skorygowane zamknięcie" pustą.
+    ac = index_df["close"]
     ctx["idx_ret_1"] = np.log(ac / ac.shift(1))
     ctx["idx_ret_5"] = np.log(ac / ac.shift(5))
     ctx["idx_ret_20"] = np.log(ac / ac.shift(20))
@@ -170,9 +173,40 @@ def stock_features(df, ctx, vix):
 # ============================================================================
 
 def market_calendar(frames):
-    """Dni sesji rynku: notowało je co najmniej CAL_MIN_SHARE spółek."""
-    counts = pd.concat([pd.Series(1, index=f.index) for f in frames]).groupby(level=0).sum()
+    """
+    Dni sesji rynku: handlowano (wolumen > 0) co najmniej CAL_MIN_SHARE spółek.
+    Yahoo wstawia czasem wiersze ze świąt (np. GPW 2019-2020: 1 maja, Boże Ciało, Wigilia) -
+    cena przepisana z poprzedniego dnia i zerowy wolumen. To nie były sesje.
+    """
+    traded = [f.index[f["volume"].fillna(0) > 0] for f in frames]
+    counts = pd.concat([pd.Series(1, index=ix) for ix in traded]).groupby(level=0).sum()
     return counts.index[counts >= max(1, CAL_MIN_SHARE * len(frames))].sort_values()
+
+
+def synthetic_index(frames):
+    """
+    Własny indeks rynku: średnia (równe wagi) dziennych zmian wszystkich spółek - gdy Yahoo nie ma
+    historii prawdziwego indeksu (WIG20.WA zwraca tylko ostatnią sesję). Dni z błędami pomijamy.
+    Zwraca ramkę w formacie data_store (open, high, low, close, adj_close, volume, quality).
+    """
+    lr, gap = [], []
+    for df in frames:
+        d = df.copy()
+        bad = (d["quality"].fillna(0).astype(int) & BAD) != 0
+        d.loc[bad, ["open", "close", "adj_close"]] = np.nan
+        k = d["adj_close"] / d["close"]
+        prev = d["adj_close"].shift(1)
+        lr.append(np.log(d["adj_close"] / prev))
+        gap.append(np.log(d["open"] * k / prev))
+    r = pd.concat(lr, axis=1).mean(axis=1, skipna=True).fillna(0.0)
+    g = pd.concat(gap, axis=1).mean(axis=1, skipna=True).fillna(0.0)
+    close = 1000.0 * np.exp(r.cumsum())
+    open_ = close.shift(1) * np.exp(g)
+    open_.iloc[0] = close.iloc[0]
+    out = pd.DataFrame({"open": open_, "high": np.maximum(open_, close), "low": np.minimum(open_, close),
+                        "close": close, "adj_close": close, "volume": np.nan, "quality": 0})
+    out.index.name = "date"
+    return out
 
 
 def build_dataset(store, progress=print):
@@ -182,13 +216,24 @@ def build_dataset(store, progress=print):
     for market in ("PL", "US"):
         names = [n for n in stocks if U.market_of(n) == market]
         idx_df = store.load(U.BENCHMARK[market])
-        if not names or idx_df is None:
-            progress(f"  {market}: brak spółek albo indeksu - pomijam")
+        if not names:
+            progress(f"  {market}: brak spółek - pomijam")
             continue
-        ctx, vix = market_context(idx_df, vix_df, market)
         raw = {n: store.load(n) for n in names}
         raw = {n: d for n, d in raw.items() if d is not None and len(d) > 60}
         cal = market_calendar(list(raw.values()))
+        # wiersze spoza kalendarza (święta wstawione przez Yahoo) wyrzucamy - ze spółek i z indeksu
+        raw = {n: d[d.index.isin(cal)] for n, d in raw.items()}
+        cover = 0.0 if idx_df is None else idx_df.index.isin(cal).sum() / max(1, len(cal))
+        if cover >= IDX_MIN_COVER:
+            idx_df = idx_df[idx_df.index.isin(cal)]
+            source = f"indeks {U.BENCHMARK[market]}"
+        else:
+            # Yahoo nie ma historii indeksu - liczymy własny ze spółek tego rynku
+            idx_df = synthetic_index(list(raw.values())).reindex(cal).ffill()
+            source = (f"średnia {len(raw)} spółek (indeks {U.BENCHMARK[market]} z Yahoo ma tylko "
+                      f"{cover:.0%} sesji)")
+        ctx, vix = market_context(idx_df, vix_df, market)
         next_session = pd.Series(cal[1:], index=cal[:-1])
         for n, df in raw.items():
             f = stock_features(df, ctx, vix)
@@ -198,7 +243,7 @@ def build_dataset(store, progress=print):
             f.insert(0, "ticker", n)
             f.insert(1, "market", market)
             parts.append(f)
-        progress(f"  {market}: {len(raw)} spółek")
+        progress(f"  {market}: {len(raw)} spółek, rynek = {source}")
     if not parts:
         raise RuntimeError("Brak danych - najpierw: python -m lab.data_store update")
 
