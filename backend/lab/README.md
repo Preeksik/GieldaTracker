@@ -3,12 +3,14 @@
 Osobna część HossaLab do badania, czy da się przewidywać krótkoterminowe ruchy cen.
 Na razie **nie dotyka aplikacji**: uruchamiasz ją poleceniami w terminalu.
 
-## Co już jest (etap 1: dane)
+## Co już jest
 
 | Plik | Do czego |
 |---|---|
 | `universe.py` | lista instrumentów: ~90 spółek z GPW, 100 z USA, indeksy (WIG20, WIG, S&P 500, Nasdaq 100, VIX), kursy EUR/PLN i USD/PLN |
 | `data_store.py` | pobiera notowania dzienne z Yahoo (10 lat), zapisuje je, przy kolejnym uruchomieniu dociąga tylko nowe dni i sprawdza jakość danych |
+| `features.py` | z notowań buduje tabelę do nauki: 17 cech na spółkę i dzień oraz etykietę (co spółka zrobi jutro ponad rynek) |
+| `engine.py` | liczy statystyki silnikiem C++ (`quant_engine`), a jeśli go nie ma, w Pythonie |
 | `tests/` | testy bez internetu (Yahoo jest zastąpione sztucznymi danymi) |
 
 Dane trafiają do `backend/data/market/`, po jednym pliku na instrument. Folder `data/` jest w `.gitignore`,
@@ -27,15 +29,32 @@ Jeśli `pyarrow` nie zainstaluje się na Pythonie 3.14, nic nie szkodzi: dane za
 ## Uruchamianie (zawsze z folderu `backend`)
 
 ```powershell
-py -m lab.data_store update     # pierwszy raz: kilka minut; potem kilkanaście sekund
-py -m lab.data_store status     # raport o stanie bazy
-py -m pytest lab\tests -q       # testy
+python -m lab.data_store update     # pierwszy raz: kilka minut; potem kilkanaście sekund
+python -m lab.data_store status     # raport o stanie bazy
+python -m pytest lab\tests -q       # testy
 ```
 
 Dodatkowe opcje:
 
-- `py -m lab.data_store update --full`: pobiera wszystko od nowa.
-- `py -m lab.data_store update --only PKO.WA,AAPL`: pobiera tylko wybrane instrumenty.
+- `python -m lab.data_store update --full`: pobiera wszystko od nowa.
+- `python -m lab.data_store update --only PKO.WA,AAPL`: pobiera tylko wybrane instrumenty.
+
+## Cechy i etykiety
+
+```powershell
+python -m lab.features build         # buduje backend\data\lab\dataset.parquet + raport (kilka sekund)
+python -m lab.features report        # sam raport
+python -m lab.features show PKO.WA   # cechy z ostatnich dni jednej spółki
+```
+
+- **Wiersz tabeli** to spółka × dzień sesji *t*. Cechy liczą się tylko z danych znanych po zamknięciu dnia *t*.
+- **Etykieta `y_oc_ex`** to zwrot spółki **jutro** od otwarcia do zamknięcia, minus średnia wszystkich spółek
+  tego rynku tego dnia. Model ma wskazać spółki, które jutro wypadną lepiej od reszty.
+- **Sejf**: ostatnie 12 miesięcy. Raport ich nie ogląda. Posłużą do jednego, końcowego, uczciwego sprawdzianu.
+- **IC** w raporcie to korelacja rangowa cechy z jutrzejszym wynikiem, liczona w obrębie każdego dnia i uśredniona.
+  W finansach 0.01–0.03 to już coś, a |t| < 2 to szum. Pojedyncza cecha z wysokim |t| to dopiero trop, nie strategia.
+- Dla spółek z GPW VIX jest brany z poprzedniego dnia, bo o 17:30 sesja w USA jeszcze trwa.
+  Test `test_no_lookahead` pilnuje, żeby żadna cecha nie podglądała przyszłości.
 
 ## Jak czytać `status`
 
@@ -58,8 +77,9 @@ Dodatkowe opcje:
 ## Co dalej
 
 1. ✅ Dane
-2. Silnik C++20 (`quant_engine/`): szybkie liczenie cech, testy zgodności z Pythonem
-3. Cechy i etykiety
+2. ✅ Silnik C++20 (`quant_engine/`): pierwszy element (`RollingWindow`). Na Windowsie z włączoną
+   Inteligentną kontrolą aplikacji jest zablokowany, więc laboratorium liczy w Pythonie z tym samym wynikiem
+3. ✅ Cechy i etykiety
 4. Modele i walk-forward
 5. Backtest z kosztami XTB
 6. Paper trading

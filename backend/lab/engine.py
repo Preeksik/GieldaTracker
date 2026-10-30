@@ -12,12 +12,15 @@ więc reszta laboratorium nie musi wiedzieć, która wersja działa.
 import numpy as np
 import pandas as pd
 
+_IMPORT_ERROR = None
 try:
     import quantpulse as _qp
     BACKEND = "cpp"
-except ImportError:
+except ImportError as e:
     _qp = None
     BACKEND = "python"
+    # "No module named" = nie zainstalowany; "DLL load failed" = zainstalowany, ale Windows go nie wpuścił
+    _IMPORT_ERROR = str(e)
 
 
 def _arr(x):
@@ -47,6 +50,9 @@ def rolling_zscore(x, window, ddof=1):
 
 def info():
     if _qp is None:
+        if _IMPORT_ERROR and "No module named" not in _IMPORT_ERROR:
+            return ("silnik: Python (numpy/pandas) - C++ jest zainstalowany, ale się nie ładuje "
+                    f"({_IMPORT_ERROR}). Na Windowsie zwykle blokuje go Inteligentna kontrola aplikacji.")
         return "silnik: Python (numpy/pandas) - C++ niezainstalowany"
     return f"silnik: C++ quantpulse {getattr(_qp, '__version__', '?')}"
 
