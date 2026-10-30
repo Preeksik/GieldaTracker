@@ -153,7 +153,9 @@ def stock_features(df, ctx, vix):
     f["bad_recent"] = bad.rolling(21, min_periods=1).max() > 0       # zły dzień w oknie cech
     nxt = df.shift(-1)
     f["next_date"] = pd.Series(df.index, index=df.index).shift(-1)
-    f["next_bad"] = (((nxt["quality"].fillna(0).astype(int)) & (BAD | Q_ZERO_VOL)) != 0)
+    nq = nxt["quality"].fillna(0).astype(int)
+    f["next_bad"] = (nq & (BAD | Q_ZERO_VOL)) != 0
+    f["next_zero_vol"] = (nq & Q_ZERO_VOL) != 0
     f["y_oc"] = np.log(nxt["close"] / nxt["open"])
     f["y_cc"] = np.log(nxt["adj_close"] / ac)
     f["idx_oc_next"] = cx["idx_oc_next"]
@@ -204,7 +206,8 @@ def build_dataset(store, progress=print):
     data.index.name = "date"
     data = data.reset_index()
 
-    label_ok = data["next_is_session"] & ~data["next_bad"] & data["y_oc"].notna()
+    y_missing = data["y_oc"].isna()
+    label_ok = data["next_is_session"] & ~data["next_bad"] & ~y_missing
     feat_ok = data[FEATURES].notna().all(axis=1) & ~data["bad_recent"]
     data.loc[~label_ok, ["y_oc", "y_cc"]] = np.nan
 
@@ -216,6 +219,7 @@ def build_dataset(store, progress=print):
     data["y_up"] = np.where(data["y_oc_ex"].notna(), (data["y_oc_ex"] > 0).astype(float), np.nan)
 
     data["train_ok"] = feat_ok & label_ok
+    diagnose(data, feat_ok, label_ok, y_missing, progress)
     # wiersze do jutrzejszej prognozy: ostatni dzień, cechy są, etykiety jeszcze nie ma
     last = data.groupby("market")["date"].transform("max")
     data["predict_row"] = feat_ok & (data["date"] == last)
@@ -225,6 +229,28 @@ def build_dataset(store, progress=print):
         ["turnover_20", "idx_open_suspect", "open_suspect", "train_ok", "predict_row"]
     out = data.loc[keep, cols].sort_values(["date", "market", "ticker"]).reset_index(drop=True)
     return out
+
+
+def diagnose(data, feat_ok, label_ok, y_missing, out=print):
+    """Ile wierszy odpada i dlaczego - osobno dla każdego rynku. Szczegóły, gdy odpada ponad połowa."""
+    pct = lambda x: f"{100 * float(x):.0f}%"
+    for mk in sorted(data["market"].unique()):
+        m = data["market"] == mk
+        d, fo, lo, ym = data[m], feat_ok[m], label_ok[m], y_missing[m]
+        ok = (fo & lo).mean()
+        out(f"  {mk}: wierszy {len(d):,}".replace(",", " ") +
+            f", z kompletem cech {pct(fo.mean())}, z etykietą {pct(lo.mean())}, do nauki {pct(ok)}")
+        if ok >= 0.5:
+            continue
+        out(f"    ⚠ {mk}: do nauki nadaje się mniej niż połowa wierszy. Powody:")
+        nan = d[FEATURES].isna().mean().sort_values(ascending=False)
+        for f, share in nan[nan > 0.2].items():
+            out(f"      brak cechy '{FEATURE_INFO[f]}': {pct(share)} wierszy")
+        out(f"      błędny dzień w ostatnich 21 sesjach: {pct(d['bad_recent'].mean())}")
+        out(f"      następny wiersz to nie następna sesja rynku: {pct((~d['next_is_session']).mean())}")
+        out(f"      jutro zerowy wolumen: {pct(d['next_zero_vol'].mean())}, "
+            f"jutro błędny dzień: {pct((d['next_bad'] & ~d['next_zero_vol']).mean())}")
+        out(f"      brak jutrzejszego zwrotu (otwarcie/zamknięcie): {pct(ym.mean())}")
 
 
 def save_dataset(df, root=None):

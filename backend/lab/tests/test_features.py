@@ -188,3 +188,38 @@ def test_bad_day_does_not_poison_year_high(tmp_path):
     a, b = pick(clean), pick(dirty)
     common = a.index.intersection(b.index)
     assert len(common) > 50 and np.allclose(a[common], b[common])
+
+
+def test_index_with_empty_adj_close(tmp_path, dataset):
+    """Yahoo zostawia dla WIG20 pustą kolumnę adj_close - cechy indeksu i tak muszą się policzyć."""
+    def empty_adj(name, df):
+        if name == "WIG20":
+            df["adj_close"] = np.nan
+        return df
+
+    alt = F.build_dataset(make_store(tmp_path / "idx", edit=empty_adj), progress=lambda *_: None)
+    pl = alt[(alt["market"] == "PL") & alt["train_ok"]]
+    assert len(pl) == len(dataset[(dataset["market"] == "PL") & dataset["train_ok"]])
+    assert pl["idx_ret_1"].notna().all() and pl["rel_str_20"].notna().all()
+
+
+def test_holiday_rows_from_yahoo_are_dropped(tmp_path):
+    """Święto: Yahoo podaje wiersz z ceną z poprzedniego dnia i zerowym wolumenem - to nie była sesja."""
+    hol = dates()[300]
+
+    def holiday(name, df):
+        if name in PL or name == "WIG20":
+            prev = df.index[df.index.get_loc(hol) - 1]
+            df.loc[hol, ["open", "high", "low", "close", "adj_close"]] = df.loc[prev, "adj_close"]
+            df.loc[hol, ["open", "high", "low", "close"]] = df.loc[prev, "close"]
+            df.loc[hol, "volume"] = 0.0
+        return df
+
+    ds = F.build_dataset(make_store(tmp_path, edit=holiday), progress=lambda *_: None)
+    pl = ds[ds["market"] == "PL"]
+    assert hol not in set(pl["date"])
+    # dzień przed świętem ma etykietę z sesji PO święcie, a nie z pustego "święta"
+    before = dates()[299]
+    assert pl[pl["date"] == before]["train_ok"].all() and len(pl[pl["date"] == before]) == len(PL)
+    # USA (nie miało święta) - dzień zostaje
+    assert hol in set(ds[ds["market"] == "US"]["date"])

@@ -172,7 +172,8 @@ def extract(raw, symbol):
     part = part.rename(columns=FIELD_MAP)
     if "close" not in part.columns:
         return None
-    if "adj_close" not in part.columns:
+    if "adj_close" not in part.columns or part["adj_close"].isna().all():
+        # brak albo pusta kolumna (Yahoo tak robi dla części indeksów) - bez dywidend adj = close
         part = part.assign(adj_close=part["close"])
     if "volume" not in part.columns:
         part = part.assign(volume=np.nan)
