@@ -26,6 +26,15 @@ if(QP_BUILD_PYTHON)
   pybind11_add_module(_core src/bindings.cpp)
   target_link_libraries(_core PRIVATE quantpulse_core)
   target_compile_definitions(_core PRIVATE QUANTPULSE_VERSION="${PROJECT_VERSION}")
+  if(MINGW)
+    # Python z python.org jest budowany MSVC. Dla MinGW:
+    #  - MS_WIN64: bez tego nagłówki Pythona źle liczą rozmiary typów na 64 bitach
+    #  - statyczne biblioteki GCC: moduł nie potrzebuje DLL-i z MSYS2 w PATH
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+      target_compile_definitions(_core PRIVATE MS_WIN64)
+    endif()
+    target_link_options(_core PRIVATE -static -static-libgcc -static-libstdc++)
+  endif()
   install(TARGETS _core DESTINATION quantpulse)
 endif()
 
