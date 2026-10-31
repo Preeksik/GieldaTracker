@@ -56,6 +56,25 @@ python -m lab.features show PKO.WA   # cechy z ostatnich dni jednej spółki
 - Dla spółek z GPW VIX jest brany z poprzedniego dnia, bo o 17:30 sesja w USA jeszcze trwa.
   Test `test_no_lookahead` pilnuje, żeby żadna cecha nie podglądała przyszłości.
 
+## Modele (etap 4)
+
+```powershell
+python -m lab.models run            # GPW, obie wersje handlu, wszystkie modele (1-3 minuty)
+python -m lab.models run --quick    # przeuczanie co kwartał zamiast co miesiąc
+python -m lab.models run --label oc # tylko handel w ciągu dnia
+```
+
+- **Na czym:** tylko GPW, płynniejsza połowa spółek danego dnia, ostatni rok (sejf) pominięty.
+  W wersji `oc` (od otwarcia do zamknięcia) tylko dni z prawdziwym otwarciem w Yahoo.
+- **Zawodnicy:** losowy wybór, proste reguły z jedną cechą, regresja logistyczna, LightGBM.
+- **Walk-forward:** model uczy się na danych do końca miesiąca M (z jednodniową przerwą) i typuje miesiąc M+1.
+  Potem okno przesuwa się o miesiąc. Każda prognoza powstaje wyłącznie z przeszłości.
+- **Wynik:** codziennie 5 spółek z góry rankingu. Liczymy ich średni zwrot ponad średnią spółek (w pb, 1 pb = 0.01%),
+  trafność, stabilność rok po roku i porównanie handlu w ciągu dnia z handlem z nocą. Wszystko **przed kosztami**.
+- **Licznik prób** (`data/lab/trials.json`): każda nowa konfiguracja to próba. Im więcej prób, tym wyższe
+  t potrafi wyjść przypadkiem, więc raport podaje, czy najlepszy wynik jest ponad ten poziom.
+- Prognozy trafiają do `data/lab/predictions_oc.parquet` i `predictions_cc.parquet`, a skorzysta z nich backtest w etapie 5.
+
 ## Jak czytać `status`
 
 - **Bez danych w Yahoo**: symbolu nie ma w Yahoo (spółka zniknęła z giełdy albo zmieniła symbol).
@@ -80,7 +99,7 @@ python -m lab.features show PKO.WA   # cechy z ostatnich dni jednej spółki
 2. ✅ Silnik C++20 (`quant_engine/`): pierwszy element (`RollingWindow`). Na Windowsie z włączoną
    Inteligentną kontrolą aplikacji jest zablokowany, więc laboratorium liczy w Pythonie z tym samym wynikiem
 3. ✅ Cechy i etykiety
-4. Modele i walk-forward
+4. ✅ Modele i walk-forward
 5. Backtest z kosztami XTB
 6. Paper trading
 7. Zakładka w aplikacji

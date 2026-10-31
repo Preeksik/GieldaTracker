@@ -58,7 +58,7 @@ FEATURE_INFO = {
     "rel_str_20": "siła względna 20 dni", "idx_ret_1": "zwrot indeksu 1 dzień",
     "idx_ret_5": "zwrot indeksu 5 dni", "vix_chg_1": "zmiana VIX", "dow": "dzień tygodnia (0=pon)",
 }
-LABELS = ["y_oc", "y_oc_ex", "y_up", "y_cc_ex", "y_oc_ex_idx"]
+LABELS = ["y_oc", "y_oc_ex", "y_up", "y_cc", "y_cc_ex", "y_oc_ex_idx"]
 
 
 def lab_dir():

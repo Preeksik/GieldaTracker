@@ -4,4 +4,6 @@ pandas>=2.2
 numpy>=2.1
 yfinance>=0.2.54
 pyarrow>=21     # pliki Parquet; bez niego dane zapisują się jako csv.gz
+scikit-learn>=1.5   # regresja logistyczna (etap 4)
+lightgbm>=4.5       # drzewa decyzyjne (etap 4)
 pytest>=8
