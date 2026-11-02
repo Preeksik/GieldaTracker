@@ -186,11 +186,16 @@ def benchmark_periods(ds, dates, h, market="PL", capital=CAPITAL):
     return capital * (1 + r).cumprod()
 
 
-def metrics_periodic(eq, capital, h, extra=None):
-    """Miary dla krzywej kapitału liczonej co okres (h sesji)."""
-    ppy = 250 / h
+def period_returns(eq, capital):
     r = eq.pct_change()
     r.iloc[0] = eq.iloc[0] / capital - 1
+    return r
+
+
+def metrics_periodic(eq, capital, h, extra=None, bench=None):
+    """Miary dla krzywej kapitału liczonej co okres (h sesji). bench: krzywa punktu odniesienia."""
+    ppy = 250 / h
+    r = period_returns(eq, capital)
     years = max(len(eq) / ppy, 1e-9)
     final = float(eq.iloc[-1])
     cagr = (final / capital) ** (1 / years) - 1 if final > 0 else -1.0
@@ -198,7 +203,8 @@ def metrics_periodic(eq, capital, h, extra=None):
     full = pd.concat([pd.Series([capital]), eq.reset_index(drop=True)])
     dd = float((full / full.cummax() - 1).min())
     out = {"koncowy": final, "rocznie": cagr, "sharpe": sharpe, "t": sharpe * np.sqrt(years),
-           "obsuniecie": dd, "transakcji": 0, "prowizje": 0.0, "trafnosc": np.nan, "lat": years}
+           "obsuniecie": dd, "transakcji": 0, "prowizje": 0.0, "trafnosc": np.nan, "lat": years,
+           "t_ex": B.excess_t(r, period_returns(bench, capital)) if bench is not None else np.nan}
     out.update(extra or {})
     return out
 
@@ -243,7 +249,7 @@ def run(ds, horizons=(5, 20), prices=None, out=print, save=True, step_months=1, 
                 if m.name == "losowo" and (k, slip) != (K, SLIPPAGE_BP):
                     continue
                 eq, st = simulate_portfolio(pr, m.name, h, k=k, slippage_bp=slip, prices=prices)
-                met = metrics_periodic(eq, CAPITAL, h, st)
+                met = metrics_periodic(eq, CAPITAL, h, st, bench=bench)
                 cfg = SimpleNamespace(model=m.name, k=k, slippage_bp=slip, capital=CAPITAL, h=h)
                 rows.append((cfg, met, eq))
                 if save:

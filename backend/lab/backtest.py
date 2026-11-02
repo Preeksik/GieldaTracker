@@ -203,8 +203,22 @@ def simulate(preds, prices, eurpln, cfg):
     return eq, pd.DataFrame(trades)
 
 
-def metrics(eq, trades, capital, all_days=None):
-    """Miary wyniku. all_days: wszystkie dni okresu (dni bez transakcji = 0% zwrotu)."""
+def excess_t(r, bench_r):
+    """
+    Czy strategia bije punkt odniesienia ponad przypadek? t-statystyka różnicy zwrotów
+    (strategia minus trzymanie) w każdym okresie. Około 2 = na granicy, powyżej 3 = wyraźnie.
+    """
+    d = (r - bench_r.reindex(r.index).fillna(0.0)).dropna()
+    if len(d) < 3 or d.std() == 0:
+        return np.nan
+    return float(d.mean() / d.std() * np.sqrt(len(d)))
+
+
+def metrics(eq, trades, capital, all_days=None, bench_r=None):
+    """
+    Miary wyniku. all_days: wszystkie dni okresu (dni bez transakcji = 0% zwrotu).
+    bench_r: dzienne zwroty punktu odniesienia (do testu, czy przewaga nad nim nie jest przypadkiem).
+    """
     if all_days is not None:
         eq = eq.reindex(all_days).ffill().fillna(capital)
     r = eq.pct_change().fillna(eq.iloc[0] / capital - 1)
@@ -223,6 +237,7 @@ def metrics(eq, trades, capital, all_days=None):
         "prowizje": float(trades["fee"].sum()) if n else 0.0,
         "brutto": float(trades["gross"].sum()) if n else 0.0,
         "dni": len(eq),
+        "t_ex": excess_t(r, bench_r) if bench_r is not None else np.nan,
     }
 
 
@@ -273,7 +288,9 @@ def verdict(what, best_cfg, best_m, hold_m, hold_capital, rand_m, n_cfg, years, 
     """Werdykt w prostych słowach: 3 pytania i wniosek. Bez żargonu."""
     ct = M.chance_t(n_cfg)
     beats = best_m["rocznie"] > hold_m["rocznie"]
-    trusted = best_m["t"] > ct + 1
+    t_ex = best_m.get("t_ex", np.nan)
+    trusted = beats and pd.notna(t_ex) and t_ex > ct + 1
+    borderline = beats and pd.notna(t_ex) and ct < t_ex <= ct + 1
     best10, hold10, rand10 = zl10k(best_m, best_cfg.capital), zl10k(hold_m, hold_capital), zl10k(rand_m, 5000.0)
 
     def money(x):
@@ -293,18 +310,26 @@ def verdict(what, best_cfg, best_m, hold_m, hold_capital, rand_m, n_cfg, years, 
     lines.append(f"   najlepszy wariant: {money(best10)}")
     lines.append(f"   zwykłe trzymanie:  {money(hold10)}")
     lines.append(f"   losowe typowanie:  {money(rand10)}")
-    lines.append("3. Czy można temu wynikowi ufać?")
+    lines.append("3. Czy można ufać, że ta przewaga nad zwykłym trzymaniem nie jest przypadkiem?")
     if best_m["rocznie"] <= 0:
         lines.append("   Nie ma tu czemu ufać - nawet najlepszy wariant traci pieniądze.")
+    elif not beats:
+        lines.append("   Nie ma czego potwierdzać - nawet najlepszy wariant nie bije zwykłego trzymania.")
     elif trusted:
-        lines.append(f"   RACZEJ TAK. Wynik jest wyraźnie lepszy, niż zdarza się przypadkiem przy {n_cfg} próbach.")
+        lines.append(f"   RACZEJ TAK. Przewaga jest wyraźnie większa, niż zdarza się przypadkiem przy {n_cfg} próbach.")
         lines.append("   Ostatecznie potwierdzi to dopiero sejf (ostatni rok, którego nikt jeszcze nie oglądał).")
+    elif borderline:
+        lines.append(f"   NA GRANICY. Przewaga jest trochę większa niż typowy 'szczęśliwy traf' przy {n_cfg} próbach,")
+        lines.append("   ale za mało, żeby na niej polegać. Potrzeba więcej dowodów (sejf, gra na papierze).")
     else:
         lines.append(f"   NIE. Sprawdziliśmy {n_cfg} {plural(n_cfg, 'wariant', 'warianty', 'wariantów')} - przy tylu "
-                     "próbach jeden tak 'dobry' trafia się zwykle przypadkiem.")
+                     "próbach jeden, który bije trzymanie o tyle, trafia się zwykle przypadkiem.")
     lines.append("")
     if beats and trusted:
         lines.append("WNIOSEK: obiecujące. Następny krok to gra na papierze - nadal BEZ prawdziwych pieniędzy.")
+    elif borderline:
+        lines.append("WNIOSEK: najciekawszy wynik do tej pory, ale jeszcze nie dowód. Nie wkładaj pieniędzy -")
+        lines.append("         sprawdźmy dalej (szczegóły, stabilność rok po roku, potem sejf).")
     elif beats:
         lines.append("WNIOSEK: wygląda nieźle, ale za mało dowodów. Nie wkładaj w to pieniędzy.")
     else:
@@ -324,7 +349,7 @@ def run(ds, preds, prices, eurpln, out=print, save=True, details=True):
 
     def test(cfg):
         eq, tr = simulate(preds, prices, eurpln, cfg)
-        m = metrics(eq, tr, cfg.capital, all_days=days)
+        m = metrics(eq, tr, cfg.capital, all_days=days, bench_r=bench)
         if save:
             M.register_trial({"backtest": asdict(cfg)})
         results.append((cfg, m, eq, tr))
@@ -416,13 +441,14 @@ def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0, de
     days = pd.DatetimeIndex(sorted(preds["date"].unique()))
     buf = []
     say = buf.append
+    bench = market_benchmark(ds, days) if ds is not None else pd.Series(0.0, index=days)
     models = [m for m in ("lightgbm", "logistyczna", "reguła: najbliżej rocznego szczytu", "losowo")
               if m in set(preds["model"])]
     results = []
 
     def test(cfg):
         eq, tr = simulate(preds, prices, eurpln, cfg)
-        m = metrics(eq, tr, cfg.capital, all_days=days)
+        m = metrics(eq, tr, cfg.capital, all_days=days, bench_r=bench)
         if save:
             M.register_trial({"backtest": asdict(cfg)})
         results.append((cfg, m, eq, tr))
@@ -472,7 +498,6 @@ def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0, de
     say(f"  -> {best[1]['rocznie']:+.1%} rocznie, Sharpe {best[1]['sharpe']:+.2f}, t {best[1]['t']:+.1f} "
         f"(przypadkiem przy {len(results)} konfiguracjach: t ≈ {M.chance_t(len(results)):.1f}).")
 
-    bench = market_benchmark(ds, days) if ds is not None else pd.Series(0.0, index=days)
     b_eq = 5000.0 * (1 + bench).cumprod()
     hold = metrics(b_eq, pd.DataFrame(columns=["date", "pnl", "fee", "gross"]), 5000.0)
     rand = next((m for c, m, *_ in results if c.model == "losowo" and c.cfd_spread_bp == 30.0), best[1])

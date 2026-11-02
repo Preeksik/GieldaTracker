@@ -30,6 +30,15 @@ CZEGO TU NIE MA I DLACZEGO:
     to z definicji nie jest sygnał "gorący teraz"; w Polsce istnieją tylko roczne
     oświadczenia majątkowe.
 
+ARCHIWUM (dla laboratorium QuantPulse):
+  Magazyn roboczy trzyma sygnały tylko 14 dni, a migawka Reddita jest nadpisywana co przebieg.
+  Żeby za rok móc sprawdzić, czy sygnały Radaru zapowiadały ruchy kursów, każdy przebieg
+  dopisuje do backend/data/radar_archive/RRRR-MM.jsonl (jeden wiersz JSON = jeden wpis):
+    - każdy NOWY sygnał (raz), z migawką danych rynkowych z chwili zapisu,
+    - wzmianki z Reddita raz dziennie na spółkę,
+    - raz dziennie ranking 40 najgorętszych spółek z wynikiem.
+  Archiwum nie jest przycinane. Zbiera tylko wtedy, gdy backend działa.
+
 JAK LICZY "TEMPERATURĘ":
   Każdy sygnał ma wagę (wezwanie > zakup prezesa > skup akcji > umowa > ...),
   która wygasa z wiekiem. Do tego premie: kilku insiderów kupujących tę samą spółkę
@@ -60,6 +69,8 @@ logger = logging.getLogger("gpw-api")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STORE_FILE = cache_path("radar_store.json")
+ARCHIVE_DIR = data_path("radar_archive")
+ARCHIVE_KEEP_IDS = 30000   # ile identyfikatorów zapamiętujemy, żeby nie zapisać sygnału dwa razy
 
 RETENTION_DAYS = 14
 COLLECT_EVERY_MINUTES = 20
@@ -1026,6 +1037,75 @@ def aggregate(store, market="all", kind="all", limit=40):
 
 
 # ============================================================================
+# ARCHIWUM
+# ============================================================================
+
+RANKING_FIELDS = ("key", "ticker", "company", "market", "score", "signal_score", "types", "mood",
+                  "market_data", "earnings_days", "signal_count")
+
+
+def archive_records(store, now=None, full=True):
+    """
+    Wpisy do dopisania do archiwum po tym przebiegu (czysta funkcja: zmienia tylko store,
+    zapisuje w nim, co już trafiło do archiwum). Zwraca listę słowników.
+    """
+    now = now or _now()
+    day = now.date().isoformat()
+    done = list(store.get("archived_ids") or [])
+    seen = set(done)
+    records = []
+    for sid, sig in sorted(store["signals"].items(), key=lambda kv: kv[1].get("date") or ""):
+        key = f"{sid}@{day}" if sid.startswith("ape:") else sid   # Reddit: migawka raz dziennie
+        if key in seen:
+            continue
+        seen.add(key)
+        done.append(key)
+        ticker = sig.get("ticker") or (ticker_for(store, sig["company"]) if sig.get("company") else None)
+        rec = {"kind": "signal", "archived_at": now.isoformat(), "ticker_resolved": ticker, **sig}
+        m = (store["market"].get(ticker) or {}).get("m") if ticker else None
+        if m:
+            rec["market_snapshot"] = m
+        records.append(rec)
+    if full and store.get("archive_ranking_day") != day:
+        groups = aggregate(store, limit=40)
+        records.append({"kind": "ranking", "archived_at": now.isoformat(), "day": day,
+                        "groups": [{k: g.get(k) for k in RANKING_FIELDS} for g in groups]})
+        store["archive_ranking_day"] = day
+    store["archived_ids"] = done[-ARCHIVE_KEEP_IDS:]
+    return records
+
+
+def write_archive(records, now=None, directory=None):
+    """Dopisuje wpisy na koniec pliku miesiąca (RRRR-MM.jsonl). Zwraca ścieżkę albo None."""
+    if not records:
+        return None
+    now = now or _now()
+    directory = directory or ARCHIVE_DIR
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, f"{now:%Y-%m}.jsonl")
+    with open(path, "a", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
+    return path
+
+
+def archive_stats(directory=None):
+    """Ile wpisów jest w archiwum i od kiedy - do podglądu w interfejsie."""
+    directory = directory or ARCHIVE_DIR
+    if not os.path.isdir(directory):
+        return {"files": 0, "records": 0, "first_month": None}
+    files = sorted(f for f in os.listdir(directory) if f.endswith(".jsonl"))
+    total = 0
+    for name in files:
+        try:
+            with open(os.path.join(directory, name), "r", encoding="utf-8") as f:
+                total += sum(1 for _ in f)
+        except OSError:
+            pass
+    return {"files": len(files), "records": total, "first_month": files[0][:7] if files else None}
+
+
+# ============================================================================
 # PRZEBIEG ZBIERANIA
 # ============================================================================
 
@@ -1090,6 +1170,16 @@ def run_collection(fetch=None, yahoo_fn=None, earnings_fn=None, download_fn=None
             fetch_earnings(store, tickers[:20], earnings_fn)
             store["last_run"] = _now().isoformat()
 
+        # Archiwum dla laboratorium - jego awaria nigdy nie może zatrzymać Radaru.
+        try:
+            recs = archive_records(store, full=full)
+            write_archive(recs)
+            if recs:
+                status["archive"] = _status(True, new=len(recs), note="zapis do data/radar_archive")
+        except Exception as e:
+            logger.exception("Radar: zapis do archiwum nie powiódł się")
+            status["archive"] = _status(False, error=f"{type(e).__name__}: {str(e)[:80]}")
+
         store["status"] = status
         with _lock:
             _store = store
@@ -1110,6 +1200,7 @@ SOURCE_LABELS = {
     "sec_form4": "SEC EDGAR · Form 4",
     "reddit": "Reddit / 4chan (ApeWisdom)",
     "market": "Notowania (Yahoo Finance)",
+    "archive": "Archiwum dla laboratorium",
 }
 
 
@@ -1141,6 +1232,11 @@ def setup_radar(app, scheduler=None, ask_fn=None, persona="", markdown_rules="",
             return {"groups": groups, "stream": stream, "status": status,
                     "last_run": store.get("last_run"), "total_signals": len(store["signals"]),
                     "every_minutes": COLLECT_EVERY_MINUTES}
+
+    @app.get("/api/radar/archive")
+    def radar_archive():
+        """Stan archiwum sygnałów (ile wpisów, od kiedy zbieramy)."""
+        return archive_stats()
 
     @app.post("/api/radar/refresh")
     def radar_refresh():

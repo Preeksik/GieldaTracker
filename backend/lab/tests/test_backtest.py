@@ -166,3 +166,26 @@ def test_cfd_report(tmp_path):
     B.run_cfd(ds, preds, prices, fx(preds["date"]), out=lines.append, save=False)
     text = "\n".join(lines)
     assert "5) Gra na różnicy" in text and "Próg opłacalności" in text and "BEZ kosztów" in text
+
+
+def test_excess_t_measures_beating_the_benchmark():
+    idx = pd.bdate_range("2020-01-01", periods=500)
+    rng = np.random.default_rng(3)
+    bench = pd.Series(rng.normal(0.001, 0.01, 500), index=idx)
+    same = bench.copy()
+    better = bench + 0.002 + rng.normal(0, 0.002, 500)
+    assert abs(B.excess_t(same, bench)) < 1e-6 or np.isnan(B.excess_t(same, bench))
+    assert B.excess_t(better, bench) > 10
+
+
+def test_verdict_asks_about_beating_hold():
+    cfg = B.Config(capital=10000)
+    hold = {"koncowy": 15000.0, "rocznie": 0.10}
+    rand = {"koncowy": 5000.0}
+    strong = {"koncowy": 30000.0, "rocznie": 0.25, "t_ex": 6.0}
+    weak = {"koncowy": 16000.0, "rocznie": 0.11, "t_ex": 1.0}
+    lose = {"koncowy": 12000.0, "rocznie": 0.05, "t_ex": -1.0}
+    txt = lambda m: "\n".join(B.verdict("x", cfg, m, hold, 10000, rand, 20, 6, None))
+    assert "RACZEJ TAK" in txt(strong) and "gra na papierze" in txt(strong)
+    assert "NIE." in txt(weak) and "Nie wkładaj" in txt(weak)
+    assert "nie bije zwykłego trzymania" in txt(lose)
