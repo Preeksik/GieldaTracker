@@ -88,6 +88,10 @@ python -m lab.backtest run          # około minuty; najpierw musi być python -
 - **Bez podatku Belki:** na IKE/IKZE go nie ma, na zwykłym koncie odejmij 19% od rocznego zysku.
 - **Scenariusze:** wszyscy zawodnicy, różny kapitał (5, 20, 50 tys. zł), mniej spółek albo próg „tylko pewne typy”
   (liczony wyłącznie z ocen z przeszłości), rok po roku na tle średniej spółek GPW.
+- **Gra na różnicy przez CFD** (`python -m lab.backtest cfd`): rano kupno najlepiej ocenionych i krótka
+  sprzedaż najgorzej ocenionych spółek, wieczorem zamknięcie obu stron. Koszty CFD na polskie akcje w XTB:
+  prowizja 0%, spread 0.30% (tabela opłat XTB z 14.03.2026). Raport pokazuje też próg opłacalności,
+  czyli przy jakim spreadzie strategia wychodzi na zero.
 - Każda konfiguracja trafia do licznika prób. Najlepsza wybrana spośród wielu jest trochę zawyżona,
   więc ostateczny sprawdzian to sejf.
 

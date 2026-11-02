@@ -1,4 +1,6 @@
 """Testy backtestu: koszty liczone ręcznie, limit prowizji, całe akcje, spójność i brak zaglądania w przyszłość."""
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -125,3 +127,42 @@ def test_yearly_returns_only_years_of_test():
     yr = B.yearly_returns(eq, 1000.0)
     assert list(yr.index) == [2019, 2020]
     assert yr[2019] == pytest.approx(0.0) and yr[2020] == pytest.approx(0.1)
+
+
+def test_short_position_by_hand():
+    """Krótka sprzedaż CFD: zarabia na spadku, płaci po połowie spreadu przy otwarciu i zamknięciu."""
+    preds, prices = split([one("UP", score=1.0, ret=np.log(1.02)), one("DOWN", score=0.0, ret=np.log(0.98))])
+    cfg = B.Config(model="m", k=1, short_k=1, instrument="cfd", cfd_spread_bp=0.0, capital=10000,
+                   max_weight=1.0, whole_shares=False)
+    eq, tr = B.simulate(preds, prices, fx([D0]), cfg)
+    # 5000 zł na nogę: kupno UP +2% = +100 zł, krótko DOWN -2% = +100 zł
+    assert eq.iloc[-1] == pytest.approx(10200.0)
+    assert set(tr["side"]) == {1, -1} and (tr["fee"].abs() < 1e-9).all()
+
+    cfg = replace(cfg, cfd_spread_bp=30.0)
+    eq, tr = B.simulate(preds, prices, fx([D0]), cfg)
+    long_pnl = 5000 / 100.15 * (102 * 0.9985 - 100.15)       # kupno 0.15% drożej, sprzedaż 0.15% taniej
+    short_pnl = 5000 / 99.85 * (99.85 - 98 * 1.0015)         # sprzedaż 0.15% taniej, odkupienie 0.15% drożej
+    assert eq.iloc[-1] == pytest.approx(10000 + long_pnl + short_pnl)
+    assert (tr["fee"] > 0).all()
+
+
+def test_long_short_is_market_neutral():
+    """Gdy wszystkie spółki ruszają się tak samo, gra na różnicy bez kosztów daje zero."""
+    days = pd.bdate_range("2020-01-01", periods=30)
+    rows = [one(f"S{i}", d, score=float(i), ret=0.03 if d.day % 2 else -0.03) for d in days for i in range(6)]
+    preds, prices = split(rows)
+    cfg = B.Config(model="m", k=3, short_k=3, instrument="cfd", cfd_spread_bp=0.0, whole_shares=False)
+    eq, _ = B.simulate(preds, prices, fx(days), cfg)
+    assert eq.iloc[-1] == pytest.approx(cfg.capital, rel=1e-12)
+
+
+def test_cfd_report(tmp_path):
+    ds = fake_dataset(days=800, stocks=40, signal=0.003)
+    preds, _ = M.walk_forward(M.prepare(ds, "oc"), [M.RandomModel(), M.LogisticModel()], step_months=6,
+                              progress=None)
+    prices = preds[["ticker", "date"]].drop_duplicates().assign(next_open=40.0)
+    lines = []
+    B.run_cfd(ds, preds, prices, fx(preds["date"]), out=lines.append, save=False)
+    text = "\n".join(lines)
+    assert "5) Gra na różnicy" in text and "Próg opłacalności" in text and "BEZ kosztów" in text

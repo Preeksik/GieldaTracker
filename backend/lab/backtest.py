@@ -51,10 +51,16 @@ class Config:
     free_turnover_eur: float = 100_000.0
     max_weight: float = 0.20        # najwięcej kapitału w jednej spółce
     whole_shares: bool = True
+    short_k: int = 0                # ile najgorzej ocenionych spółek sprzedajemy krótko (tylko CFD)
+    instrument: str = "akcje"       # "akcje" (prowizja XTB z limitem) albo "cfd" (bez prowizji, spread)
+    cfd_spread_bp: float = 30.0     # spread CFD na polskie akcje w XTB: 0.30% (po 0.15% na stronę)
+    gross: float = 1.0              # łączna wartość pozycji jako wielokrotność kapitału (dźwignia)
 
     def label(self):
         q = f", próg top {self.top_q:.0%}" if self.top_q else ""
-        return f"{self.model} | {self.k} spółek{q} | {zl(self.capital)} zł | poślizg {self.slippage_bp:g} pb"
+        side = f"{self.k} kupno + {self.short_k} krótko" if self.short_k else f"{self.k} spółek"
+        inst = f" | CFD spread {self.cfd_spread_bp / 100:.2f}%" if self.instrument == "cfd" else ""
+        return f"{self.model} | {side}{q} | {zl(self.capital)} zł | poślizg {self.slippage_bp:g} pb{inst}"
 
 
 # ============================================================================
@@ -107,15 +113,20 @@ def market_benchmark(ds, dates, market="PL"):
 # SYMULACJA
 # ============================================================================
 
-def thresholds(day_scores, top_q):
-    """Próg na każdy dzień: kwantyl (1 - top_q) ocen z poprzednich THRESHOLD_LOOKBACK dni. Tylko przeszłość."""
+def thresholds(day_scores, top_q, side="top"):
+    """
+    Próg na każdy dzień z ocen z poprzednich THRESHOLD_LOOKBACK dni (tylko przeszłość).
+    side="top": kwantyl 1 - top_q (do kupna); side="bottom": kwantyl top_q (do krótkiej sprzedaży).
+    """
     out, hist = {}, []
+    q = 1 - top_q if side == "top" else top_q
+    blocked = np.inf if side == "top" else -np.inf
     for d in sorted(day_scores):
         if len(hist) >= THRESHOLD_MIN_DAYS:
             past = np.concatenate(hist[-THRESHOLD_LOOKBACK:])
-            out[d] = float(np.quantile(past, 1 - top_q))
+            out[d] = float(np.quantile(past, q))
         else:
-            out[d] = np.inf
+            out[d] = blocked
         hist.append(day_scores[d])
     return out
 
@@ -131,12 +142,17 @@ def simulate(preds, prices, eurpln, cfg):
     p = p[p["next_open"] > 0]
     days = sorted(p["date"].unique())
     by_day = {d: g.sort_values(["score", "ticker"], ascending=[False, True]) for d, g in p.groupby("date")}
-    thr = thresholds({d: g["score"].to_numpy() for d, g in by_day.items()}, cfg.top_q) if cfg.top_q else {}
+    scores = {d: g["score"].to_numpy() for d, g in by_day.items()}
+    thr = thresholds(scores, cfg.top_q) if cfg.top_q else {}
+    thr_low = thresholds(scores, cfg.top_q, side="bottom") if (cfg.top_q and cfg.short_k) else {}
 
     equity = cfg.capital
     month, turnover_eur = None, 0.0
     curve, trades = [], []
-    slip = cfg.slippage_bp / 1e4
+    cfd = cfg.instrument == "cfd"
+    # koszt na stronę jako ułamek ceny: poślizg, a przy CFD dodatkowo połowa spreadu
+    side_cost = cfg.slippage_bp / 1e4 + (cfg.cfd_spread_bp / 2e4 if cfd else 0.0)
+    n_pos = max(cfg.k + cfg.short_k, 1)
 
     def commission(value_pln, rate_eur):
         nonlocal turnover_eur
@@ -152,25 +168,32 @@ def simulate(preds, prices, eurpln, cfg):
         m = (d.year, d.month)            # miesiąc liczymy po dniu decyzji (handel następnego dnia - przybliżenie)
         if m != month:
             month, turnover_eur = m, 0.0
-        g = by_day[d]
-        if cfg.top_q:
-            g = g[g["score"] >= thr[d]]
-        g = g.head(cfg.k)
+        day = by_day[d]
+        longs = day[day["score"] >= thr[d]] if cfg.top_q else day
+        longs = longs.head(cfg.k)
+        shorts = day.iloc[::-1]                                   # od najgorzej ocenionej
+        shorts = shorts[~shorts["ticker"].isin(longs["ticker"])]
+        if cfg.top_q and cfg.short_k:
+            shorts = shorts[shorts["score"] <= thr_low[d]]
+        shorts = shorts.head(cfg.short_k)
         rate = float(eurpln.get(d, 4.30))
         day_pnl = 0.0
-        slot = equity * min(1.0 / cfg.k, cfg.max_weight)
-        for _, r in g.iterrows():
-            buy_px = r["next_open"] * (1 + slip)
-            shares = np.floor(slot / buy_px) if cfg.whole_shares else slot / buy_px
-            if shares <= 0:
-                continue
-            sell_px = r["next_open"] * np.exp(r["ret_raw"]) * (1 - slip)
-            buy_val, sell_val = shares * buy_px, shares * sell_px
-            fee = commission(buy_val, rate) + commission(sell_val, rate)
-            pnl = sell_val - buy_val - fee
-            day_pnl += pnl
-            trades.append({"date": d, "ticker": r["ticker"], "shares": shares, "buy": buy_val,
-                           "pnl": pnl, "fee": fee, "gross": sell_val - buy_val})
+        slot = equity * cfg.gross * min(1.0 / n_pos, cfg.max_weight)
+        for side, rows in ((1, longs), (-1, shorts)):
+            for _, r in rows.iterrows():
+                open_px = r["next_open"]
+                close_px = open_px * np.exp(r["ret_raw"])
+                entry = open_px * (1 + side * side_cost)         # kupno drożej / krótka sprzedaż taniej
+                exit_ = close_px * (1 - side * side_cost)        # sprzedaż taniej / odkupienie drożej
+                shares = np.floor(slot / entry) if cfg.whole_shares else slot / entry
+                if shares <= 0:
+                    continue
+                gross = side * shares * (close_px - open_px)     # wynik przed wszystkimi kosztami
+                fee = 0.0 if cfd else commission(shares * entry, rate) + commission(shares * exit_, rate)
+                pnl = side * shares * (exit_ - entry) - fee
+                day_pnl += pnl
+                trades.append({"date": d, "ticker": r["ticker"], "side": side, "shares": shares,
+                               "buy": shares * entry, "pnl": pnl, "fee": gross - pnl, "gross": gross})
         equity += day_pnl
         curve.append((d, equity))
         if equity <= 0:
@@ -228,7 +251,7 @@ def fmt_row(name, m, width=52):
 
 def header(width=52):
     return (f"  {'konfiguracja':<{width}} {'kapitał na koniec':>12} {'rocznie':>7} {'Sharpe':>6} "
-            f"{'obsun.':>7} {'transak.':>6} {'prowizje':>11} {'trafn.':>6}")
+            f"{'obsun.':>7} {'transak.':>6} {'koszty':>11} {'trafn.':>6}")
 
 
 def run(ds, preds, prices, eurpln, out=print, save=True):
@@ -287,7 +310,7 @@ def run(ds, preds, prices, eurpln, out=print, save=True):
     for y in yr.index:
         out(f"  {y}      {yr[y]:>+9.1%}   {byr.get(y, np.nan):>+9.1%}")
     gross, fees = m["brutto"], m["prowizje"]
-    out(f"  Zysk przed prowizjami {zl(gross)} zł, prowizje {zl(fees)} zł, "
+    out(f"  Zysk przed kosztami {zl(gross)} zł, koszty (prowizje i poślizg) {zl(fees)} zł, "
         f"średnio {m['transakcji'] / max(m['dni_z_handlem'], 1):.1f} spółki w dniu z handlem, "
         f"handel w {m['dni_z_handlem'] / len(days):.0%} sesji.")
 
@@ -313,11 +336,73 @@ def run(ds, preds, prices, eurpln, out=print, save=True):
     return results
 
 
+def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0):
+    """Gra na różnicy przez CFD: kupno najlepiej ocenionych i krótka sprzedaż najgorzej ocenionych."""
+    days = pd.DatetimeIndex(sorted(preds["date"].unique()))
+    models = [m for m in ("lightgbm", "logistyczna", "reguła: najbliżej rocznego szczytu", "losowo")
+              if m in set(preds["model"])]
+    results = []
+
+    def test(cfg):
+        eq, tr = simulate(preds, prices, eurpln, cfg)
+        m = metrics(eq, tr, cfg.capital, all_days=days)
+        if save:
+            M.register_trial({"backtest": asdict(cfg)})
+        results.append((cfg, m, eq, tr))
+        return m, tr
+
+    out(f"Okres testu: {days.min().date()} – {days.max().date()} ({len(days)} sesji), prognozy na ślepo z etapu 4.")
+    out("Gra na różnicy (CFD): rano kupno najlepiej ocenionych i krótka sprzedaż najgorzej ocenionych spółek,")
+    out("wieczorem zamknięcie obu stron. Ruch całego rynku się znosi - zostaje sama różnica między spółkami.")
+    out("CFD na polskie akcje w XTB: prowizja 0%, spread 0.30% (po 0.15% przy otwarciu i zamknięciu),")
+    out("bez opłat za noc (zamykamy tego samego dnia). Pozycje łącznie = kapitał (bez dodatkowej dźwigni).")
+    out("Uwaga: XTB nie ma CFD na wszystkie spółki z listy - wynik zakłada, że każdą da się sprzedać krótko.\n")
+
+    out(f"5) Gra na różnicy, kapitał {zl(capital)} zł")
+    out(header())
+    W = 52
+    for spread, title in ((0.0, "BEZ kosztów - ile w ogóle jest do zarobienia"),
+                          (30.0, "spread XTB 0.30%"),
+                          (10.0, "gdyby spread był 0.10% (dla porównania)")):
+        out(f"  -- {title}")
+        for mname in models:
+            for k, q in ((5, None), (3, 0.05), (1, 0.01)):
+                if mname == "losowo" and q:
+                    continue
+                cfg = Config(model=mname, k=k, short_k=k, top_q=q, capital=capital,
+                             instrument="cfd", cfd_spread_bp=spread)
+                m, _ = test(cfg)
+                qtxt = f", top {q:.0%}" if q else ""
+                out(fmt_row(f"{mname} | {k}+{k}{qtxt}"[:W], m, W))
+
+    out("\n  Dla porównania: samo kupno przez CFD (bez krótkiej sprzedaży), spread 0.30%")
+    for mname in models[:2]:
+        m, _ = test(Config(model=mname, k=5, capital=capital, instrument="cfd"))
+        out(fmt_row(f"{mname} | 5 kupno, CFD", m, W))
+
+    # próg opłacalności: przy jakim spreadzie strategia wychodzi na zero
+    out("\n  Próg opłacalności (z wersji bez kosztów): średni zysk na transakcję przed kosztami")
+    for cfg, m, eq, tr in results:
+        if cfg.cfd_spread_bp == 0 and cfg.short_k and len(tr) and cfg.model != "losowo":
+            per_trade = tr["gross"].sum() / tr["buy"].sum()
+            qtxt = f", top {cfg.top_q:.0%}" if cfg.top_q else ""
+            out(f"  {cfg.model + ' | ' + str(cfg.k) + '+' + str(cfg.k) + qtxt:<52} "
+                f"{per_trade * 100:+.3f}% na transakcję -> opłaca się, gdy spread < {max(per_trade, 0) * 100:.2f}% "
+                f"(XTB: 0.30%)")
+    best = max((x for x in results if x[0].cfd_spread_bp == 30.0 and x[0].model != "losowo"),
+               key=lambda x: x[1]["sharpe"])
+    out(f"\n  Najlepsza przy prawdziwym spreadzie: {best[0].label()}")
+    out(f"  -> {best[1]['rocznie']:+.1%} rocznie, Sharpe {best[1]['sharpe']:+.2f}, t {best[1]['t']:+.1f} "
+        f"(przypadkiem przy {len(results)} konfiguracjach: t ≈ {M.chance_t(len(results)):.1f}).")
+    return results
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m lab.backtest", description="QuantPulse - backtest z kosztami XTB")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("run", help="symulacja handlu z kosztami dla prognoz z etapu 4")
-    p.parse_args(argv)
+    sub.add_parser("run", help="symulacja handlu akcjami z kosztami dla prognoz z etapu 4")
+    sub.add_parser("cfd", help="gra na różnicy przez CFD: kupno najlepszych, krótka sprzedaż najgorszych")
+    args = p.parse_args(argv)
 
     from .data_store import MarketStore
     preds = load_predictions("oc")
@@ -329,7 +414,10 @@ def main(argv=None):
     prices = next_open_prices(store, sorted(preds["ticker"].unique()))
     eurpln = eur_rate(store, pd.DatetimeIndex(sorted(preds["date"].unique())))
     ds = F.load_dataset()
-    run(ds, preds, prices, eurpln)
+    if args.cmd == "cfd":
+        run_cfd(ds, preds, prices, eurpln)
+    else:
+        run(ds, preds, prices, eurpln)
     print(f"\nGotowe w {time.time() - t0:.0f} s.")
     return 0
 
