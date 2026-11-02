@@ -75,6 +75,22 @@ python -m lab.models run --label oc # tylko handel w ciągu dnia
   t potrafi wyjść przypadkiem, więc raport podaje, czy najlepszy wynik jest ponad ten poziom.
 - Prognozy trafiają do `data/lab/predictions_oc.parquet` i `predictions_cc.parquet`, a skorzysta z nich backtest w etapie 5.
 
+## Backtest z kosztami (etap 5)
+
+```powershell
+python -m lab.backtest run          # około minuty; najpierw musi być python -m lab.models run
+```
+
+- Odtwarza handel dzień po dniu na prognozach „na ślepo” z etapu 4: wieczorem ocena, rano kupno
+  po cenie otwarcia, wieczorem sprzedaż po cenie zamknięcia.
+- **Koszty XTB:** 0% prowizji do 100 000 EUR obrotu w miesiącu, potem 0.2%, ale minimum 10 EUR za transakcję.
+  Do tego poślizg: 0 pb przy zleceniach na fixing, 10 pb na stronę w trakcie sesji. Kupujemy całe akcje.
+- **Bez podatku Belki:** na IKE/IKZE go nie ma, na zwykłym koncie odejmij 19% od rocznego zysku.
+- **Scenariusze:** wszyscy zawodnicy, różny kapitał (5, 20, 50 tys. zł), mniej spółek albo próg „tylko pewne typy”
+  (liczony wyłącznie z ocen z przeszłości), rok po roku na tle średniej spółek GPW.
+- Każda konfiguracja trafia do licznika prób. Najlepsza wybrana spośród wielu jest trochę zawyżona,
+  więc ostateczny sprawdzian to sejf.
+
 ## Jak czytać `status`
 
 - **Bez danych w Yahoo**: symbolu nie ma w Yahoo (spółka zniknęła z giełdy albo zmieniła symbol).
@@ -100,6 +116,6 @@ python -m lab.models run --label oc # tylko handel w ciągu dnia
    Inteligentną kontrolą aplikacji jest zablokowany, więc laboratorium liczy w Pythonie z tym samym wynikiem
 3. ✅ Cechy i etykiety
 4. ✅ Modele i walk-forward
-5. Backtest z kosztami XTB
+5. ✅ Backtest z kosztami XTB
 6. Paper trading
 7. Zakładka w aplikacji

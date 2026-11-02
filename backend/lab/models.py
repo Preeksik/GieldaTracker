@@ -313,6 +313,11 @@ def chance_t(n_tests):
 def report(label, data, summary, yearly, imp, n_trials, n_models, out=print):
     _, _, desc = LABEL_INFO[label]
     out(f"\n=== Handel {desc} ===")
+    if label == "cc":
+        out("⚠ WERSJA TEORETYCZNA: zakłada kupno po dzisiejszej cenie zamknięcia, z której liczone są też cechy.")
+        out("  W praktyce decyzję podejmujesz PO zamknięciu, więc po tej cenie już nie kupisz. Zysk z odbicia")
+        out("  ceny zamknięcia (np. cecha 'miejsce zamknięcia w zakresie') jest tu nie do zrealizowania.")
+        out("  Traktuj ją tylko jako porównanie - backtest (etap 5) używa wersji oc.")
     out(f"Dane: {data['date'].min().date()} – {data['date'].max().date()}, "
         f"{data['ticker'].nunique()} spółek, średnio {data.groupby('date').size().mean():.0f} spółek dziennie "
         f"po filtrach. Test na ślepo: {summary['dni'].max()} sesji.")
