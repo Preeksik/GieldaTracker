@@ -109,9 +109,9 @@ class RandomModel:
 class RuleModel:
     """Ranking według jednej cechy. Kierunek (więcej czy mniej = lepiej) z danych do nauki."""
 
-    def __init__(self, feature):
+    def __init__(self, feature, label=None):
         self.feature = feature
-        self.name = f"reguła: {RULES.get(feature, feature)}"
+        self.name = f"reguła: {label or RULES.get(feature, feature)}"
         self.sign = 1.0
 
     def fit(self, train):
@@ -187,10 +187,11 @@ def folds(dates, step_months=1, min_train_years=MIN_TRAIN_YEARS):
     return out
 
 
-def walk_forward(data, models=None, step_months=1, progress=print):
+def walk_forward(data, models=None, step_months=1, progress=print, gap=GAP_DAYS):
     """
     Prognozy "na ślepo": dla każdego okresu model uczy się tylko na wierszach sprzed testu
-    (z przerwą GAP_DAYS sesji) i ocenia spółki w okresie testu.
+    (z przerwą `gap` sesji) i ocenia spółki w okresie testu. Przy etykietach na H sesji
+    przerwa musi wynosić co najmniej H+1, inaczej wynik z nauki "zachodzi" na okres testu.
     Zwraca (prognozy, ważność cech).
     """
     models = models or default_models()
@@ -200,9 +201,9 @@ def walk_forward(data, models=None, step_months=1, progress=print):
     t0 = time.time()
     for i, (start, end) in enumerate(fl):
         first = sessions.searchsorted(start)
-        if first - GAP_DAYS <= 0:
+        if first - gap <= 0:
             continue
-        train_end = sessions[first - GAP_DAYS]          # nauka: daty < train_end
+        train_end = sessions[first - gap]               # nauka: daty < train_end
         train = data[data["date"] < train_end]
         test = data[(data["date"] >= start) & (data["date"] < end)]
         if train.empty or test.empty:
@@ -373,8 +374,41 @@ def save_predictions(preds, label):
 # WIERSZ POLECEŃ
 # ============================================================================
 
-def run(ds, labels=("oc", "cc"), market="PL", step_months=1, out=print, save=True):
-    results = {}
+def model_verdict(summary, n_tests, label):
+    """Werdykt w prostych słowach dla wyników modeli (jeszcze bez opłat)."""
+    s = summary.set_index("model")
+    rand = s.loc["losowo"] if "losowo" in s.index else None
+    cand = s.drop(index="losowo", errors="ignore")
+    best_name = cand["top_ex_t"].idxmax()
+    b = cand.loc[best_name]
+    ct = chance_t(n_tests)
+    better = b["top_ex_pb"] > 0 and b["top_ex_t"] > 2
+    trusted = b["top_ex_t"] > ct + 1
+    rand_txt = f" (losowy wybór: {rand['top_ex_pb'] / 100:+.2f}%)" if rand is not None else ""
+    lines = ["=" * 78, "WERDYKT (w prostych słowach)", "=" * 78,
+             "Sprawdzane: czy model umie wskazać spółki, które JUTRO wypadną lepiej od przeciętnej spółki.",
+             f"Wersja: {LABEL_INFO[label][2]}. To jeszcze BEZ opłat - opłaty liczy backtest.", ""]
+    lines.append("1. Czy model wybiera spółki lepiej niż przypadek?")
+    lines.append(f"   {'TAK' if better else 'NIE'}. {TOP_K} spółek wskazanych przez najlepszy model ({best_name}) wypadało "
+                 f"średnio o {b['top_ex_pb'] / 100:+.2f}% dziennie lepiej od przeciętnej{rand_txt}.")
+    lines.append("2. Jak często trafia?")
+    lines.append(f"   W {b['trafnosc']:.0%} przypadków wybrana spółka wypadła lepiej od przeciętnej (czysty przypadek: ok. 50%).")
+    lines.append("3. Czy można temu ufać?")
+    if trusted:
+        lines.append("   RACZEJ TAK. Wynik jest wyraźnie lepszy, niż zdarza się przypadkiem przy tylu sprawdzonych modelach.")
+    else:
+        lines.append("   NIE. Przy tylu sprawdzonych modelach taki wynik może być przypadkiem.")
+    lines.append("")
+    if better and trusted:
+        lines.append("WNIOSEK: model coś umie. Czy da się na tym ZAROBIĆ po opłatach, sprawdza: python -m lab.backtest run")
+    else:
+        lines.append("WNIOSEK: model nie umie wyraźnie więcej niż przypadek - na tym się nie zarobi.")
+    return lines
+
+
+def run(ds, labels=("oc", "cc"), market="PL", step_months=1, out=print, save=True, details=True):
+    results, buf, verdicts = {}, [], []
+    say = buf.append
     for label in labels:
         data = prepare(ds, label=label, market=market)
         if data.empty:
@@ -387,18 +421,32 @@ def run(ds, labels=("oc", "cc"), market="PL", step_months=1, out=print, save=Tru
         n_trials = register_trial({"market": market, "label": label, "step": step_months,
                                    "top_k": TOP_K, "models": [m.name for m in models],
                                    "features": F.FEATURES, "liquid": True}) if save else 1
-        report(label, data, summary, yearly, imp, n_trials, len(models), out=out)
+        report(label, data, summary, yearly, imp, n_trials, len(models), out=say)
         if save:
-            out(f"  Prognozy zapisane: {save_predictions(preds, label)} (do backtestu w etapie 5)")
+            say(f"  Prognozy zapisane: {save_predictions(preds, label)} (do backtestu w etapie 5)")
         results[label] = summary
+        if label == "oc":
+            verdicts = model_verdict(summary, n_trials * len(models), label)
     if len(results) == 2:
-        out("\n=== Porównanie: w ciągu dnia (oc) czy z nocą (cc)? ===")
-        out(f"  {'model':<34} {'oc ponad śr.':>13} {'oc zwrot':>9} {'cc ponad śr.':>13} {'cc zwrot':>9}")
+        say("\n=== Porównanie: w ciągu dnia (oc) czy z nocą (cc)? ===")
+        say(f"  {'model':<34} {'oc ponad śr.':>13} {'oc zwrot':>9} {'cc ponad śr.':>13} {'cc zwrot':>9}")
         a, b = results["oc"].set_index("model"), results["cc"].set_index("model")
         for m in a.index:
-            out(f"  {m:<34} {a.loc[m, 'top_ex_pb']:>+11.1f}pb {a.loc[m, 'top_raw_pb']:>+7.1f}pb "
+            say(f"  {m:<34} {a.loc[m, 'top_ex_pb']:>+11.1f}pb {a.loc[m, 'top_raw_pb']:>+7.1f}pb "
                 f"{b.loc[m, 'top_ex_pb']:>+11.1f}pb {b.loc[m, 'top_raw_pb']:>+7.1f}pb")
-        out("  'zwrot' zawiera ruch całego rynku: przy handlu w ciągu dnia GPW średnio traci, w nocy zyskuje.")
+        say("  'zwrot' zawiera ruch całego rynku: przy handlu w ciągu dnia GPW średnio traci, w nocy zyskuje.")
+    out("")
+    for line in verdicts:
+        out(line)
+    if "cc" in results:
+        out("(Wersja 'z nocą' jest teoretyczna - nie da się kupić po cenie, którą znasz dopiero po fakcie - "
+            "więc nie wchodzi do werdyktu.)")
+    if details:
+        out("")
+        for line in buf:
+            out(line)
+    else:
+        out("(Szczegółowe tabele: python -m lab.models run --szczegoly)")
     return results
 
 
@@ -409,6 +457,7 @@ def main(argv=None):
     r.add_argument("--label", choices=["oc", "cc", "both"], default="both")
     r.add_argument("--market", choices=["PL", "US"], default="PL")
     r.add_argument("--quick", action="store_true", help="przeuczanie co kwartał (szybciej)")
+    r.add_argument("--szczegoly", action="store_true", help="pokaż też wszystkie tabele")
     args = p.parse_args(argv)
 
     ds = F.load_dataset()
@@ -420,7 +469,7 @@ def main(argv=None):
         return 1
     labels = ("oc", "cc") if args.label == "both" else (args.label,)
     t0 = time.time()
-    run(ds, labels=labels, market=args.market, step_months=3 if args.quick else 1)
+    run(ds, labels=labels, market=args.market, step_months=3 if args.quick else 1, details=args.szczegoly)
     print(f"\nGotowe w {time.time() - t0:.0f} s. Wszystko PRZED kosztami - koszty doliczy backtest (etap 5).")
     return 0
 

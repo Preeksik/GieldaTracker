@@ -254,8 +254,70 @@ def header(width=52):
             f"{'obsun.':>7} {'transak.':>6} {'koszty':>11} {'trafn.':>6}")
 
 
-def run(ds, preds, prices, eurpln, out=print, save=True):
+def zl10k(m, capital):
+    """Ile zostałoby z 10 000 zł przy tym samym przebiegu (przeliczenie proporcjonalne)."""
+    return m["koncowy"] / capital * 10000
+
+
+def plural(n, one, few, many):
+    """Polska odmiana: 1 wariant, 2-4 warianty, 5+ wariantów (12-14 też 'wariantów')."""
+    n = int(round(n))
+    if n == 1:
+        return one
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return few
+    return many
+
+
+def verdict(what, best_cfg, best_m, hold_m, hold_capital, rand_m, n_cfg, years, cmd, note=""):
+    """Werdykt w prostych słowach: 3 pytania i wniosek. Bez żargonu."""
+    ct = M.chance_t(n_cfg)
+    beats = best_m["rocznie"] > hold_m["rocznie"]
+    trusted = best_m["t"] > ct + 1
+    best10, hold10, rand10 = zl10k(best_m, best_cfg.capital), zl10k(hold_m, hold_capital), zl10k(rand_m, 5000.0)
+
+    def money(x):
+        diff = x - 10000
+        return f"{zl(x)} zł ({'zysk' if diff >= 0 else 'strata'} {zl(abs(diff))} zł)"
+
+    ny = max(int(round(years)), 1)
+    lat = f"{ny} {plural(ny, 'rok', 'lata', 'lat')}"
+    lines = ["=" * 78, "WERDYKT (w prostych słowach)", "=" * 78,
+             f"Sprawdzane: {what}",
+             f"Okres: ok. {lat} historii, opłaty XTB wliczone. {note}".rstrip(), ""]
+    lines.append("1. Czy to lepsze niż zwykłe kupienie akcji i trzymanie ich?")
+    lines.append(f"   {'TAK' if beats else 'NIE'}. Najlepszy z {n_cfg} sprawdzonych wariantów: {best_m['rocznie']:+.1%} rocznie. "
+                 f"Zwykłe trzymanie spółek GPW: {hold_m['rocznie']:+.1%} rocznie.")
+    lines.append(f"2. Ile zostałoby z 10 000 zł po ok. {lat}?" if ny == 1 else
+                 f"2. Ile zostałoby z 10 000 zł po ok. {ny} {plural(ny, 'roku', 'latach', 'latach')}?")
+    lines.append(f"   najlepszy wariant: {money(best10)}")
+    lines.append(f"   zwykłe trzymanie:  {money(hold10)}")
+    lines.append(f"   losowe typowanie:  {money(rand10)}")
+    lines.append("3. Czy można temu wynikowi ufać?")
+    if best_m["rocznie"] <= 0:
+        lines.append("   Nie ma tu czemu ufać - nawet najlepszy wariant traci pieniądze.")
+    elif trusted:
+        lines.append(f"   RACZEJ TAK. Wynik jest wyraźnie lepszy, niż zdarza się przypadkiem przy {n_cfg} próbach.")
+        lines.append("   Ostatecznie potwierdzi to dopiero sejf (ostatni rok, którego nikt jeszcze nie oglądał).")
+    else:
+        lines.append(f"   NIE. Sprawdziliśmy {n_cfg} {plural(n_cfg, 'wariant', 'warianty', 'wariantów')} - przy tylu "
+                     "próbach jeden tak 'dobry' trafia się zwykle przypadkiem.")
+    lines.append("")
+    if beats and trusted:
+        lines.append("WNIOSEK: obiecujące. Następny krok to gra na papierze - nadal BEZ prawdziwych pieniędzy.")
+    elif beats:
+        lines.append("WNIOSEK: wygląda nieźle, ale za mało dowodów. Nie wkładaj w to pieniędzy.")
+    else:
+        lines.append("WNIOSEK: nie wkładaj w to pieniędzy. Zwykłe trzymanie akcji (np. ETF na IKE) wypada lepiej.")
+    if cmd:
+        lines.append(f"(Szczegółowe tabele: {cmd} --szczegoly)")
+    return lines
+
+
+def run(ds, preds, prices, eurpln, out=print, save=True, details=True):
     days = pd.DatetimeIndex(sorted(preds["date"].unique()))
+    buf = []
+    say = buf.append
     bench = market_benchmark(ds, days) if ds is not None else pd.Series(0.0, index=days)
     models = list(pd.unique(preds["model"]))
     results = []
@@ -268,58 +330,58 @@ def run(ds, preds, prices, eurpln, out=print, save=True):
         results.append((cfg, m, eq, tr))
         return m
 
-    out(f"Okres testu: {days.min().date()} – {days.max().date()} ({len(days)} sesji), prognozy na ślepo z etapu 4.")
-    out("Kupno na otwarciu, sprzedaż na zamknięciu tego samego dnia. Prowizja XTB z limitem 100 000 EUR/mies.,")
-    out("całe akcje, BEZ podatku Belki (na IKE/IKZE go nie ma). Sejf (ostatni rok) nadal nietknięty.\n")
+    say(f"Okres testu: {days.min().date()} – {days.max().date()} ({len(days)} sesji), prognozy na ślepo z etapu 4.")
+    say("Kupno na otwarciu, sprzedaż na zamknięciu tego samego dnia. Prowizja XTB z limitem 100 000 EUR/mies.,")
+    say("całe akcje, BEZ podatku Belki (na IKE/IKZE go nie ma). Sejf (ostatni rok) nadal nietknięty.\n")
 
     # punkt odniesienia: rynek kupiony i trzymany
     b_eq = 5000.0 * (1 + bench).cumprod()
     bm = metrics(b_eq, pd.DataFrame(columns=["date", "pnl", "fee", "gross"]), 5000.0)
-    out("1) Wszyscy zawodnicy: 5 000 zł, 5 spółek dziennie, bez progu")
-    out(header())
-    out(fmt_row("średnia spółek GPW - kup i trzymaj (bez kosztów)", {**bm, "trafnosc": np.nan}))
+    say("1) Wszyscy zawodnicy: 5 000 zł, 5 spółek dziennie, bez progu")
+    say(header())
+    say(fmt_row("średnia spółek GPW - kup i trzymaj (bez kosztów)", {**bm, "trafnosc": np.nan}))
     for slip in (0.0, 10.0):
-        out(f"  -- poślizg {slip:g} pb na stronę " + ("(zlecenia na fixing)" if slip == 0 else "(zlecenia w trakcie sesji)"))
+        say(f"  -- poślizg {slip:g} pb na stronę " + ("(zlecenia na fixing)" if slip == 0 else "(zlecenia w trakcie sesji)"))
         for mname in models:
             m = test(Config(model=mname, slippage_bp=slip))
-            out(fmt_row(mname, m))
+            say(fmt_row(mname, m))
 
     best_models = [x for x in ("lightgbm", "logistyczna") if x in models] or models[-1:]
-    out("\n2) Wielkość kapitału: przy większym obrót szybciej przekracza darmowy limit prowizji")
-    out(header())
+    say("\n2) Wielkość kapitału: przy większym obrót szybciej przekracza darmowy limit prowizji")
+    say(header())
     for mname in best_models:
         for cap in (5000.0, 20000.0, 50000.0):
             m = test(Config(model=mname, capital=cap))
-            out(fmt_row(f"{mname} | {zl(cap)} zł", m))
+            say(fmt_row(f"{mname} | {zl(cap)} zł", m))
 
-    out("\n3) Mniej, ale pewniej: mniej spółek i próg z przeszłych ocen (20 000 zł - tu limit prowizji boli)")
-    out(header())
+    say("\n3) Mniej, ale pewniej: mniej spółek i próg z przeszłych ocen (20 000 zł - tu limit prowizji boli)")
+    say(header())
     for mname in best_models:
         for k, q in ((5, None), (3, None), (5, 0.10), (3, 0.05), (2, 0.02)):
             m = test(Config(model=mname, capital=20000.0, k=k, top_q=q))
             qtxt = f", tylko top {q:.0%} ocen" if q else ""
-            out(fmt_row(f"{mname} | {k} spółek{qtxt}", m))
+            say(fmt_row(f"{mname} | {k} spółek{qtxt}", m))
 
     # najlepsza konfiguracja wg Sharpe (poza losowym)
     cand = [x for x in results if x[0].model != "losowo"]
     cfg, m, eq, tr = max(cand, key=lambda x: x[1]["sharpe"])
-    out(f"\n4) Najlepsza tutaj (wg Sharpe): {cfg.label()}")
+    say(f"\n4) Najlepsza tutaj (wg Sharpe): {cfg.label()}")
     yr = yearly_returns(eq, cfg.capital, all_days=days)
     byr = yearly_returns(b_eq, 5000.0)
-    out("  rok        strategia   średnia spółek GPW")
+    say("  rok        strategia   średnia spółek GPW")
     for y in yr.index:
-        out(f"  {y}      {yr[y]:>+9.1%}   {byr.get(y, np.nan):>+9.1%}")
+        say(f"  {y}      {yr[y]:>+9.1%}   {byr.get(y, np.nan):>+9.1%}")
     gross, fees = m["brutto"], m["prowizje"]
-    out(f"  Zysk przed kosztami {zl(gross)} zł, koszty (prowizje i poślizg) {zl(fees)} zł, "
+    say(f"  Zysk przed kosztami {zl(gross)} zł, koszty (prowizje i poślizg) {zl(fees)} zł, "
         f"średnio {m['transakcji'] / max(m['dni_z_handlem'], 1):.1f} spółki w dniu z handlem, "
         f"handel w {m['dni_z_handlem'] / len(days):.0%} sesji.")
 
     n_cfg = len(results)
     trials = M.register_trial({"backtest_run": [asdict(c) for c, *_ in results]}) if save else 1
     ct = M.chance_t(max(n_cfg, trials))
-    out(f"\n  Licznik prób: w tym przebiegu {n_cfg} konfiguracji. Najlepsza z tylu przypadkowych miałaby t ≈ {ct:.1f}; "
+    say(f"\n  Licznik prób: w tym przebiegu {n_cfg} konfiguracji. Najlepsza z tylu przypadkowych miałaby t ≈ {ct:.1f}; "
         f"ta ma t {m['t']:+.1f} - " + ("ponad przypadek." if m["t"] > ct + 1 else "to może być przypadek."))
-    out("  Uwaga: 'najlepsza' wybrana spośród wielu - jej wynik jest trochę zawyżony. Rozstrzygnie sejf (ostatni rok).")
+    say("  Uwaga: 'najlepsza' wybrana spośród wielu - jej wynik jest trochę zawyżony. Rozstrzygnie sejf (ostatni rok).")
 
     if save:
         path = os.path.join(F.lab_dir(), "backtest_equity.parquet")
@@ -330,15 +392,30 @@ def run(ds, preds, prices, eurpln, out=print, save=True):
         curves.index.name = "date"
         try:
             curves.reset_index().to_parquet(path, index=False)
-            out(f"  Krzywe kapitału zapisane: {path} (do zakładki w aplikacji)")
+            say(f"  Krzywe kapitału zapisane: {path} (do zakładki w aplikacji)")
         except Exception:
             pass
+
+    rand = next(m for c, m, *_ in results if c.model == "losowo" and c.slippage_bp == 0)
+    realistic = [x for x in results if x[0].model != "losowo" and x[0].slippage_bp == 0]
+    bc, bmm, *_ = max(realistic, key=lambda x: x[1]["sharpe"])
+    for line in verdict("kupno akcji rano i sprzedaż wieczorem tego samego dnia, spółki wybrane przez model",
+                        bc, bmm, bm, 5000.0, rand, len(results), len(days) / 250,
+                        None if details else "python -m lab.backtest run",
+                        note="Założenie korzystne: zlecenia po cenie z fixingu (bez poślizgu)."):
+        out(line)
+    if details:
+        out("")
+        for line in buf:
+            out(line)
     return results
 
 
-def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0):
+def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0, details=True):
     """Gra na różnicy przez CFD: kupno najlepiej ocenionych i krótka sprzedaż najgorzej ocenionych."""
     days = pd.DatetimeIndex(sorted(preds["date"].unique()))
+    buf = []
+    say = buf.append
     models = [m for m in ("lightgbm", "logistyczna", "reguła: najbliżej rocznego szczytu", "losowo")
               if m in set(preds["model"])]
     results = []
@@ -351,20 +428,20 @@ def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0):
         results.append((cfg, m, eq, tr))
         return m, tr
 
-    out(f"Okres testu: {days.min().date()} – {days.max().date()} ({len(days)} sesji), prognozy na ślepo z etapu 4.")
-    out("Gra na różnicy (CFD): rano kupno najlepiej ocenionych i krótka sprzedaż najgorzej ocenionych spółek,")
-    out("wieczorem zamknięcie obu stron. Ruch całego rynku się znosi - zostaje sama różnica między spółkami.")
-    out("CFD na polskie akcje w XTB: prowizja 0%, spread 0.30% (po 0.15% przy otwarciu i zamknięciu),")
-    out("bez opłat za noc (zamykamy tego samego dnia). Pozycje łącznie = kapitał (bez dodatkowej dźwigni).")
-    out("Uwaga: XTB nie ma CFD na wszystkie spółki z listy - wynik zakłada, że każdą da się sprzedać krótko.\n")
+    say(f"Okres testu: {days.min().date()} – {days.max().date()} ({len(days)} sesji), prognozy na ślepo z etapu 4.")
+    say("Gra na różnicy (CFD): rano kupno najlepiej ocenionych i krótka sprzedaż najgorzej ocenionych spółek,")
+    say("wieczorem zamknięcie obu stron. Ruch całego rynku się znosi - zostaje sama różnica między spółkami.")
+    say("CFD na polskie akcje w XTB: prowizja 0%, spread 0.30% (po 0.15% przy otwarciu i zamknięciu),")
+    say("bez opłat za noc (zamykamy tego samego dnia). Pozycje łącznie = kapitał (bez dodatkowej dźwigni).")
+    say("Uwaga: XTB nie ma CFD na wszystkie spółki z listy - wynik zakłada, że każdą da się sprzedać krótko.\n")
 
-    out(f"5) Gra na różnicy, kapitał {zl(capital)} zł")
-    out(header())
+    say(f"5) Gra na różnicy, kapitał {zl(capital)} zł")
+    say(header())
     W = 52
     for spread, title in ((0.0, "BEZ kosztów - ile w ogóle jest do zarobienia"),
                           (30.0, "spread XTB 0.30%"),
                           (10.0, "gdyby spread był 0.10% (dla porównania)")):
-        out(f"  -- {title}")
+        say(f"  -- {title}")
         for mname in models:
             for k, q in ((5, None), (3, 0.05), (1, 0.01)):
                 if mname == "losowo" and q:
@@ -373,35 +450,54 @@ def run_cfd(ds, preds, prices, eurpln, out=print, save=True, capital=20000.0):
                              instrument="cfd", cfd_spread_bp=spread)
                 m, _ = test(cfg)
                 qtxt = f", top {q:.0%}" if q else ""
-                out(fmt_row(f"{mname} | {k}+{k}{qtxt}"[:W], m, W))
+                say(fmt_row(f"{mname} | {k}+{k}{qtxt}"[:W], m, W))
 
-    out("\n  Dla porównania: samo kupno przez CFD (bez krótkiej sprzedaży), spread 0.30%")
+    say("\n  Dla porównania: samo kupno przez CFD (bez krótkiej sprzedaży), spread 0.30%")
     for mname in models[:2]:
         m, _ = test(Config(model=mname, k=5, capital=capital, instrument="cfd"))
-        out(fmt_row(f"{mname} | 5 kupno, CFD", m, W))
+        say(fmt_row(f"{mname} | 5 kupno, CFD", m, W))
 
     # próg opłacalności: przy jakim spreadzie strategia wychodzi na zero
-    out("\n  Próg opłacalności (z wersji bez kosztów): średni zysk na transakcję przed kosztami")
+    say("\n  Próg opłacalności (z wersji bez kosztów): średni zysk na transakcję przed kosztami")
     for cfg, m, eq, tr in results:
         if cfg.cfd_spread_bp == 0 and cfg.short_k and len(tr) and cfg.model != "losowo":
             per_trade = tr["gross"].sum() / tr["buy"].sum()
             qtxt = f", top {cfg.top_q:.0%}" if cfg.top_q else ""
-            out(f"  {cfg.model + ' | ' + str(cfg.k) + '+' + str(cfg.k) + qtxt:<52} "
+            say(f"  {cfg.model + ' | ' + str(cfg.k) + '+' + str(cfg.k) + qtxt:<52} "
                 f"{per_trade * 100:+.3f}% na transakcję -> opłaca się, gdy spread < {max(per_trade, 0) * 100:.2f}% "
                 f"(XTB: 0.30%)")
     best = max((x for x in results if x[0].cfd_spread_bp == 30.0 and x[0].model != "losowo"),
                key=lambda x: x[1]["sharpe"])
-    out(f"\n  Najlepsza przy prawdziwym spreadzie: {best[0].label()}")
-    out(f"  -> {best[1]['rocznie']:+.1%} rocznie, Sharpe {best[1]['sharpe']:+.2f}, t {best[1]['t']:+.1f} "
+    say(f"\n  Najlepsza przy prawdziwym spreadzie: {best[0].label()}")
+    say(f"  -> {best[1]['rocznie']:+.1%} rocznie, Sharpe {best[1]['sharpe']:+.2f}, t {best[1]['t']:+.1f} "
         f"(przypadkiem przy {len(results)} konfiguracjach: t ≈ {M.chance_t(len(results)):.1f}).")
+
+    bench = market_benchmark(ds, days) if ds is not None else pd.Series(0.0, index=days)
+    b_eq = 5000.0 * (1 + bench).cumprod()
+    hold = metrics(b_eq, pd.DataFrame(columns=["date", "pnl", "fee", "gross"]), 5000.0)
+    rand = next((m for c, m, *_ in results if c.model == "losowo" and c.cfd_spread_bp == 30.0), best[1])
+    real = [x for x in results if x[0].cfd_spread_bp == 30.0 and x[0].model != "losowo"]
+    n_real = len(real) + 2                      # + dwa warianty "samo kupno przez CFD"
+    rand_scaled = {**rand, "koncowy": rand["koncowy"] / capital * 5000.0}
+    for line in verdict("gra na różnicy przez CFD - rano kupno najlepszych i krótka sprzedaż najgorszych spółek",
+                        best[0], best[1], hold, 5000.0, rand_scaled, n_real, len(days) / 250,
+                        None if details else "python -m lab.backtest cfd",
+                        note="Spread XTB 0.30%. CFD to dźwignia i ryzyko - większość kont detalicznych na CFD traci."):
+        out(line)
+    if details:
+        out("")
+        for line in buf:
+            out(line)
     return results
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m lab.backtest", description="QuantPulse - backtest z kosztami XTB")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("run", help="symulacja handlu akcjami z kosztami dla prognoz z etapu 4")
-    sub.add_parser("cfd", help="gra na różnicy przez CFD: kupno najlepszych, krótka sprzedaż najgorszych")
+    for name, hlp in (("run", "symulacja handlu akcjami z kosztami dla prognoz z etapu 4"),
+                      ("cfd", "gra na różnicy przez CFD: kupno najlepszych, krótka sprzedaż najgorszych")):
+        sp = sub.add_parser(name, help=hlp)
+        sp.add_argument("--szczegoly", action="store_true", help="pokaż też wszystkie tabele")
     args = p.parse_args(argv)
 
     from .data_store import MarketStore
@@ -415,9 +511,9 @@ def main(argv=None):
     eurpln = eur_rate(store, pd.DatetimeIndex(sorted(preds["date"].unique())))
     ds = F.load_dataset()
     if args.cmd == "cfd":
-        run_cfd(ds, preds, prices, eurpln)
+        run_cfd(ds, preds, prices, eurpln, details=args.szczegoly)
     else:
-        run(ds, preds, prices, eurpln)
+        run(ds, preds, prices, eurpln, details=args.szczegoly)
     print(f"\nGotowe w {time.time() - t0:.0f} s.")
     return 0
 

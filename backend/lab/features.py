@@ -47,6 +47,7 @@ IDX_MIN_COVER = 0.8       # indeks z Yahoo musi mieć co najmniej 80% sesji, ina
 FEATURES = [
     "ret_1", "ret_5", "ret_20", "vol_20", "z_price_20", "z_volume_20", "mom_20",
     "gap", "range", "close_loc", "dist_high_250", "rsi_14", "rel_str_20",
+    "ret_60", "ret_120", "mom_12_1",
     "idx_ret_1", "idx_ret_5", "vix_chg_1", "dow",
 ]
 FEATURE_INFO = {
@@ -55,10 +56,14 @@ FEATURE_INFO = {
     "z_volume_20": "z-score wolumenu 20 dni", "mom_20": "przewaga dni wzrostowych (-1..1)",
     "gap": "luka na otwarciu", "range": "zakres dnia / cena", "close_loc": "miejsce zamknięcia w zakresie (0..1)",
     "dist_high_250": "odległość od rocznego szczytu", "rsi_14": "RSI 14",
-    "rel_str_20": "siła względna 20 dni", "idx_ret_1": "zwrot indeksu 1 dzień",
+    "rel_str_20": "siła względna 20 dni",
+    "ret_60": "zwrot 3 miesiące", "ret_120": "zwrot 6 miesięcy",
+    "mom_12_1": "momentum 12-1 (rok bez ost. miesiąca)", "idx_ret_1": "zwrot indeksu 1 dzień",
     "idx_ret_5": "zwrot indeksu 5 dni", "vix_chg_1": "zmiana VIX", "dow": "dzień tygodnia (0=pon)",
 }
-LABELS = ["y_oc", "y_oc_ex", "y_up", "y_cc", "y_cc_ex", "y_oc_ex_idx"]
+HORIZONS = (5, 20)        # trzymanie przez tydzień (5 sesji) i miesiąc (20 sesji)
+LABELS = ["y_oc", "y_oc_ex", "y_up", "y_cc", "y_cc_ex", "y_oc_ex_idx"] + \
+    [f"y_h{h}" for h in HORIZONS] + [f"y_h{h}_ex" for h in HORIZONS]
 
 
 def lab_dir():
@@ -138,6 +143,9 @@ def stock_features(df, ctx, vix):
     high_250.iloc[:249] = np.nan
     f["dist_high_250"] = ac / high_250 - 1
     f["rsi_14"] = rsi(ac, 14)
+    f["ret_60"] = np.log(ac / ac.shift(60))
+    f["ret_120"] = np.log(ac / ac.shift(120))
+    f["mom_12_1"] = np.log(ac.shift(20) / ac.shift(250))      # klasyczne momentum: rok bez ostatniego miesiąca
 
     cx = ctx.reindex(df.index)
     f["rel_str_20"] = f["ret_20"] - cx["idx_ret_20"]
@@ -165,6 +173,15 @@ def stock_features(df, ctx, vix):
     f["idx_open_suspect"] = cx["idx_open_suspect"]
     # jutrzejsze otwarcie = dzisiejsze zamknięcie co do grosza - czasem prawda, ale gdy to częste, Yahoo nie ma otwarć
     f["open_suspect"] = ((nxt["open"] - c).abs() < 1e-9 * c).astype(float)
+    # Trzymanie przez H sesji: decyzja wieczorem dnia t, kupno na fixingu zamknięcia dnia t+1,
+    # sprzedaż na zamknięciu dnia t+1+H. Ceny skorygowane (dywidenda w trakcie trzymania się liczy).
+    # Zamknięcia, a nie otwarcia: otwarcia GPW w Yahoo bywają fałszywe.
+    for hz in HORIZONS:
+        f[f"y_h{hz}"] = np.log(ac.shift(-(1 + hz)) / ac.shift(-1))
+        f[f"h{hz}_date"] = pd.Series(df.index, index=df.index).shift(-(1 + hz))
+        # dzień z błędem w okresie trzymania -> bez etykiety
+        bad_win = bad.shift(-1).iloc[::-1].rolling(hz + 1, min_periods=1).max().iloc[::-1]
+        f.loc[bad_win > 0, f"y_h{hz}"] = np.nan
     return f
 
 
@@ -240,6 +257,12 @@ def build_dataset(store, progress=print):
             # następny wiersz musi być NASTĘPNĄ sesją rynku (nie po kilkudniowym zawieszeniu)
             expected = next_session.reindex(f.index)
             f["next_is_session"] = f["next_date"].notna() & (f["next_date"] == expected)
+            # etykiety wielodniowe tylko wtedy, gdy między t a t+1+H nie było zawieszenia notowań
+            pos = pd.Series(np.arange(len(cal)), index=cal)
+            p0 = pos.reindex(f.index).to_numpy()
+            for hz in HORIZONS:
+                p1 = pos.reindex(pd.DatetimeIndex(f[f"h{hz}_date"])).to_numpy()
+                f.loc[~(p1 - p0 == 1 + hz), f"y_h{hz}"] = np.nan
             f.insert(0, "ticker", n)
             f.insert(1, "market", market)
             parts.append(f)
@@ -262,6 +285,8 @@ def build_dataset(store, progress=print):
     data["y_cc_ex"] = data["y_cc"] - grp["y_cc"].transform("mean")
     data["y_oc_ex_idx"] = data["y_oc"] - data["idx_oc_next"]
     data["y_up"] = np.where(data["y_oc_ex"].notna(), (data["y_oc_ex"] > 0).astype(float), np.nan)
+    for hz in HORIZONS:
+        data[f"y_h{hz}_ex"] = data[f"y_h{hz}"] - grp[f"y_h{hz}"].transform("mean")
 
     data["train_ok"] = feat_ok & label_ok
     diagnose(data, feat_ok, label_ok, y_missing, progress)

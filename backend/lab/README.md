@@ -39,6 +39,19 @@ Dodatkowe opcje:
 - `python -m lab.data_store update --full`: pobiera wszystko od nowa.
 - `python -m lab.data_store update --only PKO.WA,AAPL`: pobiera tylko wybrane instrumenty.
 
+## Jak czytać wyniki (najpierw to)
+
+Każdy raport modeli i backtestu zaczyna się od **werdyktu w prostych słowach**:
+1. czy to lepsze niż zwykłe kupienie akcji i trzymanie ich,
+2. ile zostałoby z 10 000 zł,
+3. czy wynikowi można ufać (czy to nie przypadek),
+
+a na końcu jest jednozdaniowy **wniosek**. Tabele z liczbami pokazują się tylko po dopisaniu `--szczegoly`,
+np. `python -m lab.backtest run --szczegoly`.
+
+**Laboratorium nie ma żadnego połączenia z kontem w XTB.** Wszystko to symulacje na danych z przeszłości.
+Prawdziwa transakcja dzieje się tylko wtedy, gdy sam ją złożysz w aplikacji XTB.
+
 ## Cechy i etykiety
 
 ```powershell
@@ -94,6 +107,22 @@ python -m lab.backtest run          # około minuty; najpierw musi być python -
   czyli przy jakim spreadzie strategia wychodzi na zero.
 - Każda konfiguracja trafia do licznika prób. Najlepsza wybrana spośród wielu jest trochę zawyżona,
   więc ostateczny sprawdzian to sejf.
+
+## Trzymanie przez tydzień albo miesiąc (opcja A)
+
+```powershell
+python -m lab.features build      # raz, po aktualizacji - dochodzą etykiety na 5 i 20 sesji
+python -m lab.swing run           # werdykt dla tygodnia i miesiąca (kilka minut)
+python -m lab.swing run --szczegoly
+```
+
+- Co tydzień (5 sesji) albo co miesiąc (20 sesji) model wybiera 10 płynnych spółek z GPW. Kupujesz je po równo
+  i trzymasz do następnej zmiany składu. Spółki, które zostają na liście, zostają też w portfelu,
+  więc płacisz tylko za zmiany.
+- Kupno i sprzedaż na fixingu zamknięcia (ceny zamknięcia w Yahoo są wiarygodne, otwarcia nie zawsze).
+  Poślizg 0.10% na stronę, prowizja XTB, całe akcje, bez podatku Belki (IKE/IKZE).
+- Nowe cechy długoterminowe: zwrot z 3 i 6 miesięcy oraz momentum 12-1 (zwrot z roku bez ostatniego miesiąca).
+- Punkt odniesienia: wszystkie spółki z listy kupione po równo i trzymane.
 
 ## Jak czytać `status`
 

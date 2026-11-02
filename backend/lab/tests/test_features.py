@@ -241,3 +241,33 @@ def test_index_without_history_falls_back_to_stock_average(tmp_path):
         assert day["idx_ret_1"].iloc[0] == pytest.approx(day["ret_1"].mean(), abs=1e-12)
     # USA ma pełny indeks - zostaje przy nim
     assert any("US" in l and "indeks SP500" in l for l in lines)
+
+
+def test_horizon_labels(tmp_path, dataset):
+    """y_h5: kupno na zamknięciu dnia t+1, sprzedaż na zamknięciu t+6 (ceny skorygowane)."""
+    raw = make_store(tmp_path / "h").load("S03.WA")
+    row = dataset[(dataset["ticker"] == "S03.WA") & dataset["train_ok"]].iloc[20]
+    i = raw.index.get_loc(row["date"])
+    exp5 = np.log(raw["adj_close"].iloc[i + 6] / raw["adj_close"].iloc[i + 1])
+    exp20 = np.log(raw["adj_close"].iloc[i + 21] / raw["adj_close"].iloc[i + 1])
+    assert row["y_h5"] == pytest.approx(exp5, abs=1e-12) and row["y_h20"] == pytest.approx(exp20, abs=1e-12)
+    pl = dataset[(dataset["market"] == "PL") & dataset["y_h20_ex"].notna()]
+    full = pl.groupby("date").filter(lambda g: len(g) == len(PL))
+    assert len(full) and np.allclose(full.groupby("date")["y_h20_ex"].sum(), 0, atol=1e-12)
+    # ostatnie dni nie mają jeszcze wyniku za 20 sesji
+    last = dataset[dataset["ticker"] == "S03.WA"]
+    assert last["y_h20"].tail(21).isna().all()
+
+
+def test_horizon_label_dropped_when_suspended_inside(tmp_path):
+    d = dates()
+    gap = d[310:313]                 # S06 zawieszona na 3 sesje
+
+    def edit(name, df):
+        return df.drop(gap) if name == "S06.WA" else df
+
+    ds = F.build_dataset(make_store(tmp_path, edit=edit), progress=lambda *_: None)
+    s6 = ds[ds["ticker"] == "S06.WA"].set_index("date")
+    # okres trzymania 20 sesji obejmujący zawieszenie -> bez etykiety; daleko przed - jest
+    assert s6.loc[s6.index[(s6.index >= d[295]) & (s6.index < d[309])], "y_h20"].isna().all()
+    assert s6.loc[s6.index[s6.index < d[280]], "y_h20"].notna().any()
