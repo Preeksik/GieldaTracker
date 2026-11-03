@@ -45,13 +45,17 @@ REBAL_BAND = 0.5           # spółkę, która zostaje w portfelu, wyrównujemy 
 # DANE I MODELE
 # ============================================================================
 
-def prepare_h(ds, h, market="PL", liquid=True):
-    """Wiersze do nauki dla trzymania przez h sesji. Jak models.prepare, ale z etykietą y_h{h}."""
+def prepare_h(ds, h, market="PL", liquid=True, include_vault=False):
+    """
+    Wiersze do nauki dla trzymania przez h sesji. Jak models.prepare, ale z etykietą y_h{h}.
+    include_vault=True tylko dla lab.vault (jednorazowy sprawdzian zamrożonych strategii).
+    """
     y = f"y_h{h}"
     d = ds[(ds["market"] == market) & ds["train_ok"] & ds[y].notna()].copy()
-    vault_from = ds["date"].max() - pd.Timedelta(days=F.VAULT_DAYS)
-    # etykieta sięga h+1 sesji w przód - kończymy wcześniej, żeby wynik nie zajrzał do sejfu
-    d = d[d["date"] < vault_from - pd.Timedelta(days=int((h + 2) * 7 / 5) + 2)]
+    if not include_vault:
+        vault_from = ds["date"].max() - pd.Timedelta(days=F.VAULT_DAYS)
+        # etykieta sięga h+1 sesji w przód - kończymy wcześniej, żeby wynik nie zajrzał do sejfu
+        d = d[d["date"] < vault_from - pd.Timedelta(days=int((h + 2) * 7 / 5) + 2)]
     if liquid:
         med = d.groupby("date")["turnover_20"].transform("median")
         d = d[d["turnover_20"] >= med]

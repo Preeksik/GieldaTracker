@@ -137,6 +137,20 @@ Startuje w `python -m lab.swing run` jako „sieć neuronowa”, na tych samych 
   wzorca, którego regresja liniowa nie widzi, i znaleźć ukryty sygnał w teście na ślepo.
 - Po aktualizacji przebuduj tabelę cech (`python -m lab.features build`), bo doszły kolumny z przebiegiem cen.
 
+## Sejf (jednorazowy sprawdzian)
+
+```powershell
+python -m lab.vault run --szczegoly
+```
+
+- Sprawdza trzy zamrożone strategie (A1 „najbliżej rocznego szczytu”, A2 „zwrot 6 miesięcy”, A3 sieć neuronowa;
+  każda 10 spółek, zmiana co miesiąc) na ostatnim roku, którego żaden wcześniejszy test nie używał.
+- Co miesiąc nauka wyłącznie na danych sprzed tego miesiąca, tak jak przy prawdziwym używaniu.
+- „ZDAŁA” = lepsza od zwykłego trzymania wszystkich spółek w tym roku. Rok to mało, więc to brak powodu
+  do odrzucenia, a nie dowód.
+- Wynik jest pieczętowany w `data/lab/vault.json`. Jeśli strategie zostaną zmienione i sejf otwarty ponownie,
+  raport ostrzega, że to już nie jest uczciwy test.
+
 ## Jak czytać `status`
 
 - **Bez danych w Yahoo**: symbolu nie ma w Yahoo (spółka zniknęła z giełdy albo zmieniła symbol).
@@ -163,5 +177,5 @@ Startuje w `python -m lab.swing run` jako „sieć neuronowa”, na tych samych 
 3. ✅ Cechy i etykiety
 4. ✅ Modele i walk-forward
 5. ✅ Backtest z kosztami XTB
-6. Paper trading
+6. Sejf ✅ (jednorazowo), potem gra na papierze
 7. Zakładka w aplikacji
