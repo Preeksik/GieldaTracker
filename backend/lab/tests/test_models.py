@@ -19,7 +19,7 @@ def fake_dataset(days=1000, stocks=40, signal=0.004, seed=0):
     })
     for f in F.FEATURES:
         df[f] = rng.normal(size=n)
-    df["dow"] = df["date"].dt.dayofweek.astype(float)
+    df["dow"] = df["date"].dt.day_of_week.astype(float)
     noise = rng.normal(0, 0.02, n)
     df["y_oc"] = signal * df["dist_high_250"] + noise - 0.001
     df["y_cc"] = signal * df["dist_high_250"] + rng.normal(0, 0.02, n) + 0.0005

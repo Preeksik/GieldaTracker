@@ -156,7 +156,7 @@ def stock_features(df, ctx, vix):
         f["vix_chg_1"] = vix.reindex(vix.index.union(df.index)).ffill(limit=5).reindex(df.index)
     else:
         f["vix_chg_1"] = np.nan
-    f["dow"] = df.index.dayofweek.astype(float)
+    f["dow"] = df.index.day_of_week.astype(float)
 
     # pomocnicze: płynność, jakość, surowe etykiety
     f["turnover_20"] = (c * v).rolling(20, min_periods=20).median()
