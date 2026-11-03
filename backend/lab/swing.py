@@ -31,6 +31,7 @@ import pandas as pd
 from . import features as F
 from . import models as M
 from . import backtest as B
+from .neural import NeuralModel
 
 HORIZONS = {"tydzien": 5, "miesiac": 20}
 H_NAME = {5: "tydzień", 20: "miesiąc"}
@@ -60,7 +61,10 @@ def prepare_h(ds, h, market="PL", liquid=True):
     d["y"] = (d["ret_ex"] > 0).astype(int)
     for f in M.STOCK_FEATURES:
         d[f] = d.groupby("date")[f].rank(pct=True) - 0.5
-    cols = ["date", "ticker"] + F.FEATURES + ["y", "ret_ex", "ret_raw"]
+    seq = [c for c in F.SEQ_COLS if c in d.columns]
+    for c in [c for c in seq if c.startswith("seq_m")]:        # miesiące: pozycja na tle innych spółek
+        d[c] = d.groupby("date")[c].rank(pct=True) - 0.5
+    cols = ["date", "ticker"] + F.FEATURES + seq + ["y", "ret_ex", "ret_raw"]
     return d[cols].sort_values(["date", "ticker"]).reset_index(drop=True)
 
 
@@ -73,6 +77,7 @@ def swing_models():
         M.RuleModel("vol_20", "zmienność 20 dni"),
         M.LogisticModel(),
         M.LGBMModel(),
+        NeuralModel(),
     ]
 
 

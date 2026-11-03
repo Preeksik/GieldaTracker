@@ -58,10 +58,18 @@ FEATURE_INFO = {
     "dist_high_250": "odległość od rocznego szczytu", "rsi_14": "RSI 14",
     "rel_str_20": "siła względna 20 dni",
     "ret_60": "zwrot 3 miesiące", "ret_120": "zwrot 6 miesięcy",
-    "mom_12_1": "momentum 12-1 (rok bez ost. miesiąca)", "idx_ret_1": "zwrot indeksu 1 dzień",
+    "mom_12_1": "momentum 12-1 (rok bez ost. miesiąca)",
+    "seq_daily": "przebieg 20 ostatnich dni (śr. na dzień)", "seq_monthly": "przebieg 12 miesięcy (śr. na miesiąc)", "idx_ret_1": "zwrot indeksu 1 dzień",
     "idx_ret_5": "zwrot indeksu 5 dni", "vix_chg_1": "zmiana VIX", "dow": "dzień tygodnia (0=pon)",
 }
 HORIZONS = (5, 20)        # trzymanie przez tydzień (5 sesji) i miesiąc (20 sesji)
+
+# Surowy przebieg cen dla sieci neuronowej (nie są to gotowe wskaźniki - sieć sama szuka wzorców):
+#   seq_d1..seq_d20  - zwrot każdego z ostatnich 20 dni, podzielony przez typową zmienność spółki
+#                      (dzięki temu "duży ruch" znaczy to samo dla spokojnej i rozchwianej spółki),
+#   seq_m1..seq_m12  - zwrot każdego z ostatnich 12 "miesięcy" (po 20 sesji).
+SEQ_DAYS, SEQ_MONTHS = 20, 12
+SEQ_COLS = [f"seq_d{k}" for k in range(1, SEQ_DAYS + 1)] + [f"seq_m{j}" for j in range(1, SEQ_MONTHS + 1)]
 LABELS = ["y_oc", "y_oc_ex", "y_up", "y_cc", "y_cc_ex", "y_oc_ex_idx"] + \
     [f"y_h{h}" for h in HORIZONS] + [f"y_h{h}_ex" for h in HORIZONS]
 
@@ -146,6 +154,11 @@ def stock_features(df, ctx, vix):
     f["ret_60"] = np.log(ac / ac.shift(60))
     f["ret_120"] = np.log(ac / ac.shift(120))
     f["mom_12_1"] = np.log(ac.shift(20) / ac.shift(250))      # klasyczne momentum: rok bez ostatniego miesiąca
+    vol60 = pd.Series(engine.rolling_std(lr.to_numpy(), 60), index=df.index)
+    for k in range(1, SEQ_DAYS + 1):
+        f[f"seq_d{k}"] = (lr.shift(k - 1) / vol60).clip(-6, 6)
+    for j in range(1, SEQ_MONTHS + 1):
+        f[f"seq_m{j}"] = np.log(ac.shift(20 * (j - 1)) / ac.shift(20 * j))
 
     cx = ctx.reindex(df.index)
     f["rel_str_20"] = f["ret_20"] - cx["idx_ret_20"]
@@ -295,7 +308,7 @@ def build_dataset(store, progress=print):
     data["predict_row"] = feat_ok & (data["date"] == last)
 
     keep = data["train_ok"] | data["predict_row"]
-    cols = ["date", "ticker", "market"] + FEATURES + LABELS + \
+    cols = ["date", "ticker", "market"] + FEATURES + SEQ_COLS + LABELS + \
         ["turnover_20", "idx_open_suspect", "open_suspect", "train_ok", "predict_row"]
     out = data.loc[keep, cols].sort_values(["date", "market", "ticker"]).reset_index(drop=True)
     return out

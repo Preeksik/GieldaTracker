@@ -124,6 +124,19 @@ python -m lab.swing run --szczegoly
 - Nowe cechy długoterminowe: zwrot z 3 i 6 miesięcy oraz momentum 12-1 (zwrot z roku bez ostatniego miesiąca).
 - Punkt odniesienia: wszystkie spółki z listy kupione po równo i trzymane.
 
+## Sieć neuronowa (zawodnik napisany od zera)
+
+`lab/neural.py` to mała sieć neuronowa zbudowana od podstaw w numpy, bez gotowych bibliotek do sieci.
+Startuje w `python -m lab.swing run` jako „sieć neuronowa”, na tych samych zasadach co reszta.
+
+- **Co widzi:** 20 naszych wskaźników oraz surowy przebieg ceny, czyli każdy z ostatnich 20 dni (w skali
+  zmienności spółki) i każdy z ostatnich 12 miesięcy. Sama szuka wzorców w kształcie wykresu.
+- **Budowa:** 52 wejścia → 32 neurony → 16 neuronów → 1 wynik (szansa, że spółka pobije przeciętną).
+  Uczenie przez backpropagation i Adam, kara za duże wagi, średnia z 3 sieci o różnym starcie.
+- **Testy:** pochodne liczone przez sieć są porównywane z liczonymi „na piechotę”, sieć musi nauczyć się
+  wzorca, którego regresja liniowa nie widzi, i znaleźć ukryty sygnał w teście na ślepo.
+- Po aktualizacji przebuduj tabelę cech (`python -m lab.features build`), bo doszły kolumny z przebiegiem cen.
+
 ## Jak czytać `status`
 
 - **Bez danych w Yahoo**: symbolu nie ma w Yahoo (spółka zniknęła z giełdy albo zmieniła symbol).

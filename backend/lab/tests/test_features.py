@@ -80,8 +80,9 @@ def test_no_lookahead(tmp_path, dataset):
     t = dates()[330]
     cut = F.build_dataset(make_store(tmp_path / "cut", edit=lambda n, df: df[df.index <= t]),
                           progress=lambda *_: None)
-    a = dataset[dataset["date"] == t].set_index("ticker")[F.FEATURES].sort_index()
-    b = cut[cut["date"] == t].set_index("ticker")[F.FEATURES].sort_index()
+    cols = F.FEATURES + F.SEQ_COLS
+    a = dataset[dataset["date"] == t].set_index("ticker")[cols].sort_index()
+    b = cut[cut["date"] == t].set_index("ticker")[cols].sort_index()
     assert len(a) == len(PL) + len(US) and list(a.index) == list(b.index)
     assert np.allclose(a.to_numpy(), b.to_numpy(), rtol=0, atol=1e-12, equal_nan=True)
     # dzień t w uciętych danych to "wiersz do prognozy" - bez etykiety
@@ -271,3 +272,15 @@ def test_horizon_label_dropped_when_suspended_inside(tmp_path):
     # okres trzymania 20 sesji obejmujący zawieszenie -> bez etykiety; daleko przed - jest
     assert s6.loc[s6.index[(s6.index >= d[295]) & (s6.index < d[309])], "y_h20"].isna().all()
     assert s6.loc[s6.index[s6.index < d[280]], "y_h20"].notna().any()
+
+
+def test_sequence_columns(tmp_path, dataset):
+    """Surowy przebieg dla sieci: seq_d1 = dzisiejszy zwrot / zmienność 60 dni, seq_m2 = zwrot sprzed miesiąca."""
+    raw = make_store(tmp_path / "s").load("S04.WA")
+    row = dataset[(dataset["ticker"] == "S04.WA") & dataset["train_ok"]].iloc[30]
+    i = raw.index.get_loc(row["date"])
+    ac = raw["adj_close"]
+    lr = np.log(ac / ac.shift(1))
+    assert row["seq_d1"] == pytest.approx(lr.iloc[i] / lr.iloc[i - 59:i + 1].std(), rel=1e-9)
+    assert row["seq_d3"] == pytest.approx(lr.iloc[i - 2] / lr.iloc[i - 59:i + 1].std(), rel=1e-9)
+    assert row["seq_m2"] == pytest.approx(np.log(ac.iloc[i - 20] / ac.iloc[i - 40]), abs=1e-12)
