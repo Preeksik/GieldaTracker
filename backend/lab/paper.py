@@ -263,6 +263,8 @@ def main(argv=None):
     r.add_argument("--kapital", type=float, default=S.CAPITAL, help="kwota na papierze (domyślnie 20 000 zł)")
     sub.add_parser("status", help="tylko podgląd dziennika (bez nowych typów)")
     args = p.parse_args(argv)
+    import logging
+    logging.getLogger("yfinance").setLevel(logging.CRITICAL)   # bez komunikatów o ^WIG20 itp. - nie mają znaczenia
 
     from .data_store import MarketStore
     store = MarketStore()
