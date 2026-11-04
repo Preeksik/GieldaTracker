@@ -258,7 +258,9 @@ def run(store, update=True, out=print, path=None, capital=S.CAPITAL, ds=None):
             out("  (bieżący miesiąc jest jeszcze otwarty - liczony do ostatniej sesji, zmieni się do jego końca)")
         if not any(s.get("status") == "rozliczony" for s in journal["sets"]):
             out("  Żaden pełny miesiąc nie jest jeszcze rozliczony.")
-    elif not new_days:
+    elif journal["sets"]:
+        out("Wyników jeszcze nie ma - portfel czeka na kupno (zamknięcie najbliższej sesji po dniu wskazania).")
+    else:
         out("Dziennik jest pusty.")
 
     back_days = [d for d, b, _ in new_days if b]
