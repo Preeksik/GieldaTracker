@@ -3745,3 +3745,14 @@ setup_review(
     disclaimer=DISCLAIMER_RULE,
     ticker_rule=ticker_line_rule("PLN"),
 )
+from portfolio_clear import setup_portfolio_clear
+setup_portfolio_clear(
+    app,
+    load_portfolio=lambda: load_portfolio(),
+    save_portfolio=lambda e: save_portfolio(e),
+    load_sales=lambda: load_sales(),
+    save_sales=lambda s: save_sales(s),
+    load_history=lambda: load_history(),
+    save_history=lambda h: save_history(h),
+    snapshot_fn=lambda: write_safety_snapshot(reason="przed-wyczyszczeniem"),
+)

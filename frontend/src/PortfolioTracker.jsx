@@ -2,6 +2,7 @@ import { useState, useEffect, Fragment } from 'react'
 import PortfolioHistoryChart from './PortfolioHistoryChart'
 import MarkdownView from './MarkdownView'
 import TickerSearch from './TickerSearch'
+import ClearPortfolio from './ClearPortfolio'
 import { StepLoader, TableSkeleton, InlineLoader } from './Loader'
 
 const API_URL = 'http://127.0.0.1:8000'
@@ -728,6 +729,8 @@ function PortfolioTracker() {
         )}
 
         {xtbError && <div style={{ color: 'var(--down)', marginTop: '10px' }}>{xtbError}</div>}
+
+        <ClearPortfolio onCleared={refreshAll} />
       </div>
 
       {importLoading && (
