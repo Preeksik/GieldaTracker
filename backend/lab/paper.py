@@ -64,36 +64,63 @@ def save_journal(j, path=None):
 # TYPY
 # ============================================================================
 
-def today_rows(ds, market="PL"):
-    """Spółki do oceny na dziś: ostatnia sesja, komplet cech, płynniejsza połowa - jak w testach."""
-    d = ds[(ds["market"] == market) & ds["predict_row"]].copy()
+def rows_on(ds, day, market="PL"):
+    """Spółki do oceny w dniu `day`: komplet cech, płynniejsza połowa tego dnia - jak w testach."""
+    d = ds[(ds["market"] == market) & (ds["date"] == day) & (ds["train_ok"] | ds["predict_row"])].copy()
     if d.empty:
-        return d, None
-    day = d["date"].max()
-    d = d[d["date"] == day]
+        return d
     med = d["turnover_20"].median()
     d = d[d["turnover_20"] >= med].copy()
     for f in M.STOCK_FEATURES:
         d[f] = d[f].rank(pct=True) - 0.5
     for c in [c for c in F.SEQ_COLS if c.startswith("seq_m") and c in d.columns]:
         d[c] = d[c].rank(pct=True) - 0.5
-    return d, day
+    return d
 
 
-def make_picks(ds, last_close, capital):
-    """Nowe typy A1/A2/A3. last_close: ticker -> ostatnia cena (do pominięcia zbyt drogich akcji)."""
+def make_picks(ds, day, closes, capital, calendar):
+    """
+    Typy A1/A2/A3 na dzień `day`, wyłącznie z danych znanych tego dnia: nauka tylko na wierszach,
+    których wynik za 20 sesji był już znany (dzień <= day - 21 sesji). Dzięki temu typy
+    "dorobione wstecz" są takie same, jak gdyby program uruchomiono dokładnie w tamtym dniu.
+    closes: ticker -> ceny zamknięcia (do pominięcia akcji zbyt drogich na przydział).
+    """
+    idx = calendar.searchsorted(day)
+    if idx - (H + 1) < 0:
+        return None
     train = S.prepare_h(ds, H, include_vault=True)
-    today, day = today_rows(ds)
-    if today.empty or len(today) < K:
-        return None, day
+    train = train[train["date"] <= calendar[idx - (H + 1)]]
+    today = rows_on(ds, day)
+    if train.empty or len(today) < K:
+        return None
     slot = capital / K
     picks = {}
     for key in V.FROZEN:
         model = V.make_model(key).fit(train)
         scored = today.assign(score=model.score(today)).sort_values(["score", "ticker"], ascending=[False, True])
-        ok = [t for t in scored["ticker"] if last_close.get(t, np.inf) <= slot]
+        ok = []
+        for t in scored["ticker"]:
+            px = closes.get(t)
+            price = px.get(day, np.nan) if px is not None else np.nan
+            if pd.notna(price) and price <= slot:
+                ok.append(t)
         picks[key] = ok[:K]
-    return picks, day
+    return picks
+
+
+def schedule(journal, calendar):
+    """Dni zmiany składu: pierwszy dzień gry + co 20 sesji. Brakujące (pominięte) dni do dorobienia."""
+    if not journal["sets"]:
+        return [calendar[-1]] if len(calendar) else []
+    d0 = pd.Timestamp(min(s["decision_date"] for s in journal["sets"]))
+    i0 = calendar.searchsorted(d0)
+    have = {s["decision_date"] for s in journal["sets"]}
+    out, i = [], i0 + H
+    while i < len(calendar):
+        if str(calendar[i].date()) not in have:
+            out.append(calendar[i])
+        i += H
+    return out
 
 
 # ============================================================================
@@ -194,6 +221,25 @@ def run(store, update=True, out=print, path=None, capital=S.CAPITAL, ds=None):
     prices = load_prices(store, pl)
     calendar = pd.DatetimeIndex(sorted(ds.loc[ds["market"] == "PL", "date"].unique()))
     journal = load_journal(path)
+
+    # 1) nowe typy wg stałego harmonogramu - także "dorobione wstecz", jeśli dzień zmiany minął
+    closes = {}
+    for t in pl:
+        df = store.load(t)
+        if df is not None:
+            closes[t] = df["close"]
+    new_days, created = [], datetime.now().isoformat(timespec="seconds")
+    for day in schedule(journal, calendar):
+        picks = make_picks(ds, day, closes, capital, calendar)
+        if picks is None:
+            continue
+        back = day != calendar[-1]
+        for k, tick in picks.items():
+            journal["sets"].append({"strategy": k, "decision_date": str(day.date()), "tickers": tick,
+                                    "created_at": created, "capital": capital, "backfilled": back})
+        new_days.append((day, back, picks))
+
+    # 2) rozliczenie wszystkiego, co już się wydarzyło
     settle(journal, prices, calendar, pl)
 
     out("")
@@ -208,48 +254,38 @@ def run(store, update=True, out=print, path=None, capital=S.CAPITAL, ds=None):
             verdict = "lepiej" if v["value"] > v["hold"] else "gorzej"
             out(f"  {k} {V.FROZEN[k]['opis']:<36} {B.zl(v['value']):>8} zł   (trzymanie: {B.zl(v['hold'])} zł, "
                 f"{verdict}; miesiące lepsze od trzymania: {v['better']}/{v['periods']})")
-        closed = [s for s in journal["sets"] if s.get("status") == "rozliczony"]
-        openp = [s for s in journal["sets"] if s.get("status") == "otwarty"]
-        if openp:
-            out("  (ostatni okres jest jeszcze otwarty - liczony do ostatniej sesji, zmieni się do końca miesiąca)")
-        if not closed:
+        if any(s.get("status") == "otwarty" for s in journal["sets"]):
+            out("  (bieżący miesiąc jest jeszcze otwarty - liczony do ostatniej sesji, zmieni się do jego końca)")
+        if not any(s.get("status") == "rozliczony" for s in journal["sets"]):
             out("  Żaden pełny miesiąc nie jest jeszcze rozliczony.")
-    else:
-        out("Dziennik jest pusty - to pierwsze typy.")
+    elif not new_days:
+        out("Dziennik jest pusty.")
+
+    back_days = [d for d, b, _ in new_days if b]
+    if back_days:
+        out("")
+        out("Dorobiono wstecz typy z: " + ", ".join(str(d.date()) for d in back_days) +
+            " - program nie był uruchomiony w dniu zmiany składu,")
+        out("więc typy policzono tak, jak wyglądałyby wtedy (tylko z danych do tamtego dnia).")
 
     last = max((s["decision_date"] for s in journal["sets"]), default=None)
-    day_now = calendar[-1] if len(calendar) else None
-    due = last is None or (day_now is not None and
-                           calendar.searchsorted(day_now, side="right") - calendar.searchsorted(pd.Timestamp(last), side="right") >= H)
     out("")
-    if not due:
-        passed = calendar.searchsorted(day_now, side="right") - calendar.searchsorted(pd.Timestamp(last), side="right")
-        out(f"Nowe typy będą za {H - passed} sesji (ostatnie wskazanie: {last}). Bieżący skład:")
-        for s in sorted([s for s in journal["sets"] if s["decision_date"] == last], key=lambda s: s["strategy"]):
-            r = s.get("return")
-            rtxt = f"{r:+.1%} od kupna" if r is not None else "czeka na kupno"
-            out(f"  {s['strategy']}: {', '.join(s['tickers'])}   ({rtxt})")
+    if last is None:
+        out("Za mało danych, żeby wskazać spółki.")
         save_journal(journal, path)
         return journal
-
-    last_close = {t: float(p.dropna().iloc[-1]) for t, p in
-                  ((t, store.load(t)["close"]) for t in prices) if len(p.dropna())}
-    picks, day = make_picks(ds, last_close, capital)
-    if picks is None:
-        out("Za mało danych na dziś, żeby wskazać spółki.")
-        save_journal(journal, path)
-        return journal
-    created = datetime.now().isoformat(timespec="seconds")
-    for k, tick in picks.items():
-        journal["sets"].append({"strategy": k, "decision_date": str(day.date()), "tickers": tick,
-                                "created_at": created, "capital": capital})
-    out(f"NOWE TYPY na podstawie sesji {day.date()} (kupno na zamknięciu NASTĘPNEJ sesji, po równo, "
+    passed = calendar.searchsorted(calendar[-1], side="right") - calendar.searchsorted(pd.Timestamp(last), side="right")
+    title = "NOWE TYPY" if new_days and not new_days[-1][1] else "Bieżący skład"
+    out(f"{title} - wskazanie z sesji {last} (kupno na zamknięciu następnej sesji, po równo, "
         f"{B.zl(capital)} zł -> ok. {B.zl(capital / K)} zł na spółkę):")
-    for k, tick in picks.items():
-        out(f"  {k} {V.FROZEN[k]['opis']}:")
-        out(f"     {', '.join(tick)}")
-    out(f"Następna zmiana składu: za {H} sesji (ok. miesiąc). Uruchom wtedy znowu: python -m lab.paper run")
-    out("To tylko zapis na papierze - nic nie jest kupowane. Spółki zbyt drogie na przydział zostały pominięte.")
+    for s in sorted([s for s in journal["sets"] if s["decision_date"] == last], key=lambda s: s["strategy"]):
+        r = s.get("return")
+        rtxt = f"{r:+.1%} od kupna" if r is not None else "czeka na kupno"
+        out(f"  {s['strategy']} {V.FROZEN[s['strategy']]['opis']}: ({rtxt})")
+        out(f"     {', '.join(s['tickers'])}")
+    out(f"Następna zmiana składu za {H - passed} sesji. Możesz uruchomić program później - "
+        "zaległe miesiące rozliczy i dorobi sam.")
+    out("To tylko zapis na papierze - nic nie jest kupowane. Spółki zbyt drogie na przydział są pomijane.")
     out(f"Dziennik: {path or journal_path()}")
     save_journal(journal, path)
     return journal

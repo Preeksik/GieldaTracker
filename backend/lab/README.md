@@ -162,6 +162,9 @@ python -m lab.paper status       # sam podgląd wyników
   wskazuje nowe 10 spółek dla A1, A2 i A3, czyli strategii, które przeszły sejf. Bez żadnych zmian w strategiach.
 - Typy „kupujemy” na zamknięciu sesji po dniu wskazania, a „sprzedajemy” na zamknięciu sesji po następnym
   wskazaniu, z kosztem 0.10% od każdej zmienionej spółki. Punkt odniesienia: wszystkie spółki po równo.
+- **Stały harmonogram:** zmiana składu co dokładnie 20 sesji od pierwszych typów. Jeśli uruchomisz program później,
+  sam rozliczy zaległe miesiące i dorobi typy z pominiętych dni, licząc je tylko z danych do tamtego dnia
+  (w dzienniku oznaczone jako `backfilled`). Nie musisz trafiać w konkretny dzień.
 - Spółki zbyt drogie na przydział (domyślnie 20 000 zł / 10 spółek) są pomijane. Zmiana: `--kapital 10000`.
 - Dziennik: `data/lab/paper_journal.json`. **Nic nie jest kupowane** - laboratorium nie łączy się z XTB.
 
