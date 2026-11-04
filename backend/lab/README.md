@@ -151,6 +151,20 @@ python -m lab.vault run --szczegoly
 - Wynik jest pieczętowany w `data/lab/vault.json`. Jeśli strategie zostaną zmienione i sejf otwarty ponownie,
   raport ostrzega, że to już nie jest uczciwy test.
 
+## Gra na papierze
+
+```powershell
+python -m lab.paper run          # raz na jakiś czas, najlepiej wieczorem po sesji
+python -m lab.paper status       # sam podgląd wyników
+```
+
+- Jedno polecenie: dociąga notowania, przebudowuje cechy, rozlicza poprzednie typy i co 20 sesji (ok. miesiąc)
+  wskazuje nowe 10 spółek dla A1, A2 i A3, czyli strategii, które przeszły sejf. Bez żadnych zmian w strategiach.
+- Typy „kupujemy” na zamknięciu sesji po dniu wskazania, a „sprzedajemy” na zamknięciu sesji po następnym
+  wskazaniu, z kosztem 0.10% od każdej zmienionej spółki. Punkt odniesienia: wszystkie spółki po równo.
+- Spółki zbyt drogie na przydział (domyślnie 20 000 zł / 10 spółek) są pomijane. Zmiana: `--kapital 10000`.
+- Dziennik: `data/lab/paper_journal.json`. **Nic nie jest kupowane** - laboratorium nie łączy się z XTB.
+
 ## Jak czytać `status`
 
 - **Bez danych w Yahoo**: symbolu nie ma w Yahoo (spółka zniknęła z giełdy albo zmieniła symbol).
@@ -177,5 +191,5 @@ python -m lab.vault run --szczegoly
 3. ✅ Cechy i etykiety
 4. ✅ Modele i walk-forward
 5. ✅ Backtest z kosztami XTB
-6. Sejf ✅ (jednorazowo), potem gra na papierze
+6. Sejf ✅, gra na papierze ✅ (trwa)
 7. Zakładka w aplikacji
