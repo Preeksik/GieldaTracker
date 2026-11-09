@@ -41,6 +41,12 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Laboratorium',
+    items: [
+      { key: 'quantpulse', icon: '⚗', label: 'QuantPulse' },
+    ],
+  },
+  {
     label: 'System',
     items: [
       { key: 'broker', icon: '⚖', label: 'Broker i koszty' },

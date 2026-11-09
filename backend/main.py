@@ -3756,3 +3756,7 @@ setup_portfolio_clear(
     save_history=lambda h: save_history(h),
     snapshot_fn=lambda: write_safety_snapshot(reason="przed-wyczyszczeniem"),
 )
+
+# QuantPulse - zakładka z grą na papierze: /api/lab/*, rozliczanie w tle w dni robocze o 18:30
+from lab_api import setup_lab
+setup_lab(app, scheduler=scheduler)

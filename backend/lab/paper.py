@@ -318,11 +318,19 @@ def main(argv=None):
         for k, v in summary(j).items():
             print(f"{k}: {B.zl(v['value'])} zł z 10 000 zł (trzymanie {B.zl(v['hold'])} zł), okresów: {v['periods']}")
         return 0
-    if args.szybko:
-        ds = F.load_dataset()
-        run(store, update=False, ds=ds, capital=args.kapital)
-    else:
-        run(store, update=True, capital=args.kapital)
+    if args.kapital != S.CAPITAL:            # inna kwota = tylko podgląd w terminalu, bez raportu dla aplikacji
+        ds = F.load_dataset() if args.szybko else None
+        run(store, update=not args.szybko, ds=ds, capital=args.kapital)
+        return 0
+    # Przez paper_report: blokada (żeby nie liczyć naraz z aplikacją), kopia dziennika
+    # i świeży raport dla zakładki QuantPulse. W terminalu wolno zacząć nową grę.
+    from . import paper_report as R
+    try:
+        R.refresh(store, update=not args.szybko, trigger="terminal", out=print, require_game=False,
+                  ds=F.load_dataset() if args.szybko else None)
+    except R.Busy as e:
+        print(e)
+        return 1
     return 0
 
 

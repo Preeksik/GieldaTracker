@@ -16,6 +16,7 @@ import Advisor from './Advisor'
 import BrokerPanel from './BrokerPanel'
 import JournalPanel from './JournalPanel'
 import RadarPanel from './RadarPanel'
+import QuantPulsePanel from './QuantPulsePanel'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -293,6 +294,7 @@ function App() {
           {activeTab === 'dziennik' && <JournalPanel />}
           {activeTab === 'broker' && <BrokerPanel />}
           {activeTab === 'automat' && <AutomationPanel />}
+          {activeTab === 'quantpulse' && <QuantPulsePanel />}
         </main>
       </div>
     </div>
