@@ -79,3 +79,40 @@ def test_schedule_slots():
     assert L.needs_catch_up("2026-11-06T18:40:00", mon_19)            # piątek był, poniedziałku nie
     assert not L.needs_catch_up("2026-11-09T18:45:00", mon_19)
     assert not L.needs_catch_up("2026-11-13T18:45:00", sat)            # weekend - nic nie przepadło
+
+
+def test_live_check_is_cached_and_never_writes(tmp_path):
+    lab = tmp_path / "lab"
+    lab.mkdir()
+    jp = lab / "paper_journal.json"
+    jp.write_text(json.dumps({"sets": [{"strategy": "A1", "tickers": ["X.WA"]}]}), encoding="utf-8")
+    before = jp.read_text(encoding="utf-8")
+    calls = []
+
+    def fake_live(journal):
+        calls.append(1)
+        return {"last_session": "2026-11-09", "strategies": []}
+
+    app = FastAPI()
+    L.setup_lab(app, refresh_fn=lambda t: None, lab_dir=str(lab), live_fn=fake_live)
+    c = TestClient(app)
+    assert c.get("/api/lab/paper/live").json()["cached"] is False
+    assert c.get("/api/lab/paper/live").json()["cached"] is True             # w ciągu minuty - bez Yahoo
+    assert c.get("/api/lab/paper/live?fresh=true").json()["cached"] is False
+    assert len(calls) == 2 and jp.read_text(encoding="utf-8") == before
+    assert sorted(os.listdir(lab)) == ["paper_journal.json"]                  # żadnych nowych plików
+
+
+def test_live_check_blocked_without_game_and_reports_yahoo_errors(tmp_path):
+    c, _, _, _ = make_app(tmp_path, game=False)
+    assert c.get("/api/lab/paper/live").status_code == 409
+
+    def boom(journal):
+        raise RuntimeError("timeout")
+    lab = tmp_path / "lab2"
+    lab.mkdir()
+    (lab / "paper_journal.json").write_text(json.dumps({"sets": [{"strategy": "A1"}]}), encoding="utf-8")
+    app = FastAPI()
+    L.setup_lab(app, refresh_fn=lambda t: None, lab_dir=str(lab), live_fn=boom)
+    r = TestClient(app).get("/api/lab/paper/live")
+    assert r.status_code == 502 and "timeout" in r.json()["detail"]

@@ -40,7 +40,7 @@ zwykłe/IKE/IKZE, broker XTB), z analizami AI (Gemini) i laboratorium **QuantPul
   `var(--radius-sm)`, `var(--text-dim)`), klasy `hl-btn`, `hl-panel`, `hl-table`, `hl-xtb-*`. Po zmianie portfela
   wołaj `refreshAll()` (odświeża też wykres przez `historyVersion`).
 - Liczby w analizach liczy **kod**, AI tylko je komentuje (tak działa `review.py`).
-- Testy laboratorium: `python -m pytest lab\tests -q` (z `backend`). Obecnie 80 testów (2 pomijane bez C++). Testy aplikacji: `python -m pytest tests_app -q`.
+- Testy laboratorium: `python -m pytest lab\tests -q` (z `backend`). Obecnie 85 testów (2 pomijane bez C++). Testy aplikacji: `python -m pytest tests_app -q`.
 
 ## Bezpieczeństwo i zasady (twarde)
 
@@ -80,7 +80,7 @@ Uruchamianie: `python -m lab.paper run` (zaległe miesiące program dorabia sam,
 **Zakładka QuantPulse** (grupa „Laboratorium”, `QuantPulsePanel.jsx`) robi to bez terminala: `backend/lab_api.py`
 (`/api/lab/paper`, `/api/lab/paper/run`, automat w dni robocze 18:30 + zaległe po starcie backendu) woła
 `lab/paper_report.refresh()` → blokada `paper.lock`, kopia `paper_journal.backup.json`, raport `paper_status.json`
-(zakładka tylko go czyta). Przy pustym dzienniku (laptop) automat i przycisk nic nie robią - nie zakładają drugiej gry.
+(zakładka tylko go czyta). Przycisk „Sprawdź na dziś” (`LiveCheck.jsx`, `/api/lab/paper/live`, `lab/paper_live.py`): świeże ceny z Yahoo w kilka sekund, cache 60 s, NIC nie zapisuje. Przy pustym dzienniku (laptop) automat i przycisk nic nie robią - nie zakładają drugiej gry.
 Pierwsze typy: A1 BNP, CAR, ALE, MBK, KTY, OPL, BDX, BHW, ALR, PCO · A2 ASB, ALE, PCO, VOX, PGE, ZAB, CAR, DNP, MBK, ACP ·
 A3 XTB, PKN, CAR, PCO, ASB, GPW, SNT, PEO, ZAB, DOM.
 

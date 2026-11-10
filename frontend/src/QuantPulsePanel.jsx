@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createChart, LineSeries, LineStyle } from 'lightweight-charts'
+import LiveCheck from './LiveCheck'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -327,6 +328,8 @@ export default function QuantPulsePanel() {
           {rep && ' Poniżej ostatni zapisany raport.'}
         </div>
       )}
+
+      {data.game && <LiveCheck />}
 
       {data.game && !rep && (
         <div className="hl-panel" style={{ padding: 24, marginBottom: 16, color: 'var(--text-muted)', fontSize: 14 }}>

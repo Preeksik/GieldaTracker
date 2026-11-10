@@ -4,6 +4,7 @@ HossaLab - zakładka QuantPulse: gra na papierze bez terminala.
 Endpointy:
     GET  /api/lab/paper        gotowy raport (typy A1/A2/A3, wynik od startu, historia, wykres) - tylko odczyt pliku
     POST /api/lab/paper/run    "Rozlicz teraz" - to samo co `python -m lab.paper run`, w tle
+    GET  /api/lab/paper/live   "Sprawdź na dziś" - świeże ceny z Yahoo, kilka sekund, NIC nie zapisuje
 
 Automat: w dni robocze o 18:30 (po sesji GPW, z zapasem na notowania w Yahoo).
 Jeśli backend był wtedy wyłączony, rozliczenie rusza kilka minut po najbliższym starcie.
@@ -27,6 +28,7 @@ logger = logging.getLogger("gpw-api")
 
 AUTO_HOUR, AUTO_MINUTE = 18, 30
 CATCH_UP_DELAY_MIN = 3
+LIVE_CACHE_SECONDS = 60          # podgląd na dziś: nie pytamy Yahoo częściej niż raz na minutę
 SCHEDULE_TEXT = f"w dni robocze o {AUTO_HOUR}:{AUTO_MINUTE:02d}"
 
 
@@ -72,9 +74,10 @@ def needs_catch_up(last_ok, now):
         return True
 
 
-def setup_lab(app, scheduler=None, refresh_fn=None, lab_dir=None, now_fn=datetime.now):
+def setup_lab(app, scheduler=None, refresh_fn=None, lab_dir=None, now_fn=datetime.now, live_fn=None):
     """
     refresh_fn(trigger) - pełne rozliczenie; domyślnie lab.paper_report.refresh. W testach podmieniane.
+    live_fn(journal) - podgląd na dziś; domyślnie lab.paper_live.live_check.
     lab_dir - folder data/lab (domyślnie z paths.py).
     """
     from fastapi import HTTPException
@@ -162,6 +165,36 @@ def setup_lab(app, scheduler=None, refresh_fn=None, lab_dir=None, now_fn=datetim
             raise HTTPException(status_code=409, detail="Rozliczanie już trwa - poczekaj, aż się skończy.")
         threading.Thread(target=run_once, args=("przycisk",), daemon=True, name="quantpulse-paper").start()
         return {"started": True}
+
+    # --- Szybki podgląd "na dziś" (lab/paper_live.py): świeże ceny, nic nie zapisuje ---
+    live_cache = {"at": None, "data": None}
+    live_guard = threading.Lock()
+
+    def default_live(journal):
+        import logging as _l
+        _l.getLogger("yfinance").setLevel(_l.CRITICAL)
+        from lab.paper_live import live_check
+        return live_check(journal)
+
+    do_live = live_fn or default_live
+
+    @app.get("/api/lab/paper/live")
+    def lab_paper_live(fresh: bool = False):
+        journal = _read(journal_file) or {}
+        if not journal.get("sets"):
+            raise HTTPException(status_code=409, detail=(
+                "Na tym komputerze nie ma gry na papierze - jest prowadzona na komputerze stacjonarnym."))
+        with live_guard:                       # dwa kliknięcia naraz = jedno pobranie
+            at = live_cache["at"]
+            if not fresh and at and (datetime.now() - at).total_seconds() < LIVE_CACHE_SECONDS:
+                return {**live_cache["data"], "cached": True}
+            try:
+                data = do_live(journal)
+            except Exception as e:
+                logger.exception("QuantPulse: podgląd na dziś nie powiódł się")
+                raise HTTPException(status_code=502, detail=f"Nie udało się pobrać cen z Yahoo: {e}")
+            live_cache.update(at=datetime.now(), data=data)
+            return {**data, "cached": False}
 
     app.state.lab_run_once = run_once        # do testów
 
