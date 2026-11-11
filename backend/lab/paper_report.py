@@ -185,7 +185,29 @@ def equity_curve(journal, prices, calendar, all_tickers):
     return [{"date": str(d.date()), **{k: _clean(df.at[d, k]) for k in df.columns}} for d in df.index]
 
 
-def build_report(journal, prices, calendar, all_tickers):
+def prices_last_session(store, tickers):
+    """
+    Najnowsza sesja, dla której Yahoo zwróciło jakiekolwiek notowania (także niepełne), i lista spółek,
+    którym w tym dniu brakuje ceny zamknięcia. Gdy to jest później niż ostatnia rozliczona sesja,
+    zakładka ostrzega: wynik nie obejmuje najnowszych sesji (zwykle naprawia się przy następnym pobraniu).
+    """
+    last, broken = None, []
+    frames = {}
+    for t in tickers:
+        df = store.load(t)
+        if df is not None and len(df):
+            frames[t] = df
+            d = df.index.max()
+            last = d if last is None or d > last else last
+    if last is None:
+        return None, []
+    for t, df in frames.items():
+        if last in df.index and pd.isna(df.loc[last, "close"]):
+            broken.append(t)
+    return str(pd.Timestamp(last).date()), sorted(broken)
+
+
+def build_report(journal, prices, calendar, all_tickers, prices_last=None, incomplete=None):
     """Wszystko, co pokazuje zakładka QuantPulse. Bez pobierania i bez nauki - tylko liczenie z gotowych danych."""
     sets = journal.get("sets") or []
     summ = P.summary(journal)
@@ -231,6 +253,8 @@ def build_report(journal, prices, calendar, all_tickers):
     return {
         "started": min((s["decision_date"] for s in sets), default=None),
         "last_session": str(last_day.date()) if last_day is not None else None,
+        "prices_last_session": prices_last,          # do kiedy Yahoo ma notowania (porównanie z last_session)
+        "incomplete_tickers": incomplete or [],      # spółki bez ceny zamknięcia w tym dniu
         "last_decision": last_decision,
         "sessions_to_next": sessions_left,
         "every_sessions": P.H, "per_strategy": P.K, "start_value": START_VALUE,
@@ -307,7 +331,11 @@ def refresh(store=None, update=True, trigger="terminal", out=None, journal=None,
 
         pl = sorted(ds.loc[ds["market"] == "PL", "ticker"].unique())
         calendar = pd.DatetimeIndex(sorted(ds.loc[ds["market"] == "PL", "date"].unique()))
-        status["report"] = build_report(j, P.load_prices(store, pl), calendar, pl)
+        p_last, broken = prices_last_session(store, pl)
+        if p_last and calendar is not None and len(calendar) and p_last > str(calendar[-1].date()):
+            say(f"Uwaga: notowania sięgają {p_last}, ale wynik jest policzony do {calendar[-1].date()} - "
+                f"Yahoo zwróciło niepełne dane ({len(broken)} spółek bez ceny zamknięcia).")
+        status["report"] = build_report(j, P.load_prices(store, pl), calendar, pl, p_last, broken)
         finished = datetime.now().isoformat(timespec="seconds")
         status["last_run"] = {"started": started, "finished": finished, "ok": True, "trigger": trigger,
                               "error": None, "log": lines[-80:]}

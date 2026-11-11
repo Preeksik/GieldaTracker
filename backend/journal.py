@@ -45,10 +45,16 @@ BENCHMARKS = [
 
 # Po ilu dniach od porady da się ją sensownie ocenić. Wcześniej wynik to szum -
 # porada krótkoterminowa po 3 dniach, a długoterminowa po miesiącu nic nie mówią.
-HORIZON_DAYS = {"krotki": 60, "sredni": 365, "dlugi": 1095, None: 90}
-HORIZON_LABEL = {"krotki": "krótki", "sredni": "średni", "dlugi": "długi"}
+HORIZON_DAYS = {"krotki": 60, "sredni": 365, "dlugi": 1095, None: 90,
+                # "Moje pomysły" - termin wybierany ręcznie
+                "1m": 30, "3m": 91, "6m": 182, "1r": 365}
+HORIZON_LABEL = {"krotki": "krótki", "sredni": "średni", "dlugi": "długi",
+                 "1m": "1 miesiąc", "3m": "3 miesiące", "6m": "6 miesięcy", "1r": "rok"}
+IDEA_HORIZONS = ("1m", "3m", "6m", "1r")
 
-SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Przegląd portfela", "pozycja": "Analiza pozycji"}
+SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Przegląd portfela", "pozycja": "Analiza pozycji",
+           "moje": "Mój pomysł"}
+IDEA = "moje"       # własne przeczucia użytkownika - liczone OSOBNO od porad AI
 
 PRICE_TTL = 600
 
@@ -67,7 +73,7 @@ _entries = None
 _price_cache = {}   # ticker -> (ts, cena)
 
 # Wstrzykiwane przez setup_journal - potrzebne też funkcjom zapisu wołanym z innych modułów.
-_deps = {"price_fn": None, "snapshot_fn": None, "model_fn": None, "fx_fn": None}
+_deps = {"price_fn": None, "snapshot_fn": None, "model_fn": None, "fx_fn": None, "name_fn": None, "currency_fn": None}
 
 
 # ============================================================================
@@ -186,7 +192,7 @@ def _ticker_row(t, added_at=None):
     return row
 
 
-def journal_save(source, question, answer, tickers=None, brief=None):
+def journal_save(source, question, answer, tickers=None, brief=None, with_model=True):
     """
     tickers: [{"ticker", "name", "price", "currency", "stance"?, "amount"?, "amount_currency"?,
                "amount_pln"?}] - ceny Z CHWILI PORADY. stance: kup/trzymaj/sprzedaj/unikaj/neutralnie.
@@ -209,7 +215,7 @@ def journal_save(source, question, answer, tickers=None, brief=None):
             "outcome": None,        # trafiona | chybiona | czesciowo | None
             "pinned": False,
         }
-        if _deps["model_fn"]:
+        if with_model and _deps["model_fn"]:
             try:
                 entry["model"] = _deps["model_fn"]()
             except Exception:
@@ -290,10 +296,15 @@ def evaluate(entry):
     needed = HORIZON_DAYS.get(horizon, HORIZON_DAYS[None])
 
     tickers = entry.get("tickers") or []
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        now_prices = list(pool.map(lambda t: _price(t["ticker"]), tickers))
-
-    bench_now = _benchmarks_now()
+    final = entry.get("final")
+    if final:
+        # Pomysł po terminie: wynik z dnia terminu, a nie z dnia, w którym akurat zaglądasz
+        now_prices = [final["prices"].get(t["ticker"]) for t in tickers]
+        bench_now = final.get("benchmarks") or {}
+    else:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            now_prices = list(pool.map(lambda t: _price(t["ticker"]), tickers))
+        bench_now = _benchmarks_now()
     bench = {}
     for b in BENCHMARKS:
         then = (entry.get("benchmarks") or {}).get(b["key"])
@@ -331,6 +342,8 @@ def evaluate(entry):
         "days": days,
         "horizon_days": needed,
         "mature": days >= needed * 0.25,   # od 1/4 horyzontu wynik zaczyna cokolwiek mówić
+        "due": days >= needed,             # termin minął (dla "Moich pomysłów" - wynik zamrożony)
+        "final_at": final.get("at") if final else None,
         "rows": rows,
         "avg_change_pct": avg,             # wynik porady (z kierunkiem zalecenia)
         "weighted": weighted,
@@ -341,9 +354,46 @@ def evaluate(entry):
     }
 
 
+def finalize_due_ideas():
+    """
+    "Moje pomysły", którym minął termin: zapisuje ceny z tej chwili jako WYNIK KOŃCOWY.
+    Wołane co 6 godzin przez harmonogram (backend musi działać) i przy otwarciu dziennika.
+    Zwraca liczbę zamrożonych pomysłów.
+    """
+    now = datetime.now(timezone.utc)
+    with _lock:
+        due = [e for e in _load() if e.get("source") == IDEA and not e.get("final")
+               and (now - datetime.fromisoformat(e["created_at"])).days
+               >= HORIZON_DAYS.get((e.get("brief") or {}).get("horizon"), HORIZON_DAYS[None])]
+    if not due:
+        return 0
+    bench = _benchmarks_now()
+    done = 0
+    with _lock:
+        for e in due:
+            prices = {t["ticker"]: _price(t["ticker"]) for t in e.get("tickers") or []}
+            if any(v is None for v in prices.values()):
+                continue                    # brak ceny (np. Yahoo nie odpowiada) - spróbujemy następnym razem
+            e["final"] = {"at": now.isoformat(), "prices": prices, "benchmarks": bench}
+            done += 1
+        if done:
+            _persist()
+    if done:
+        logger.info("Dziennik: zamrożono wynik %d pomysłów po terminie.", done)
+    return done
+
+
 # ============================================================================
 # ENDPOINTY
 # ============================================================================
+
+class IdeaIn(BaseModel):
+    ticker: str
+    direction: str            # "wzrost" | "spadek"
+    horizon: str = "3m"       # 1m | 3m | 6m | 1r
+    reason: str = ""
+    amount: float | None = None   # ile złotych byś w to włożył (opcjonalnie - do wyniku w zł)
+
 
 class EntryUpdate(BaseModel):
     note: str | None = None
@@ -351,14 +401,67 @@ class EntryUpdate(BaseModel):
     pinned: bool | None = None
 
 
-def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=None):
+def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=None,
+                  name_fn=None, currency_fn=None, scheduler=None):
     from fastapi import HTTPException
 
-    _deps.update(price_fn=price_fn, snapshot_fn=snapshot_fn, model_fn=model_fn, fx_fn=fx_fn)
+    _deps.update(price_fn=price_fn, snapshot_fn=snapshot_fn, model_fn=model_fn, fx_fn=fx_fn,
+                 name_fn=name_fn, currency_fn=currency_fn)
+
+    @app.post("/api/journal/idea")
+    def add_idea(idea: IdeaIn):
+        """
+        "Mój pomysł": własne przeczucie co do spółki. Cena i data zapisują się w tej chwili
+        i nie da się ich później zmienić (PATCH zmienia tylko notatkę, ocenę i przypięcie).
+        """
+        ticker = (idea.ticker or "").strip().upper()
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Podaj spółkę.")
+        if idea.direction not in ("wzrost", "spadek"):
+            raise HTTPException(status_code=400, detail="Kierunek: wzrost albo spadek.")
+        if idea.horizon not in IDEA_HORIZONS:
+            raise HTTPException(status_code=400, detail="Termin: 1 miesiąc, 3 miesiące, 6 miesięcy albo rok.")
+        if idea.amount is not None and idea.amount < 0:
+            raise HTTPException(status_code=400, detail="Kwota nie może być ujemna.")
+        with _lock:
+            _price_cache.pop(ticker, None)          # cena z TEJ chwili, nie sprzed 10 minut
+        price = _price(ticker)
+        if price is None:
+            raise HTTPException(status_code=400, detail=(
+                f"Nie znalazłem aktualnej ceny dla {ticker}. Sprawdź symbol (spółki z GPW mają końcówkę .WA, np. CDR.WA)."))
+        name, currency = ticker, None
+        try:
+            name = (_deps["name_fn"](ticker) if _deps["name_fn"] else None) or ticker
+            currency = _deps["currency_fn"](ticker) if _deps["currency_fn"] else None
+        except Exception:
+            pass
+        up = idea.direction == "wzrost"
+        question = f"{name} ({ticker}) - {'wzrośnie' if up else 'spadnie'} w ciągu: {HORIZON_LABEL[idea.horizon]}"
+        entry_id = journal_save(
+            IDEA, question, (idea.reason or "").strip()[:4000],
+            tickers=[{"ticker": ticker, "name": name, "price": price, "currency": currency,
+                      "stance": "kup" if up else "sprzedaj",
+                      "amount": idea.amount or None, "amount_currency": "PLN"}],
+            brief={"horizon": idea.horizon, "direction": idea.direction}, with_model=False)
+        if not entry_id:
+            raise HTTPException(status_code=500, detail="Nie udało się zapisać pomysłu - spróbuj jeszcze raz.")
+        return {"id": entry_id, "price": price, "currency": currency, "name": name}
+
+    if scheduler is not None:
+        try:
+            scheduler.add_job(finalize_due_ideas, "interval", hours=6, id="journal_finalize_ideas",
+                              replace_existing=True, max_instances=1, coalesce=True)
+        except Exception:
+            logger.exception("Dziennik: nie udało się dodać zamrażania pomysłów do harmonogramu")
 
     @app.get("/api/journal")
     def list_entries(q: str = "", ticker: str = "", source: str = "", with_results: bool = True):
         """Lista porad, najnowsze pierwsze, przypięte na górze. Z wynikiem od dnia porady."""
+        if with_results:
+            try:
+                finalize_due_ideas()
+            except Exception:
+                logger.exception("Dziennik: zamrażanie pomysłów po terminie nie powiodło się")
         with _lock:
             items = [dict(e) for e in _load()]
 
@@ -380,8 +483,12 @@ def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=Non
                 e["result"] = evaluate(e)
 
         # Bilans: tylko porady, które dojrzały - reszta to szum.
-        mature = [e for e in items if with_results and e["result"]["mature"]
+        # Porady AI i "Moje pomysły" liczymy OSOBNO - inaczej Twoje przeczucia mieszałyby się z oceną AI.
+        mature = [e for e in items if with_results and e["source"] != IDEA and e["result"]["mature"]
                   and e["result"]["vs_market_pct"] is not None]
+        # Pomysł liczy się do bilansu dopiero po terminie (wcześniej jest "w trakcie")
+        ideas_done = [e for e in items if with_results and e["source"] == IDEA and e["result"].get("due")
+                      and e["result"]["vs_market_pct"] is not None]
         def stats(group):
             return {
                 "mature": len(group),
@@ -404,11 +511,17 @@ def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=Non
             money["vs_market_pct"] = round(money["vs_market_pln"] / invested * 100, 2)
 
         summary = {
-            "total": len(items),
+            "total": sum(1 for e in items if e["source"] != IDEA),
             **stats(mature),
             "money": money,
             "by_source": {k: stats([e for e in mature if e["source"] == k])
                           for k in SOURCES if any(e["source"] == k for e in mature)},
+            "ideas": {
+                "total": sum(1 for e in items if e["source"] == IDEA),
+                "open": sum(1 for e in items if e["source"] == IDEA and not (e.get("result") or {}).get("due")),
+                **stats(ideas_done),
+                "hit": sum(1 for e in ideas_done if (e["result"].get("avg_change_pct") or 0) > 0),
+            },
             "outcomes": {k: sum(1 for e in items if e.get("outcome") == k)
                          for k in ("trafiona", "czesciowo", "chybiona")},
         }

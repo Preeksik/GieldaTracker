@@ -89,3 +89,25 @@ def test_backup_before_write_and_failure_is_recorded(tmp_path):
     st = json.loads((tmp_path / "lab" / "paper_status.json").read_text(encoding="utf-8"))
     assert st["last_run"]["ok"] is False and st["report"] is not None    # stary raport zostaje
     assert not os.path.exists(R.lock_path(str(tmp_path / "lab")))
+
+
+def test_incomplete_last_session_is_reported(tmp_path):
+    """Yahoo zwraca ostatnią sesję bez ceny zamknięcia -> raport mówi, że wynik nie obejmuje najnowszych dni."""
+    jp = tmp_path / "journal.json"
+    refresh_on(tmp_path, 600, jp)
+    st = store_until(tmp_path / "s610", DATES[610])
+    for name in list(st.meta):
+        if name.endswith(".WA"):
+            df = st.load(name)
+            df.loc[DATES[610], ["close", "adj_close"]] = np.nan
+            st._store(name, "stock", df, name)
+    rep = R.refresh(st, update=False, trigger="test", journal=str(jp), lab_dir=str(tmp_path / "lab"),
+                    require_game=False)["report"]
+    assert rep["prices_last_session"] == str(DATES[610].date())
+    assert rep["last_session"] < rep["prices_last_session"]
+    assert len(rep["incomplete_tickers"]) > 30
+
+
+def test_complete_data_has_no_gap(tmp_path):
+    rep = refresh_on(tmp_path, 600, tmp_path / "journal.json")["report"]
+    assert rep["prices_last_session"] == rep["last_session"] and rep["incomplete_tickers"] == []

@@ -3707,6 +3707,10 @@ setup_journal(
     snapshot_fn=get_index_snapshot,
     model_fn=lambda: (_ai_state().get("last_used") or {}).get("model"),
     fx_fn=lambda currency: get_fx_rate(currency, {}),
+    # "Moje pomysły": nazwa i waluta spółki + zamrażanie wyniku po terminie (co 6 h)
+    name_fn=lambda t: get_company_name(t),
+    currency_fn=lambda t: get_currency(t),
+    scheduler=scheduler,
 )
 
 # Doradca - endpoint /api/advisor/ask

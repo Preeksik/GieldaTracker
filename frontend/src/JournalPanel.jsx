@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import MarkdownView from './MarkdownView'
+import IdeaForm from './IdeaForm'
 
 const API = 'http://127.0.0.1:8000'
 
@@ -8,7 +9,16 @@ const OUTCOMES = [
   { key: 'czesciowo', label: 'Częściowo', cls: 'hl-jr-o-mid' },
   { key: 'chybiona', label: 'Chybiona', cls: 'hl-jr-o-bad' },
 ]
-const HORIZON = { krotki: 'krótki horyzont', sredni: 'średni horyzont', dlugi: 'długi horyzont' }
+const HORIZON = {
+  krotki: 'krótki horyzont', sredni: 'średni horyzont', dlugi: 'długi horyzont',
+  '1m': 'termin: 1 miesiąc', '3m': 'termin: 3 miesiące', '6m': 'termin: 6 miesięcy', '1r': 'termin: rok',
+}
+const IDEA = 'moje'
+// W "Moich pomysłach" kierunek to przewidywanie, nie zalecenie
+const IDEA_STANCE = {
+  kup: { label: '📈 wzrośnie', cls: 'hl-jr-st-buy' },
+  sprzedaj: { label: '📉 spadnie', cls: 'hl-jr-st-sell' },
+}
 
 function fullDate(iso) {
   return new Date(iso).toLocaleString('pl-PL', {
@@ -34,8 +44,8 @@ const STANCE = {
   unikaj: { label: 'unikaj', cls: 'hl-jr-st-sell' },
   neutralnie: { label: 'bez zalecenia', cls: 'hl-jr-st-none' },
 }
-function StanceTag({ stance }) {
-  const st = STANCE[stance]
+function StanceTag({ stance, idea }) {
+  const st = (idea ? IDEA_STANCE[stance] : null) || STANCE[stance]
   if (!st) return null
   return <span className={`hl-jr-st ${st.cls}`}>{st.label}</span>
 }
@@ -56,6 +66,8 @@ function Entry({ e, sources, onChange }) {
   const [note, setNote] = useState(e.note || '')
   const r = e.result || {}
   const ref = r.benchmarks?.[r.reference]
+  const idea = e.source === IDEA
+  const dueDate = new Date(new Date(e.created_at).getTime() + (r.horizon_days || 0) * 86400000)
 
   const patch = async (body) => {
     await api(`/api/journal/${e.id}`, {
@@ -65,7 +77,10 @@ function Entry({ e, sources, onChange }) {
   }
 
   const remove = async () => {
-    if (!window.confirm('Usunąć tę poradę z dziennika? Tego nie da się cofnąć.')) return
+    const msg = idea
+      ? 'Usunąć ten pomysł? Uwaga: usuwanie chybionych pomysłów sprawia, że bilans wygląda lepiej, niż jest naprawdę. Tego nie da się cofnąć.'
+      : 'Usunąć tę poradę z dziennika? Tego nie da się cofnąć.'
+    if (!window.confirm(msg)) return
     await api(`/api/journal/${e.id}`, { method: 'DELETE' })
     onChange()
   }
@@ -80,7 +95,9 @@ function Entry({ e, sources, onChange }) {
 
         <div className="hl-jr-main">
           <div className="hl-jr-meta">
-            <span className="hl-jr-badge">{sources?.[e.source] || e.source}</span>
+            <span className="hl-jr-badge" style={idea ? { background: 'var(--accent)', color: '#fff' } : undefined}>
+              {idea ? '💡 ' : ''}{sources?.[e.source] || e.source}
+            </span>
             {e.brief?.profile && <span>{e.brief.profile}</span>}
             {!e.brief?.profile && e.brief?.horizon && <span>{HORIZON[e.brief.horizon]}</span>}
             {e.brief?.amount ? <span>{Number(e.brief.amount).toLocaleString('pl-PL')} zł</span> : null}
@@ -96,7 +113,7 @@ function Entry({ e, sources, onChange }) {
                 <span key={t.ticker} className="hl-jr-tk"
                   title={`${t.name || t.ticker}: ${t.price} → ${t.now ?? '?'} ${t.currency || ''} (kurs ${pct(t.change_pct)})`}>
                   <b>{t.ticker}</b>
-                  <StanceTag stance={t.stance} />
+                  <StanceTag stance={t.stance} idea={idea} />
                   <span className={cls(t.effect_pct ?? null)}>{t.effect_pct != null ? pct(t.effect_pct) : pct(t.change_pct)}</span>
                 </span>
               ))}
@@ -120,9 +137,18 @@ function Entry({ e, sources, onChange }) {
                   <span className={cls(r.vs_market_pct)}>{r.vs_market_pct > 0 ? '+' : ''}{r.vs_market_pct.toFixed(2)} pp</span> vs {ref?.label}
                 </div>
               )}
-              <div className={`hl-jr-status ${r.mature ? 'hl-jr-ready' : ''}`}>
-                {r.mature ? 'do oceny' : `za wcześnie · ocena za ${Math.max(1, Math.ceil(r.horizon_days / 4) - r.days)} dni`}
-              </div>
+              {idea ? (
+                <div className={`hl-jr-status ${r.due ? 'hl-jr-ready' : ''}`}
+                  title={r.final_at ? `Wynik zamrożony ${new Date(r.final_at).toLocaleDateString('pl-PL')} - dalsze zmiany kursu się nie liczą` : ''}>
+                  {r.due
+                    ? (r.final_at ? `rozliczony ${new Date(r.final_at).toLocaleDateString('pl-PL')}` : 'termin minął')
+                    : `trwa · rozliczenie ${dueDate.toLocaleDateString('pl-PL')}`}
+                </div>
+              ) : (
+                <div className={`hl-jr-status ${r.mature ? 'hl-jr-ready' : ''}`}>
+                  {r.mature ? 'do oceny' : `za wcześnie · ocena za ${Math.max(1, Math.ceil(r.horizon_days / 4) - r.days)} dni`}
+                </div>
+              )}
             </>
           ) : (
             <div className="hl-jr-status">bez spółek do śledzenia</div>
@@ -143,10 +169,10 @@ function Entry({ e, sources, onChange }) {
                 <thead>
                   <tr>
                     <th>Spółka</th>
-                    <th>Zalecenie</th>
+                    <th>{idea ? 'Przewidywanie' : 'Zalecenie'}</th>
                     <th style={{ textAlign: 'right' }}>Kwota</th>
-                    <th style={{ textAlign: 'right' }}>W dniu porady</th>
-                    <th style={{ textAlign: 'right' }}>Dziś</th>
+                    <th style={{ textAlign: 'right' }}>{idea ? 'W dniu zapisu' : 'W dniu porady'}</th>
+                    <th style={{ textAlign: 'right' }}>{r.final_at ? 'W dniu terminu' : 'Dziś'}</th>
                     <th style={{ textAlign: 'right' }}>Kurs</th>
                     <th style={{ textAlign: 'right' }} title="Kurs z uwzględnieniem kierunku: przy SPRZEDAJ/UNIKAJ spadek kursu to zysk porady">Wynik porady</th>
                   </tr>
@@ -157,7 +183,7 @@ function Entry({ e, sources, onChange }) {
                       <td><span className="hl-adv-vtick" style={{ minWidth: 0, marginRight: 8 }}>{t.ticker}</span>{t.name}
                         {t.added_at && <span className="hl-adv-vmeta"> · dodana w dopytaniu {new Date(t.added_at).toLocaleDateString('pl-PL')}</span>}
                       </td>
-                      <td><StanceTag stance={t.stance} />{!t.stance && <span className="hl-adv-vmeta">—</span>}</td>
+                      <td><StanceTag stance={t.stance} idea={idea} />{!t.stance && <span className="hl-adv-vmeta">—</span>}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{t.amount_pln ? zl(t.amount_pln) : '—'}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{t.price} {t.currency}</td>
                       <td className="hl-num" style={{ textAlign: 'right' }}>{t.now ?? '—'} {t.now != null ? t.currency : ''}</td>
@@ -183,7 +209,16 @@ function Entry({ e, sources, onChange }) {
             </div>
           )}
 
-          <MarkdownView>{e.answer}</MarkdownView>
+          {idea ? (
+            <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+              <span className="hl-adv-label">Dlaczego tak myślałeś</span>
+              <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, color: e.answer ? 'var(--text)' : 'var(--text-dim)' }}>
+                {e.answer || '(bez uzasadnienia)'}
+              </div>
+            </div>
+          ) : (
+            <MarkdownView>{e.answer}</MarkdownView>
+          )}
 
           {e.followups?.map((f, i) => (
             <div key={i} className="hl-adv-followitem" style={{ marginTop: 14 }}>
@@ -239,6 +274,8 @@ export default function JournalPanel() {
   const [q, setQ] = useState('')
   const [source, setSource] = useState('')
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [saved, setSaved] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -263,12 +300,18 @@ export default function JournalPanel() {
   return (
     <div>
       <div className="hl-panel" style={{ padding: '22px 24px', marginBottom: 18 }}>
-        <h2 style={{ margin: '0 0 6px', fontSize: 17 }}>Dziennik porad</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 17 }}>Dziennik porad</h2>
+          {!adding && (
+            <button className="hl-btn hl-btn-primary" onClick={() => { setAdding(true); setSaved('') }}>💡 Dodaj mój pomysł</button>
+          )}
+        </div>
         <p className="hl-adv-hint" style={{ margin: '0 0 16px' }}>
           Każda porada AI zapisuje się sama — z Doradcy, Portfela AI, analizy spółki i analiz pozycji —
           z datą, cenami z tamtej chwili, zaleceniem i kwotą. Automatycznie, bo przy ręcznym zapisie
           zostawałyby głównie trafione porady i bilans byłby fałszywie optymistyczny. Porada
-          „sprzedaj” jest trafna, gdy kurs spadł — tak też jest liczona.
+          „sprzedaj” jest trafna, gdy kurs spadł — tak też jest liczona. Własne przeczucia zapisuj
+          przyciskiem „Dodaj mój pomysł” — liczą się osobno, żeby było widać: Ty kontra AI.
         </p>
 
         {s && s.total > 0 && (
@@ -293,6 +336,32 @@ export default function JournalPanel() {
                 <b className={cls(s.money.vs_market_pln)}>{zl(s.money.vs_market_pln, true)}</b>
                 <span>ponad rynek</span>
               </div>
+            )}
+          </div>
+        )}
+        {s?.ideas?.total > 0 && (
+          <div className="hl-jr-sources" style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 10 }}>
+            <span>
+              <b>💡 Twoje pomysły:</b> {s.ideas.total} zapisanych, {s.ideas.open} w trakcie
+              {s.ideas.mature > 0 && (
+                <>
+                  {' '}· rozliczone: {s.ideas.mature}, trafione {s.ideas.hit}/{s.ideas.mature}, pobiło rynek {s.ideas.beat_market}/{s.ideas.mature} ·{' '}
+                  <span className={cls(s.ideas.avg_vs_market_pct)}>
+                    {s.ideas.avg_vs_market_pct > 0 ? '+' : ''}{s.ideas.avg_vs_market_pct?.toFixed(2)} pp vs rynek
+                  </span>
+                </>
+              )}
+            </span>
+            {s.ideas.mature > 0 && s.mature > 0 && (
+              <span>
+                <b>Porady AI:</b> pobiło rynek {s.beat_market}/{s.mature} ·{' '}
+                <span className={cls(s.avg_vs_market_pct)}>
+                  {s.avg_vs_market_pct > 0 ? '+' : ''}{s.avg_vs_market_pct?.toFixed(2)} pp vs rynek
+                </span>
+              </span>
+            )}
+            {s.ideas.mature === 0 && (
+              <span className="hl-adv-vmeta">Bilans pojawi się, gdy minie termin pierwszego pomysłu.</span>
             )}
           </div>
         )}
@@ -325,12 +394,24 @@ export default function JournalPanel() {
         </div>
       </div>
 
+      {adding && (
+        <IdeaForm
+          onCancel={() => setAdding(false)}
+          onSaved={(d) => {
+            setAdding(false)
+            setSaved(`Zapisano: ${d.name} po ${d.price} ${d.currency || ''}. Wynik policzy się sam po terminie.`)
+            load()
+          }}
+        />
+      )}
+      {saved && <div className="hl-adv-hint" style={{ margin: '0 0 14px', color: 'var(--up)' }}>✓ {saved}</div>}
+
       {error && <div className="hl-adv-error">{error}</div>}
       {loading && !data && <div className="hl-adv-hint">Wczytuję dziennik i bieżące ceny…</div>}
 
       {data && data.entries.length === 0 && (
         <div className="hl-panel" style={{ padding: 28, textAlign: 'center', color: 'var(--text-dim)' }}>
-          {q || source ? 'Nic nie pasuje do wyszukiwania.' : 'Dziennik jest pusty. Zadaj pytanie w Doradcy, Portfelu AI albo przeanalizuj spółkę lub pozycję — porada zapisze się tu sama.'}
+          {q || source ? 'Nic nie pasuje do wyszukiwania.' : 'Dziennik jest pusty. Zadaj pytanie w Doradcy, Portfelu AI albo przeanalizuj spółkę lub pozycję — porada zapisze się tu sama. Możesz też dodać własny pomysł.'}
         </div>
       )}
 

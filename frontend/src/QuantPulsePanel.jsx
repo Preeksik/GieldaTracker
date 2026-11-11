@@ -41,6 +41,50 @@ function fmtDateTime(iso) {
   return `${d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+// Ile dni roboczych minęło od daty (bez świąt - tylko do ostrzeżenia "dane mają kilka dni")
+function workdaysSince(iso) {
+  if (!iso) return 0
+  const d = new Date(`${iso}T12:00:00`)
+  const now = new Date()
+  let n = 0
+  while (d.toDateString() !== now.toDateString() && d < now) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() !== 0 && d.getDay() !== 6) n += 1
+  }
+  return n
+}
+
+/* Ostrzeżenie, gdy wynik nie obejmuje najnowszych sesji:
+   - Yahoo zwróciło niepełne dane (ostatnia sesja bez ceny zamknięcia) - zwykle naprawia się samo za kilka godzin,
+   - albo rozliczenie dawno się nie odbyło (backend był wyłączony). */
+function DataWarning({ rep, running, game }) {
+  if (!rep || running || !game) return null
+  const box = { background: 'rgba(251,191,36,0.08)', borderLeft: '4px solid var(--warn)', padding: '12px 15px',
+    borderRadius: 'var(--radius-sm)', marginBottom: 16, fontSize: 13.5, lineHeight: 1.55 }
+  if (rep.prices_last_session && rep.last_session && rep.prices_last_session > rep.last_session) {
+    const n = rep.incomplete_tickers?.length || 0
+    return (
+      <div style={box}>
+        ⚠️ Wynik jest policzony do <strong>{fmtDate(rep.last_session)}</strong>, a notowania sięgają już{' '}
+        <strong>{fmtDate(rep.prices_last_session)}</strong>. Yahoo zwróciło niepełne dane
+        {n > 0 && <> ({n} {n === 1 ? 'spółka' : 'spółek'} bez ceny zamknięcia)</>}, więc najnowsze sesje zostały pominięte.
+        Zwykle naprawia się to samo po kilku godzinach - przy następnym rozliczeniu albo po kliknięciu „Rozlicz teraz”.
+      </div>
+    )
+  }
+  const lag = workdaysSince(rep.last_session)
+  if (lag > 2) {
+    return (
+      <div style={box}>
+        ⚠️ Ostatnia rozliczona sesja to <strong>{fmtDate(rep.last_session)}</strong> - od tego czasu minęło ok. {lag} dni
+        roboczych. Backend był pewnie wyłączony w porze automatu (18:30) albo Yahoo miało dziurę w danych.
+        Kliknij „Rozlicz teraz”, żeby nadrobić.
+      </div>
+    )
+  }
+  return null
+}
+
 const STATUS = {
   'czeka na kupno': { label: 'czeka na kupno', color: 'var(--warn)' },
   otwarty: { label: 'trwa', color: 'var(--cyan)' },
@@ -317,6 +361,8 @@ export default function QuantPulsePanel() {
       </div>
 
       {error && <div className="hl-adv-error">{error}</div>}
+      <DataWarning rep={rep} running={running} game={data.game} />
+
       {data.error && !running && (
         <div className="hl-adv-error">Ostatnie rozliczanie się nie udało: {data.error}. Poprzedni wynik zostaje - spróbuj ponownie później.</div>
       )}

@@ -40,7 +40,7 @@ zwykłe/IKE/IKZE, broker XTB), z analizami AI (Gemini) i laboratorium **QuantPul
   `var(--radius-sm)`, `var(--text-dim)`), klasy `hl-btn`, `hl-panel`, `hl-table`, `hl-xtb-*`. Po zmianie portfela
   wołaj `refreshAll()` (odświeża też wykres przez `historyVersion`).
 - Liczby w analizach liczy **kod**, AI tylko je komentuje (tak działa `review.py`).
-- Testy laboratorium: `python -m pytest lab\tests -q` (z `backend`). Obecnie 85 testów (2 pomijane bez C++). Testy aplikacji: `python -m pytest tests_app -q`.
+- Testy laboratorium: `python -m pytest lab\tests -q` (z `backend`). Obecnie 87 testów (2 pomijane bez C++). Testy aplikacji: `python -m pytest tests_app -q`.
 
 ## Bezpieczeństwo i zasady (twarde)
 
@@ -74,6 +74,9 @@ Wyniki (najważniejsze wnioski):
 na fixingu zamknięcia sesji po wskazaniu, poślizg 0.10%):
 - **A1** reguła „najbliżej rocznego szczytu” (`dist_high_250`), **A2** „zwrot 6 miesięcy” (`ret_120`), **A3** sieć neuronowa.
 Każda zmiana cech/ustawień = nowa strategia, która wymaga nowego uczciwego testu (na przyszłych miesiącach).
+Decyzja 11 XI 2026: **nie dotrenowujemy A3** (więcej epok/większa sieć). Sieć i tak uczy się co miesiąc od zera na całej historii
+od 2016; ograniczeniem jest ilość informacji (~120 niezależnych miesięcy), nie czas nauki - dłuższy trening = przeuczenie,
+a sejf jest już otwarty, więc nowej wersji nie da się uczciwie sprawdzić na historii. Nowy model dopiero z nowymi danymi (pkt 3 „Co dalej”).
 
 **Gra na papierze** (`paper.py`, dziennik `data/lab/paper_journal.json`, tylko na komputerze stacjonarnym):
 start - typy z sesji **2026-11-03**, kupno 2026-11-04. Stały harmonogram co 20 sesji; **pierwsze rozliczenie ok. 2 grudnia 2026**.
@@ -81,7 +84,7 @@ Uruchamianie: `python -m lab.paper run` (zaległe miesiące program dorabia sam,
 **Zakładka QuantPulse** (grupa „Laboratorium”, `QuantPulsePanel.jsx`) robi to bez terminala: `backend/lab_api.py`
 (`/api/lab/paper`, `/api/lab/paper/run`, automat w dni robocze 18:30 + zaległe po starcie backendu) woła
 `lab/paper_report.refresh()` → blokada `paper.lock`, kopia `paper_journal.backup.json`, raport `paper_status.json`
-(zakładka tylko go czyta). Przycisk „Sprawdź na dziś” (`LiveCheck.jsx`, `/api/lab/paper/live`, `lab/paper_live.py`): świeże ceny z Yahoo w kilka sekund, cache 60 s, NIC nie zapisuje. Przy pustym dzienniku (laptop) automat i przycisk nic nie robią - nie zakładają drugiej gry.
+(zakładka tylko go czyta; ostrzega, gdy Yahoo zwróciło niepełną ostatnią sesję - `prices_last_session` > `last_session`). Przycisk „Sprawdź na dziś” (`LiveCheck.jsx`, `/api/lab/paper/live`, `lab/paper_live.py`): świeże ceny z Yahoo w kilka sekund, cache 60 s, NIC nie zapisuje. Przy pustym dzienniku (laptop) automat i przycisk nic nie robią - nie zakładają drugiej gry.
 Pierwsze typy: A1 BNP, CAR, ALE, MBK, KTY, OPL, BDX, BHW, ALR, PCO · A2 ASB, ALE, PCO, VOX, PGE, ZAB, CAR, DNP, MBK, ACP ·
 A3 XTB, PKN, CAR, PCO, ASB, GPW, SNT, PEO, ZAB, DOM.
 
@@ -106,6 +109,8 @@ Pułapki danych (już obsłużone, nie „naprawiaj” ich na nowo):
 
 1. ~~Zakładka QuantPulse w aplikacji~~ - zrobione 9 XI 2026 (opis wyżej, przy grze na papierze). Testy:
    `lab\tests\test_paper_report.py`, `tests_app\test_lab_api.py` (`python -m pytest tests_app -q` z `backend`).
-2. **„Moje pomysły” w Dzienniku porad** - ręczne zapisywanie własnych przeczuć, rozliczane po czasie jak porady AI.
+2. ~~„Moje pomysły” w Dzienniku porad~~ - zrobione 11 XI 2026: `POST /api/journal/idea` (`journal.py`, source `moje`), formularz `IdeaForm.jsx`.
+   Cena/data z chwili zapisu, nie do edycji; po terminie (1m/3m/6m/1r) wynik zamrażany (`finalize_due_ideas`, co 6 h + przy otwarciu
+   dziennika, pole `final`); bilans pomysłów OSOBNO od porad AI (`summary.ideas`). Testy: `tests_app	est_journal_ideas.py`.
 3. Za ok. rok: dane z archiwum Radaru (`data/radar_archive/*.jsonl`, zbierane od XI 2026, gdy backend działa) jako nowe cechy
    → nowa wersja modelu, nowy uczciwy test.
