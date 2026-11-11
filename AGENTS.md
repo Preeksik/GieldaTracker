@@ -46,6 +46,7 @@ zwykłe/IKE/IKZE, broker XTB), z analizami AI (Gemini) i laboratorium **QuantPul
 
 - **Nigdy nie commituj** `backend/.env` ani `backend/data/` (są w `.gitignore`). Gdyby klucz API trafił do repo → wymiana klucza.
 - Nie scrapujemy X.com. `SEC_USER_AGENT` w `.env` ustawia sam użytkownik. Nie wysyłaj nigdzie jego e-maila.
+- Daty wypłat dywidend GPW (Yahoo ich nie ma, zna tylko USA): `dividend_payments.py` czyta jedną stronę biznesradar.pl/dywidendy/ najwyżej raz na 12 h (cache `data/cache/dividend_payments.json`, robots.txt pozwala). stooq.pl odpada - robots.txt zabrania botów.
 - Prywatny klucz SSH (`id_ed25519_github`) nigdy nie jest pokazywany ani wysyłany. Git push idzie przez alias
   `github.com-prywatne:Preeksik/GieldaTracker.git`.
 - Eksporty z XTB użytkownika są prywatne - nie publikuj ich, nie kopiuj poza projekt.

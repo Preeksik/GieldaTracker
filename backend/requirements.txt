@@ -4,3 +4,4 @@ yfinance
 requests
 pydantic
 httpx
+lxml            # tabela dat wypłat dywidend (dividend_payments.py)

@@ -1248,12 +1248,22 @@ def get_dividend_data(ticker):
     except Exception:
         pass
 
+    # Data WYPŁATY - Yahoo zna ją tylko dla części spółek (głównie USA); GPW uzupełnia dividend_payments.py
+    next_payment_date = None
+    try:
+        ts = info.get("dividendDate")
+        if ts:
+            next_payment_date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+
     annual_rate = info.get("dividendRate")
     last_amount = float(div_series.iloc[-1]) if div_series is not None and not div_series.empty else None
 
     return {
         "history": history,
         "next_ex_date": next_ex_date,
+        "next_payment_date": next_payment_date,
         "next_amount_estimate": last_amount,
         "annual_rate": annual_rate,
     }
@@ -1669,6 +1679,7 @@ def portfolio_dividends():
             "realized_total_pln": safe_round(realized_total_pln),
             # Szacowane, nadchodzące
             "next_ex_date": div_data["next_ex_date"],
+            "yahoo_payment_date": div_data.get("next_payment_date"),
             "next_amount_estimate_per_share": safe_round(next_amount_estimate),
             "next_amount_estimate_total": safe_round(next_amount_total),
             "annual_rate_per_share": safe_round(annual_rate),
@@ -1676,11 +1687,17 @@ def portfolio_dividends():
             "annual_estimate_total_pln": safe_round(annual_estimate_pln),
         })
 
+    # Daty wypłaty: GPW z BiznesRadar (raz na 12 h), reszta z Yahoo - moduł dividend_payments.py
+    from dividend_payments import load_rows as _pay_rows, enrich as _pay_enrich
+    pay_rows, pay_source = _pay_rows()
+    _pay_enrich(results, pay_rows)
+
     # Spółki z najbliższą znaną datą odcięcia na górze, potem reszta
     results.sort(key=lambda r: (r["next_ex_date"] is None, r["next_ex_date"] or ""))
 
     return {
         "positions": results,
+        "payment_source": pay_source,
         "summary": {
             "total_realized_last_12mo_pln": safe_round(total_realized_pln) or 0.0,
             "total_annual_estimate_pln": safe_round(total_annual_estimate_pln) or 0.0,

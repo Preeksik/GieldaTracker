@@ -2,9 +2,33 @@ import { useState, useEffect, Fragment } from 'react'
 
 const API_URL = 'http://127.0.0.1:8000'
 
+const plDate = (iso) => (iso ? iso.split('-').reverse().join('.') : '')
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+// Kolory statusu wypłaty: uchwalona = pewna (walne zgromadzenie zdecydowało), rekomendowana = propozycja zarządu
+const PAY_STATUS = {
+  'wypłacona': { label: 'wypłacona', color: 'var(--text-dim)' },
+  uchwalona: { label: 'uchwalona', color: 'var(--up)' },
+  rekomendowana: { label: 'rekomendowana', color: 'var(--warn)' },
+  zapowiedziana: { label: 'zapowiedziana', color: 'var(--cyan)' },
+}
+
+function PaymentCell({ pay }) {
+  if (!pay) return <span style={{ color: 'var(--text-dim)' }}>— brak danych —</span>
+  const st = PAY_STATUS[pay.status] || { label: pay.status, color: 'var(--text-dim)' }
+  return (
+    <span title={`Źródło: ${pay.source}${pay.amount ? ` · ${pay.amount} na akcję` : ''}${pay.last_with_right ? ` · ostatni dzień z prawem do dywidendy: ${plDate(pay.last_with_right)}` : ''}`}>
+      <span style={{ color: pay.paid ? 'var(--text-dim)' : 'var(--text)' }}>{plDate(pay.date)}</span>
+      <span style={{ fontSize: '11px', color: st.color, marginLeft: '6px' }}>{st.label}</span>
+      {pay.more > 0 && <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}> (+{pay.more} {pay.more === 1 ? 'rata' : 'raty'})</span>}
+    </span>
+  )
+}
+
 function DividendCalendar() {
   const [positions, setPositions] = useState([])
   const [summary, setSummary] = useState(null)
+  const [paySource, setPaySource] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [view, setView] = useState('szacowane') // 'szacowane' | 'realne'
@@ -24,6 +48,7 @@ function DividendCalendar() {
       const data = await res.json()
       setPositions(data.positions)
       setSummary(data.summary)
+      setPaySource(data.payment_source || null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -173,6 +198,7 @@ function DividendCalendar() {
               {view === 'szacowane' ? (
                 <>
                   <th style={{ padding: '8px' }}>Najbliższa data odcięcia</th>
+                  <th style={{ padding: '8px' }}>Data wypłaty</th>
                   <th style={{ padding: '8px' }}>Szac. kwota (na akcję)</th>
                   <th style={{ padding: '8px' }}>Szac. wpływ (ta wypłata)</th>
                   <th style={{ padding: '8px' }}>Szac. roczny dochód</th>
@@ -199,6 +225,7 @@ function DividendCalendar() {
                   {view === 'szacowane' ? (
                     <>
                       <td style={{ padding: '8px' }}>{p.next_ex_date || '— brak danych —'}</td>
+                      <td style={{ padding: '8px' }}><PaymentCell pay={p.next_payment} /></td>
                       <td style={{ padding: '8px' }}>
                         {p.next_amount_estimate_per_share !== null
                           ? `${p.next_amount_estimate_per_share} ${p.currency}`
@@ -252,7 +279,16 @@ function DividendCalendar() {
                     <td colSpan={5} style={{ padding: '10px 10px 10px 30px', background: 'var(--bg-deep)' }}>
                       {p.realized_dividends.map((d, idx) => (
                         <div key={idx} style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          {d.date}: {d.amount_per_share} {p.currency}/akcję → łącznie {d.total_received} {p.currency}
+                          odcięcie {d.date}
+                          {d.payment_date && (
+                            <>
+                              {' '}· wypłata {d.payment_date.split(', ').map(plDate).join(' i ')}
+                              {d.payment_date.split(', ').some((x) => x > todayIso()) && (
+                                <span style={{ color: 'var(--warn)' }}> (jeszcze nie wpłynęła)</span>
+                              )}
+                            </>
+                          )}
+                          : {d.amount_per_share} {p.currency}/akcję → łącznie {d.total_received} {p.currency}
                         </div>
                       ))}
                     </td>
@@ -273,6 +309,14 @@ function DividendCalendar() {
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '20px' }}>
         ⚠️ "Szacowana dywidenda" bazuje na estymacjach Yahoo Finance (roczna stawka, ostatnia wypłata) -
         to NIE jest gwarancja wypłaty ani jej wysokości. "Realna dywidenda" to twarde dane historyczne.
+      </p>
+      <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
+        💸 Daty wypłaty: spółki z GPW z serwisu{' '}
+        <a href="https://www.biznesradar.pl/dywidendy/" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)' }}>BiznesRadar</a>
+        {' '}(odświeżane najwyżej raz na 12 h), pozostałe z Yahoo Finance. „Uchwalona” = zdecydowało walne zgromadzenie,
+        „rekomendowana” = na razie tylko propozycja zarządu. Wiążące są komunikaty spółki (ESPI).
+        {paySource?.stale && ' Uwaga: serwis chwilowo nie odpowiada - pokazuję ostatnią zapisaną wersję.'}
+        {paySource?.error && ' Uwaga: nie udało się pobrać dat wypłat z serwisu - spróbuj później.'}
       </p>
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
         📅 Backend sprawdza co 12h, czy zbliża się dzień odcięcia dywidendy (3 dni wyprzedzenia) i wysyła
