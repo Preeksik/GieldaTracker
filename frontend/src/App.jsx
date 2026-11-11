@@ -17,6 +17,7 @@ import BrokerPanel from './BrokerPanel'
 import JournalPanel from './JournalPanel'
 import RadarPanel from './RadarPanel'
 import QuantPulsePanel from './QuantPulsePanel'
+import MirrorPanel from './MirrorPanel'
 import { StepLoader } from './Loader'
 import './theme.css'
 import './nav.css'
@@ -295,6 +296,7 @@ function App() {
           {activeTab === 'broker' && <BrokerPanel />}
           {activeTab === 'automat' && <AutomationPanel />}
           {activeTab === 'quantpulse' && <QuantPulsePanel />}
+          {activeTab === 'lusterko' && <MirrorPanel />}
         </main>
       </div>
     </div>

@@ -14,6 +14,7 @@ const HORIZON = {
   '1m': 'termin: 1 miesiąc', '3m': 'termin: 3 miesiące', '6m': 'termin: 6 miesięcy', '1r': 'termin: rok',
 }
 const IDEA = 'moje'
+const BASIS_LABEL = { raport: 'raport', insider: 'insiderzy', news: 'news', wykres: 'wykres', przeczucie: 'przeczucie', inne: 'inne' }
 // W "Moich pomysłach" kierunek to przewidywanie, nie zalecenie
 const IDEA_STANCE = {
   kup: { label: '📈 wzrośnie', cls: 'hl-jr-st-buy' },
@@ -100,6 +101,7 @@ function Entry({ e, sources, onChange }) {
             </span>
             {e.brief?.profile && <span>{e.brief.profile}</span>}
             {!e.brief?.profile && e.brief?.horizon && <span>{HORIZON[e.brief.horizon]}</span>}
+            {idea && e.brief?.basis && <span>podstawa: {BASIS_LABEL[e.brief.basis] || e.brief.basis}</span>}
             {e.brief?.amount ? <span>{Number(e.brief.amount).toLocaleString('pl-PL')} zł</span> : null}
             {e.model && <span className="hl-jr-model">{e.model}</span>}
             {e.followups?.length > 0 && <span>+{e.followups.length} dopytań</span>}

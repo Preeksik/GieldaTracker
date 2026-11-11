@@ -51,6 +51,7 @@ HORIZON_DAYS = {"krotki": 60, "sredni": 365, "dlugi": 1095, None: 90,
 HORIZON_LABEL = {"krotki": "krótki", "sredni": "średni", "dlugi": "długi",
                  "1m": "1 miesiąc", "3m": "3 miesiące", "6m": "6 miesięcy", "1r": "rok"}
 IDEA_HORIZONS = ("1m", "3m", "6m", "1r")
+IDEA_BASIS = ("raport", "insider", "news", "wykres", "przeczucie", "inne")   # do porównania w Lusterku
 
 SOURCES = {"doradca": "Doradca", "spolka": "Analiza spółki", "portfel": "Przegląd portfela", "pozycja": "Analiza pozycji",
            "moje": "Mój pomysł"}
@@ -393,6 +394,7 @@ class IdeaIn(BaseModel):
     horizon: str = "3m"       # 1m | 3m | 6m | 1r
     reason: str = ""
     amount: float | None = None   # ile złotych byś w to włożył (opcjonalnie - do wyniku w zł)
+    basis: str | None = None      # na czym się opierasz: raport / insider / news / wykres / przeczucie / inne
 
 
 class EntryUpdate(BaseModel):
@@ -421,6 +423,8 @@ def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=Non
             raise HTTPException(status_code=400, detail="Kierunek: wzrost albo spadek.")
         if idea.horizon not in IDEA_HORIZONS:
             raise HTTPException(status_code=400, detail="Termin: 1 miesiąc, 3 miesiące, 6 miesięcy albo rok.")
+        if idea.basis and idea.basis not in IDEA_BASIS:
+            raise HTTPException(status_code=400, detail="Podstawa: raport, insider, news, wykres, przeczucie albo inne.")
         if idea.amount is not None and idea.amount < 0:
             raise HTTPException(status_code=400, detail="Kwota nie może być ujemna.")
         with _lock:
@@ -442,7 +446,8 @@ def setup_journal(app, price_fn=None, snapshot_fn=None, model_fn=None, fx_fn=Non
             tickers=[{"ticker": ticker, "name": name, "price": price, "currency": currency,
                       "stance": "kup" if up else "sprzedaj",
                       "amount": idea.amount or None, "amount_currency": "PLN"}],
-            brief={"horizon": idea.horizon, "direction": idea.direction}, with_model=False)
+            brief={"horizon": idea.horizon, "direction": idea.direction, "basis": idea.basis or None},
+            with_model=False)
         if not entry_id:
             raise HTTPException(status_code=500, detail="Nie udało się zapisać pomysłu - spróbuj jeszcze raz.")
         return {"id": entry_id, "price": price, "currency": currency, "name": name}

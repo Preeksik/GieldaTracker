@@ -29,6 +29,7 @@ export const NAV_GROUPS = [
       { key: 'analiza', icon: '◈', label: 'Spółka' },
       { key: 'rekomendacje', icon: '◆', label: 'Przegląd portfela' },
       { key: 'dziennik', icon: '✎', label: 'Dziennik porad' },
+      { key: 'lusterko', icon: '◐', label: 'Lusterko inwestora' },
     ],
   },
   {

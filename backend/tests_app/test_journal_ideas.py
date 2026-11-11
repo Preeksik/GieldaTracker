@@ -104,3 +104,12 @@ def test_no_freeze_without_price(env):
     prices["CDR.WA"] = 120.0
     J._price_cache.clear()
     assert J.finalize_due_ideas() == 1
+
+
+def test_idea_basis_is_saved_and_validated(env):
+    c, _, _ = env
+    c.post("/api/journal/idea", json={"ticker": "CDR.WA", "direction": "wzrost", "basis": "raport"})
+    assert J._load()[0]["brief"]["basis"] == "raport"
+    assert c.post("/api/journal/idea", json={"ticker": "CDR.WA", "direction": "wzrost", "basis": "horoskop"}).status_code == 400
+    c.post("/api/journal/idea", json={"ticker": "CDR.WA", "direction": "spadek"})          # podstawa jest opcjonalna
+    assert J._load()[0]["brief"]["basis"] is None

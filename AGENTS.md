@@ -115,5 +115,11 @@ Pułapki danych (już obsłużone, nie „naprawiaj” ich na nowo):
 2. ~~„Moje pomysły” w Dzienniku porad~~ - zrobione 11 XI 2026: `POST /api/journal/idea` (`journal.py`, source `moje`), formularz `IdeaForm.jsx`.
    Cena/data z chwili zapisu, nie do edycji; po terminie (1m/3m/6m/1r) wynik zamrażany (`finalize_due_ideas`, co 6 h + przy otwarciu
    dziennika, pole `final`); bilans pomysłów OSOBNO od porad AI (`summary.ideas`). Testy: `tests_app	est_journal_ideas.py`.
+2b. ~~„Lusterko inwestora”~~ - zrobione 11 XI 2026 (zakładka w grupie Analiza, `MirrorPanel.jsx`, `backend/mirror.py`, `/api/mirror`):
+   statystyki nawyków bez AI z `sales.json` (częściowe zlecenia XTB złączone: ticker+konto+data kupna+data sprzedaży),
+   OTWARTE pozycje na minusie (inaczej statystyka za ładna) i „Moich pomysłów” wg podstawy (`brief.basis`: raport/insider/news/
+   wykres/przeczucie/inne). Wnioski liczone stałymi progami (`THRESHOLDS`), próbka < 10 = „mało danych”.
+   Na później (po kilku miesiącach gry): znaczki informacyjne przy typach QuantPulse (raport, insiderzy, dywidenda) - TYLKO do
+   wyświetlania, nigdy do odsiewania typów (to byłaby nowa strategia). Dywidenda/raport to nie „złe” zdarzenia - opis neutralny.
 3. Za ok. rok: dane z archiwum Radaru (`data/radar_archive/*.jsonl`, zbierane od XI 2026, gdy backend działa) jako nowe cechy
    → nowa wersja modelu, nowy uczciwy test.

@@ -10,6 +10,16 @@ const API = 'http://127.0.0.1:8000'
   Po terminie wynik zamraża się sam (backend), a pomysł trafia do bilansu "Ty vs AI".
 */
 
+// Na czym opiera się pomysł - Lusterko inwestora porówna potem, które podstawy wychodzą Ci najlepiej
+const BASIS = [
+  { key: 'raport', label: '📊 raport finansowy' },
+  { key: 'insider', label: '👔 transakcje insiderów' },
+  { key: 'news', label: '📰 news / wydarzenie' },
+  { key: 'wykres', label: '📈 wykres' },
+  { key: 'przeczucie', label: '🎲 przeczucie' },
+  { key: 'inne', label: 'inne' },
+]
+
 const HORIZONS = [
   { key: '1m', label: '1 miesiąc' },
   { key: '3m', label: '3 miesiące' },
@@ -23,6 +33,7 @@ export default function IdeaForm({ onSaved, onCancel }) {
   const [horizon, setHorizon] = useState('3m')
   const [reason, setReason] = useState('')
   const [amount, setAmount] = useState('')
+  const [basis, setBasis] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -38,7 +49,7 @@ export default function IdeaForm({ onSaved, onCancel }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticker: ticker.trim(), direction, horizon, reason,
+          ticker: ticker.trim(), direction, horizon, reason, basis: basis || null,
           amount: amount ? Number(String(amount).replace(',', '.')) : null,
         }),
       })
@@ -88,6 +99,19 @@ export default function IdeaForm({ onSaved, onCancel }) {
           <input className="hl-input" value={amount} onChange={(e) => setAmount(e.target.value)}
             placeholder="np. 2000 zł" inputMode="decimal" style={{ width: 140 }} />
         </div>
+      </div>
+
+      <div className="hl-adv-field" style={{ marginTop: 14 }}>
+        <span className="hl-adv-label">Na czym się opierasz?</span>
+        <div className="hl-adv-chips">
+          {BASIS.map((b) => (
+            <button key={b.key} type="button" className={`hl-adv-chip ${basis === b.key ? 'hl-adv-chip-on' : ''}`}
+              onClick={() => setBasis(basis === b.key ? '' : b.key)}>{b.label}</button>
+          ))}
+        </div>
+        <span className="hl-adv-hint" style={{ margin: '4px 0 0' }}>
+          Po czasie Lusterko inwestora pokaże, na czym Twoje pomysły sprawdzają się najlepiej.
+        </span>
       </div>
 
       <div className="hl-adv-field" style={{ marginTop: 14 }}>

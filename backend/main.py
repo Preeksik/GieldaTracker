@@ -3798,3 +3798,14 @@ setup_portfolio_clear(
 # QuantPulse - zakładka z grą na papierze: /api/lab/*, rozliczanie w tle w dni robocze o 18:30
 from lab_api import setup_lab
 setup_lab(app, scheduler=scheduler)
+
+# Lusterko inwestora - /api/mirror: nawyki z historii sprzedaży, otwartych pozycji i „Moich pomysłów” (bez AI)
+import journal as _journal_mod
+from mirror import setup_mirror
+setup_mirror(
+    app,
+    sales_fn=lambda: load_sales(),
+    positions_fn=lambda: get_portfolio()["positions"],
+    journal_entries_fn=lambda: list(_journal_mod._load()),
+    evaluate_fn=lambda e: _journal_mod.evaluate(e),
+)
