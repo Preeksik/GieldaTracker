@@ -13,6 +13,16 @@ const PAY_STATUS = {
   zapowiedziana: { label: 'zapowiedziana', color: 'var(--cyan)' },
 }
 
+// Kwota netto w nawiasie - to, co faktycznie wpływa na konto po podatku pobranym od razu przez XTB
+function Net({ value, currency, p }) {
+  if (value == null) return null
+  return (
+    <span style={{ color: 'var(--text-dim)', fontSize: '12px' }} title={p?.tax_note || ''}>
+      {' '}(netto {p?.net_is_estimate ? '~' : ''}{value} {currency})
+    </span>
+  )
+}
+
 function PaymentCell({ pay }) {
   if (!pay) return <span style={{ color: 'var(--text-dim)' }}>— brak danych —</span>
   const st = PAY_STATUS[pay.status] || { label: pay.status, color: 'var(--text-dim)' }
@@ -169,10 +179,16 @@ function DividendCalendar() {
           <div>
             💰 Otrzymane (realne, 12 mies.):{' '}
             <strong style={{ color: 'var(--up)' }}>{summary.total_realized_last_12mo_pln.toFixed(2)} PLN</strong>
+            {summary.total_realized_last_12mo_net_pln != null && (
+              <span style={{ color: 'var(--text-muted)' }}> (netto {summary.total_realized_last_12mo_net_pln.toFixed(2)} PLN)</span>
+            )}
           </div>
           <div>
             📈 Szacowany roczny dochód:{' '}
             <strong style={{ color: 'var(--warn)' }}>{summary.total_annual_estimate_pln.toFixed(2)} PLN</strong>
+            {summary.total_annual_estimate_net_pln != null && (
+              <span style={{ color: 'var(--text-muted)' }}> (netto {summary.total_annual_estimate_net_pln.toFixed(2)} PLN)</span>
+            )}
             <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}> (estymacja)</span>
           </div>
         </div>
@@ -246,9 +262,11 @@ function DividendCalendar() {
                         {p.next_amount_estimate_total !== null
                           ? `${p.next_amount_estimate_total} ${p.currency}`
                           : '—'}
+                        {p.next_amount_estimate_total !== null && <Net value={p.next_amount_estimate_net_total} currency={p.currency} p={p} />}
                       </td>
                       <td style={{ padding: '8px', color: 'var(--warn)' }}>
                         {p.annual_estimate_total_pln !== null ? `≈ ${p.annual_estimate_total_pln} PLN` : '—'}
+                        {p.annual_estimate_total_pln !== null && <Net value={p.annual_estimate_net_pln} currency="PLN" p={p} />}
                       </td>
                     </>
                   ) : (
@@ -256,6 +274,7 @@ function DividendCalendar() {
                       <td style={{ padding: '8px' }}>{p.realized_dividends.length}</td>
                       <td style={{ padding: '8px', color: 'var(--up)' }}>
                         {p.realized_total_pln !== null ? `${p.realized_total_pln} PLN` : '—'}
+                        {p.realized_total_pln !== null && <Net value={p.realized_total_net_pln} currency="PLN" p={p} />}
                         {p.realized_total_native !== null && p.currency !== 'PLN' && (
                           <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
                             {' '}
@@ -300,6 +319,7 @@ function DividendCalendar() {
                             </>
                           )}
                           : {d.amount_per_share} {p.currency}/akcję → łącznie {d.total_received} {p.currency}
+                          <Net value={d.net_received} currency={p.currency} p={p} />
                         </div>
                       ))}
                     </td>
@@ -320,6 +340,11 @@ function DividendCalendar() {
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '20px' }}>
         ⚠️ "Szacowana dywidenda" bazuje na estymacjach Yahoo Finance (roczna stawka, ostatnia wypłata) -
         to NIE jest gwarancja wypłaty ani jej wysokości. "Realna dywidenda" to twarde dane historyczne.
+      </p>
+      <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
+        🧾 „Netto” = po podatku, który broker pobiera od razu przy wypłacie: polskie spółki 19% na koncie zwykłym,
+        0% na IKE/IKZE (liczone osobno dla akcji z każdego konta). Spółki zagraniczne - kwota orientacyjna (~):
+        część podatku pobiera kraj spółki, resztę rozlicza się w PIT-38. Najedź na kwotę, żeby zobaczyć, jak policzono.
       </p>
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
         💸 Daty wypłaty: spółki z GPW z serwisu{' '}

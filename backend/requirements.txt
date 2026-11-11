@@ -1,7 +1,21 @@
-fastapi
-uvicorn[standard]
-yfinance
-requests
-pydantic
-httpx
-lxml            # tabela dat wypłat dywidend (dividend_payments.py)
+# HossaLab - aplikacja (backend). Instalacja z folderu backend:
+#   pip install -r requirements.txt
+# Laboratorium QuantPulse ma osobną listę: lab/requirements-lab.txt
+# (albo wszystko naraz z głównego folderu: pip install -r requirements.txt)
+
+fastapi>=0.115
+uvicorn[standard]>=0.30     # serwer (z --reload)
+pydantic>=2.7
+requests>=2.32
+httpx>=0.27                 # potrzebne do testów (TestClient)
+python-dotenv>=1.0          # klucze z backend/.env
+apscheduler>=3.10,<4        # zadania w tle (alerty, Radar, QuantPulse); wersja 4 ma inne API
+yfinance>=0.2.54            # notowania i dywidendy z Yahoo
+pandas>=2.2
+numpy>=2.1
+lxml>=5.0                   # tabela dat wypłat dywidend (dividend_payments.py)
+tzdata                      # strefy czasowe na Windows (zoneinfo w ai_models.py)
+pytest>=8                   # testy: python -m pytest tests_app -q
+
+# Opcjonalne - aplikacja działa bez nich:
+# openpyxl                  # dokładniejszy odczyt eksportów XTB w .xlsx (bez niego działa prostszy odczyt)

@@ -212,3 +212,84 @@ def enrich(positions, rows, today=None):
             if hits:
                 item["payment_date"] = hits[0] if len(hits) == 1 else ", ".join(hits)
     return positions
+
+
+# ============================================================================
+# KWOTY NETTO - po podatku, który broker pobiera od razu przy wypłacie
+# ============================================================================
+
+PL_TAX = 0.19            # "podatek Belki" od polskich dywidend - XTB pobiera go od razu (konto zwykłe)
+FOREIGN_TAX = 0.19       # zagranica: łącznie ok. 19% (część pobiera kraj spółki, resztę rozliczasz w PIT-38)
+FOREIGN_TAX_FREE_ACC = 0.15   # IKE/IKZE z zagranicznymi spółkami: zostaje podatek kraju spółki (np. USA 15% z W-8BEN)
+TAX_FREE_ACCOUNTS = {"ike", "ikze"}
+
+
+def _net_factor(ticker, quantities):
+    """
+    Jaka część brutto zostaje na rękę, uśredniona po kontach (np. część akcji na IKE, część na zwykłym).
+    Zwraca (mnożnik, czy to tylko szacunek).
+    """
+    total = sum(quantities.values())
+    if total <= 0:
+        return None, False
+    polish = gpw_symbol(ticker) is not None
+    keep = 0.0
+    for acc, q in quantities.items():
+        free = acc in TAX_FREE_ACCOUNTS
+        if polish:
+            rate = 0.0 if free else PL_TAX
+        else:
+            rate = FOREIGN_TAX_FREE_ACC if free else FOREIGN_TAX
+        keep += q * (1 - rate)
+    return keep / total, not polish
+
+
+def _r(x):
+    return None if x is None else round(x, 2)
+
+
+def add_net(positions, entries, summary):
+    """
+    Dopisuje kwoty netto (po podatku) obok brutto - w tej samej walucie co brutto:
+      net_factor, net_is_estimate, tax_note
+      realized_dividends[].net_received, realized_total_net_native, realized_total_net_pln
+      next_amount_estimate_net_total, annual_estimate_net_pln
+    oraz do summary: total_realized_last_12mo_net_pln, total_annual_estimate_net_pln.
+    entries - pozycje portfela (potrzebne konto każdej transzy: zwykle / ike / ikze).
+    """
+    by_ticker = {}
+    for e in entries or []:
+        acc = (e.get("account") or "zwykle").lower()
+        q = by_ticker.setdefault(e.get("ticker"), {})
+        q[acc] = q.get(acc, 0) + float(e.get("quantity") or 0)
+
+    tot_real, tot_annual = 0.0, 0.0
+    for p in positions:
+        qty = by_ticker.get(p.get("ticker"), {})
+        f, estimate = _net_factor(p.get("ticker"), qty)
+        p["net_factor"], p["net_is_estimate"] = f, estimate
+        free = sum(v for a, v in qty.items() if a in TAX_FREE_ACCOUNTS)
+        taxed = sum(v for a, v in qty.items() if a not in TAX_FREE_ACCOUNTS)
+        if gpw_symbol(p.get("ticker")):
+            p["tax_note"] = ("bez podatku (IKE/IKZE)" if taxed == 0 else
+                             "po 19% podatku" if free == 0 else
+                             f"19% podatku tylko od akcji z konta zwykłego ({taxed:g} z {taxed + free:g})")
+        else:
+            p["tax_note"] = "orientacyjnie: podatek zależy od kraju spółki"
+        if f is None:
+            continue
+        for item in p.get("realized_dividends") or []:
+            if item.get("total_received") is not None:
+                item["net_received"] = _r(item["total_received"] * f)
+        p["realized_total_net_native"] = _r((p.get("realized_total_native") or 0) * f)
+        p["realized_total_net_pln"] = _r(p["realized_total_pln"] * f) if p.get("realized_total_pln") is not None else None
+        nxt = p.get("next_amount_estimate_total")
+        p["next_amount_estimate_net_total"] = _r(nxt * f) if nxt is not None else None
+        ann = p.get("annual_estimate_total_pln")
+        p["annual_estimate_net_pln"] = _r(ann * f) if ann is not None else None
+        tot_real += p["realized_total_net_pln"] or 0
+        tot_annual += p["annual_estimate_net_pln"] or 0
+    if summary is not None:
+        summary["total_realized_last_12mo_net_pln"] = _r(tot_real)
+        summary["total_annual_estimate_net_pln"] = _r(tot_annual)
+    return positions

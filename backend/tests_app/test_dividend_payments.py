@@ -89,3 +89,29 @@ def test_past_ex_dates_are_not_shown_as_next():
     assert mur["next_ex_date"] == "2026-11-23" and mur["last_ex_date"] == "2025-11-20"  # piątek -> poniedziałek
     assert ims["next_ex_date"] == "2026-11-12"                                         # dziś jeszcze można kupić
     assert aapl["next_ex_date"] == "2026-11-12" and aapl["next_ex_source"] == "Yahoo"
+
+
+def test_net_amounts_depend_on_account():
+    entries = [{"ticker": "AMB.WA", "quantity": 111, "account": "zwykle"},
+               {"ticker": "AMB.WA", "quantity": 27, "account": "zwykle"},
+               {"ticker": "PZU.WA", "quantity": 42, "account": "ike"},
+               {"ticker": "MIX.WA", "quantity": 30, "account": "zwykle"},
+               {"ticker": "MIX.WA", "quantity": 10, "account": "ikze"},
+               {"ticker": "AAPL", "quantity": 4, "account": "zwykle"}]
+    pos = [{"ticker": "AMB.WA", "realized_dividends": [{"total_received": 151.8}], "realized_total_native": 151.8,
+            "realized_total_pln": 151.8, "next_amount_estimate_total": 151.8, "annual_estimate_total_pln": 151.8},
+           {"ticker": "PZU.WA", "realized_dividends": [{"total_received": 201.6}], "realized_total_native": 201.6,
+            "realized_total_pln": 201.6, "next_amount_estimate_total": None, "annual_estimate_total_pln": None},
+           {"ticker": "MIX.WA", "realized_total_native": 100.0, "realized_total_pln": 100.0},
+           {"ticker": "AAPL", "realized_total_native": 4.0, "realized_total_pln": 15.0}]
+    summary = {}
+    D.add_net(pos, entries, summary)
+    amb, pzu, mix, aapl = pos
+    assert amb["realized_dividends"][0]["net_received"] == 122.96                  # 151,80 - 19%
+    assert amb["realized_total_net_pln"] == 122.96 and amb["tax_note"] == "po 19% podatku"
+    assert amb["next_amount_estimate_net_total"] == 122.96
+    assert pzu["realized_total_net_pln"] == 201.6 and "IKE" in pzu["tax_note"]     # IKE - bez podatku
+    assert mix["realized_total_net_pln"] == 85.75                                  # 30 z 40 akcji opodatkowane
+    assert "30 z 40" in mix["tax_note"]
+    assert aapl["net_is_estimate"] and aapl["realized_total_net_native"] == 3.24
+    assert summary["total_realized_last_12mo_net_pln"] == round(122.96 + 201.6 + 85.75 + 12.15, 2)

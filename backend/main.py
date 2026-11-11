@@ -1695,13 +1695,18 @@ def portfolio_dividends():
     # Spółki z najbliższą znaną datą odcięcia na górze, potem reszta
     results.sort(key=lambda r: (r["next_ex_date"] is None, r["next_ex_date"] or ""))
 
+    summary = {
+        "total_realized_last_12mo_pln": safe_round(total_realized_pln) or 0.0,
+        "total_annual_estimate_pln": safe_round(total_annual_estimate_pln) or 0.0,
+    }
+    # Kwoty netto (po podatku pobieranym od razu przez XTB; IKE/IKZE bez podatku od polskich dywidend)
+    from dividend_payments import add_net as _pay_add_net
+    _pay_add_net(results, entries, summary)
+
     return {
         "positions": results,
         "payment_source": pay_source,
-        "summary": {
-            "total_realized_last_12mo_pln": safe_round(total_realized_pln) or 0.0,
-            "total_annual_estimate_pln": safe_round(total_annual_estimate_pln) or 0.0,
-        },
+        "summary": summary,
     }
 
 

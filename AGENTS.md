@@ -99,7 +99,7 @@ Pułapki danych (już obsłużone, nie „naprawiaj” ich na nowo):
 - Silnik C++ budowany g++ z MSYS2: `$env:CMAKE_GENERATOR="Ninja"; $env:CC="gcc"; $env:CXX="g++"` i
   `pip install --force-reinstall --no-deps --no-cache-dir .\quant_engine`. `CMakeLists.txt` linkuje biblioteki GCC statycznie
   (bez tego: „DLL load failed: nie można odnaleźć modułu”). Bez silnika `lab/engine.py` liczy w Pythonie.
-- Po przeniesieniu folderu trzeba zbudować nowe `.venv` (stare ma zaszyte ścieżki).
+- Po przeniesieniu folderu trzeba zbudować nowe `.venv` (stare ma zaszyte ścieżki). Wszystkie biblioteki naraz: `pip install -r requirements.txt` z głównego folderu (dołącza `backend/requirements.txt` i `backend/lab/requirements-lab.txt`). APScheduler musi zostać w wersji 3 (`<4`).
 - Ostrzeżenia Git „LF will be replaced by CRLF” są niegroźne.
 
 ## Co dalej (plan)
