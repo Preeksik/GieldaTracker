@@ -134,12 +134,34 @@ def gpw_symbol(ticker):
     return t[:-3] if t.endswith(".WA") else None
 
 
-def next_weekday(iso):
-    """Dzień odcięcia = sesja po ostatnim dniu z prawem do dywidendy (pomija weekendy, nie zna świąt)."""
-    d = date.fromisoformat(iso) + timedelta(days=1)
-    while d.weekday() >= 5:
-        d += timedelta(days=1)
-    return d.isoformat()
+def ex_date_after(last_with_right):
+    """Dzień odcięcia = pierwsza sesja GPW po ostatnim dniu z prawem do dywidendy (pomija weekendy i święta GPW)."""
+    from gpw_calendar import next_session
+    return next_session(last_with_right)
+
+
+def held_at(ticker, ex_date, entries, sales):
+    """
+    Ile akcji miałeś (z podziałem na konta) w dniu odcięcia dywidendy - prawo do dywidendy daje akcja
+    kupiona PRZED dniem odcięcia i sprzedana w dniu odcięcia albo później:
+      - transze z portfela kupione przed ex_date,
+      - plus transze już sprzedane, ale kupione przed ex_date i sprzedane w ex_date lub później.
+    Bez tego wypłata sprzed roku liczyłaby się od akcji dokupionych dopiero wczoraj.
+    """
+    out = {}
+
+    def add(acc, q):
+        acc = (acc or "zwykle").lower()
+        out[acc] = out.get(acc, 0.0) + float(q or 0)
+
+    for e in entries or []:
+        if e.get("ticker") == ticker and (e.get("buy_date") or "") < ex_date:
+            add(e.get("account"), e.get("quantity"))
+    for s in sales or []:
+        if (s.get("ticker") == ticker and (s.get("buy_date") or "") < ex_date
+                and (s.get("sell_date") or "") >= ex_date):
+            add(s.get("account"), s.get("quantity"))
+    return {a: round(q, 6) for a, q in out.items() if q > 0}
 
 
 def fix_ex_date(p, mine, today):
@@ -153,13 +175,13 @@ def fix_ex_date(p, mine, today):
     """
     yahoo_ex = p.get("next_ex_date")
     upcoming = sorted(r["last_with_right"] for r in mine if r.get("last_with_right") and r["last_with_right"] >= today)
-    past = [next_weekday(r["last_with_right"]) for r in mine if r.get("last_with_right") and r["last_with_right"] < today]
+    past = [ex_date_after(r["last_with_right"]) for r in mine if r.get("last_with_right") and r["last_with_right"] < today]
     if yahoo_ex and yahoo_ex < today:
         past.append(yahoo_ex)
     p["last_ex_date"] = max(past) if past else None
     p["last_with_right"] = None
     if upcoming:
-        p["next_ex_date"], p["next_ex_source"], p["last_with_right"] = next_weekday(upcoming[0]), SOURCE_NAME, upcoming[0]
+        p["next_ex_date"], p["next_ex_source"], p["last_with_right"] = ex_date_after(upcoming[0]), SOURCE_NAME, upcoming[0]
     elif yahoo_ex and yahoo_ex >= today:
         p["next_ex_source"] = "Yahoo"
     else:
@@ -275,14 +297,23 @@ def add_net(positions, entries, summary):
                              "po 19% podatku" if free == 0 else
                              f"19% podatku tylko od akcji z konta zwykłego ({taxed:g} z {taxed + free:g})")
         else:
-            p["tax_note"] = "orientacyjnie: podatek zależy od kraju spółki"
+            p["tax_note"] = ("orientacyjnie: łącznie ok. 19% podatku - np. dla USA XTB pobiera 15% przy wypłacie, "
+                             "a 4% dopłacasz sam w PIT-38, więc na konto wpływa trochę więcej")
         if f is None:
             continue
+        # Realne wypłaty: każda z kontami z dnia odcięcia (held_at), a nie z dzisiejszego portfela
+        gross_sum, net_sum = 0.0, 0.0
         for item in p.get("realized_dividends") or []:
-            if item.get("total_received") is not None:
-                item["net_received"] = _r(item["total_received"] * f)
-        p["realized_total_net_native"] = _r((p.get("realized_total_native") or 0) * f)
-        p["realized_total_net_pln"] = _r(p["realized_total_pln"] * f) if p.get("realized_total_pln") is not None else None
+            if item.get("total_received") is None:
+                continue
+            fi = _net_factor(p.get("ticker"), item["accounts"])[0] if item.get("accounts") else f
+            item["net_received"] = _r(item["total_received"] * (fi if fi is not None else f))
+            gross_sum += item["total_received"]
+            net_sum += item["net_received"]
+        real_f = (net_sum / gross_sum) if gross_sum else f
+        p["realized_total_net_native"] = _r((p.get("realized_total_native") or 0) * real_f)
+        p["realized_total_net_pln"] = (_r(p["realized_total_pln"] * real_f)
+                                       if p.get("realized_total_pln") is not None else None)
         nxt = p.get("next_amount_estimate_total")
         p["next_amount_estimate_net_total"] = _r(nxt * f) if nxt is not None else None
         ann = p.get("annual_estimate_total_pln")

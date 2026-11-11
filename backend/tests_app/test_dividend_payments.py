@@ -115,3 +115,42 @@ def test_net_amounts_depend_on_account():
     assert "30 z 40" in mix["tax_note"]
     assert aapl["net_is_estimate"] and aapl["realized_total_net_native"] == 3.24
     assert summary["total_realized_last_12mo_net_pln"] == round(122.96 + 201.6 + 85.75 + 12.15, 2)
+
+
+def test_gpw_holidays():
+    import gpw_calendar as G
+    assert G.easter(2026) == date(2026, 4, 5) and G.easter(2027) == date(2027, 3, 28)
+    h = G.holidays(2026)
+    assert {date(2026, 4, 3), date(2026, 4, 6), date(2026, 6, 4), date(2026, 11, 11), date(2026, 12, 24)} <= h
+    assert G.next_session("2026-11-10") == "2026-11-12"          # 11 listopada - giełda zamknięta
+    assert G.prev_session("2026-11-12") == "2026-11-10"
+    assert G.next_session("2026-12-23") == "2026-12-28"          # Wigilia, święta, weekend
+    assert G.next_session("2026-04-02") == "2026-04-07"          # Wielki Piątek + Poniedziałek Wielkanocny
+    assert G.next_session("2026-11-12") == "2026-11-13"          # zwykły dzień
+    # dzień odcięcia z BiznesRadar też omija święto
+    pos = [{"ticker": "IMS.WA"}]
+    D.enrich(pos, D.parse_table(HTML.replace("<td>11 lis 26</td><td>03 gru 26</td>", "<td>10 lis 26</td><td>03 gru 26</td>")),
+             today=date(2026, 11, 9))
+    assert pos[0]["next_ex_date"] == "2026-11-12"
+
+
+def test_shares_held_on_ex_date():
+    entries = [{"ticker": "AMB.WA", "quantity": 111, "account": "zwykle", "buy_date": "2026-04-23"},
+               {"ticker": "AMB.WA", "quantity": 27, "account": "ike", "buy_date": "2026-10-30"},     # po odcięciu
+               {"ticker": "AMB.WA", "quantity": 5, "account": "zwykle", "buy_date": "2026-10-27"}]    # W dniu odcięcia
+    sales = [{"ticker": "AMB.WA", "quantity": 10, "account": "ike", "buy_date": "2026-01-10", "sell_date": "2026-10-27"},
+             {"ticker": "AMB.WA", "quantity": 7, "account": "zwykle", "buy_date": "2026-01-10", "sell_date": "2026-10-26"},
+             {"ticker": "PZU.WA", "quantity": 3, "account": "zwykle", "buy_date": "2026-01-10", "sell_date": "2026-12-01"}]
+    held = D.held_at("AMB.WA", "2026-10-27", entries, sales)
+    # 111 (kupione wcześniej) + 10 sprzedane w dniu odcięcia (prawo zostaje); bez 27 i 5 (za późno) i bez 7 (sprzedane przed)
+    assert held == {"zwykle": 111.0, "ike": 10.0}
+    assert D.held_at("AMB.WA", "2026-01-05", entries, sales) == {}
+
+
+def test_net_uses_accounts_from_ex_date():
+    entries = [{"ticker": "AMB.WA", "quantity": 100, "account": "ike"}]       # dziś wszystko na IKE
+    pos = [{"ticker": "AMB.WA", "realized_total_native": 110.0, "realized_total_pln": 110.0,
+            "realized_dividends": [{"total_received": 110.0, "accounts": {"zwykle": 100.0}}]}]  # wtedy na zwykłym
+    D.add_net(pos, entries, {})
+    assert pos[0]["realized_dividends"][0]["net_received"] == 89.1           # 19% - bo wtedy było konto zwykłe
+    assert pos[0]["realized_total_net_pln"] == 89.1

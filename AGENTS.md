@@ -94,6 +94,9 @@ Pułapki danych (już obsłużone, nie „naprawiaj” ich na nowo):
 - Yahoo wstawiało wiersze ze świąt GPW (2019-2020, wolumen 0) → kalendarz sesji z dni z handlem.
 - Dzisiejsza niedokończona sesja nie jest zapisywana (GPW po 17:30, USA po 22:30 czasu PL).
 - Usunięte z listy (brak danych w Yahoo): SPL, CCC, CMR, GEA, TIM, SEN (.WA), BK.
+- Święta GPW w aplikacji (dywidendy: dzień odcięcia, „kup do sesji”): `backend/gpw_calendar.py` (Wielkanoc liczona wzorem, jednorazowe
+  zamknięcia dopisuje się do `EXTRA_CLOSED`). Realne dywidendy liczone od akcji posiadanych W DNIU ODCIĘCIA (`dividend_payments.held_at`:
+  portfel + sprzedaże), z kontami z tamtego dnia.
 
 ## Środowisko - znane problemy
 

@@ -119,8 +119,13 @@ function DividendCalendar() {
       {error && <div style={{ color: 'var(--down)', marginBottom: '20px' }}>{error}</div>}
       {loading && <div style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Ładowanie danych o dywidendach...</div>}
 
-      {upcomingCutoffs.length > 0 && (
-        <div style={{ marginBottom: '20px' }}>
+      {/* Przycisk widoczny zawsze - także gdy nic się nie zbliża (sprawdza od razu i wysyła powiadomienia) */}
+      <div style={{ marginBottom: '20px' }}>
+          {upcomingCutoffs.length === 0 && (
+            <div style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '8px' }}>
+              W najbliższych dniach żadna spółka z portfela nie ma odcięcia dywidendy.
+            </div>
+          )}
           {upcomingCutoffs.map((c) => (
             <div
               key={`${c.ticker}-${c.ex_date}`}
@@ -161,8 +166,7 @@ function DividendCalendar() {
           >
             {checkingCutoffs ? 'Sprawdzam...' : '🔄 Sprawdź teraz'}
           </button>
-        </div>
-      )}
+      </div>
 
       {summary && (
         <div
@@ -318,7 +322,9 @@ function DividendCalendar() {
                               )}
                             </>
                           )}
-                          : {d.amount_per_share} {p.currency}/akcję → łącznie {d.total_received} {p.currency}
+                          : {d.amount_per_share} {p.currency}/akcję
+                          {d.quantity != null && <> × {d.quantity} akc. (tyle miałeś w dniu odcięcia)</>}
+                          {' '}→ łącznie {d.total_received} {p.currency}
                           <Net value={d.net_received} currency={p.currency} p={p} />
                         </div>
                       ))}
@@ -342,9 +348,11 @@ function DividendCalendar() {
         to NIE jest gwarancja wypłaty ani jej wysokości. "Realna dywidenda" to twarde dane historyczne.
       </p>
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
-        🧾 „Netto” = po podatku, który broker pobiera od razu przy wypłacie: polskie spółki 19% na koncie zwykłym,
-        0% na IKE/IKZE (liczone osobno dla akcji z każdego konta). Spółki zagraniczne - kwota orientacyjna (~):
-        część podatku pobiera kraj spółki, resztę rozlicza się w PIT-38. Najedź na kwotę, żeby zobaczyć, jak policzono.
+        🧾 „Netto” = po podatku. Polskie spółki: 19% na koncie zwykłym, które XTB pobiera od razu przy wypłacie,
+        i 0% na IKE/IKZE (liczone osobno dla akcji z każdego konta, według stanu z dnia odcięcia).
+        Spółki zagraniczne - kwota orientacyjna (~) po CAŁYM podatku, nie to, co od razu wpłynie na konto:
+        np. dla USA XTB pobiera przy wypłacie 15%, a pozostałe 4% dopłacasz sam w PIT-38, więc na koncie
+        zobaczysz trochę więcej. Najedź na kwotę, żeby zobaczyć, jak policzono.
       </p>
       <p style={{ color: 'var(--text-dim)', fontSize: '12px', marginTop: '8px' }}>
         💸 Daty wypłaty: spółki z GPW z serwisu{' '}

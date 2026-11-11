@@ -812,12 +812,15 @@ def save_dividend_cutoff_notifications(notifications):
         json.dump(notifications, f, ensure_ascii=False, indent=2)
 
 
-def last_session_before(date_str):
+def last_session_before(date_str, ticker=None):
     """
     Ostatnia sesja giełdowa PRZED podaną datą (żeby otrzymać dywidendę, akcje trzeba mieć
     na koniec sesji dzień przed dniem odcięcia - w dniu odcięcia notowane są już bez tego prawa).
-    Prosto pomija tylko weekendy, nie uwzględnia świąt giełdowych.
+    Dla GPW (ticker .WA) pomija weekendy i święta GPW (gpw_calendar.py); dla reszty tylko weekendy.
     """
+    if ticker and str(ticker).upper().endswith(".WA"):
+        from gpw_calendar import prev_session
+        return prev_session(date_str)
     d = datetime.strptime(date_str, "%Y-%m-%d").date() - timedelta(days=1)
     while d.weekday() >= 5:  # 5 = sobota, 6 = niedziela
         d -= timedelta(days=1)
@@ -859,7 +862,7 @@ def check_dividend_cutoff_alerts():
         if (ex_date - today).days != 3 or key in notified_keys:
             continue
 
-        last_session = last_session_before(ex_date_str)
+        last_session = last_session_before(ex_date_str, pos["ticker"])
         subject = f"📅 Za 3 dni odcięcie dywidendy: {pos['name']} ({pos['ticker']})"
         amount_line = (
             f"Szacowana kwota: {pos['next_amount_estimate_per_share']} {pos['currency']}/akcję.\n\n"
@@ -1635,22 +1638,31 @@ def portfolio_dividends():
     results = []
     total_realized_pln = 0.0
     total_annual_estimate_pln = 0.0
+    try:
+        sales_all = load_sales() or []      # sprzedane transze - do odtworzenia stanu w dniu odcięcia
+    except Exception:
+        sales_all = []
 
     for ticker, info in tickers_info.items():
         div_data = get_dividend_data(ticker)
         quote_currency = get_currency(ticker) or info["currency"]
         fx = get_fx_rate(quote_currency, fx_cache)
 
-        # REALNE: liczymy tylko wypłaty po dacie pierwszego zakupu tego tickera.
-        # Uproszczenie: jeśli dokupowałeś w kilku transzach, liczymy całą aktualną ilość
-        # dla każdej wypłaty (nie odtwarzamy dokładnie ile akcji miałeś w danym dniu).
+        # REALNE: dla każdej wypłaty liczymy akcje, które miałeś W DNIU ODCIĘCIA (z podziałem na konta):
+        # transze z portfela kupione wcześniej + transze sprzedane dopiero w dniu odcięcia lub później.
+        # Dokupione później się nie liczą - dywidenda za nie by Ci nie przysługiwała.
+        from dividend_payments import held_at as _held_at
         realized = []
         realized_total_native = 0.0
         for item in div_data["history"]:
-            if item["date"] >= info["earliest_buy"]:
-                received = item["amount_per_share"] * info["quantity"]
-                realized_total_native += received
-                realized.append({**item, "total_received": safe_round(received)})
+            held = _held_at(ticker, item["date"], entries, sales_all)
+            qty_then = sum(held.values())
+            if qty_then <= 0:
+                continue
+            received = item["amount_per_share"] * qty_then
+            realized_total_native += received
+            realized.append({**item, "quantity": safe_round(qty_then, 6), "accounts": held,
+                             "total_received": safe_round(received)})
 
         realized_total_pln = realized_total_native * fx if fx is not None else None
         if realized_total_pln is not None:
@@ -1740,7 +1752,7 @@ def get_dividend_cutoff_alerts():
                 "name": pos["name"],
                 "ex_date": ex_date_str,
                 "days_until": days_until,
-                "last_buy_session": last_session_before(ex_date_str),
+                "last_buy_session": last_session_before(ex_date_str, pos["ticker"]),
                 "amount_per_share": pos["next_amount_estimate_per_share"],
                 "currency": pos["currency"],
             })
