@@ -224,7 +224,18 @@ function DividendCalendar() {
 
                   {view === 'szacowane' ? (
                     <>
-                      <td style={{ padding: '8px' }}>{p.next_ex_date || '— brak danych —'}</td>
+                      <td style={{ padding: '8px' }}>
+                        {p.next_ex_date ? (
+                          <span title={`Źródło: ${p.next_ex_source || 'Yahoo'}${p.last_with_right ? ` · żeby dostać dywidendę, akcje trzeba mieć na koniec sesji ${plDate(p.last_with_right)}` : ''}`}>
+                            {p.next_ex_date}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-dim)' }}>— brak zapowiedzi —</span>
+                        )}
+                        {!p.next_ex_date && p.last_ex_date && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>poprzednie: {p.last_ex_date}</div>
+                        )}
+                      </td>
                       <td style={{ padding: '8px' }}><PaymentCell pay={p.next_payment} /></td>
                       <td style={{ padding: '8px' }}>
                         {p.next_amount_estimate_per_share !== null

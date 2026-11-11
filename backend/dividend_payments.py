@@ -134,9 +134,41 @@ def gpw_symbol(ticker):
     return t[:-3] if t.endswith(".WA") else None
 
 
+def next_weekday(iso):
+    """Dzień odcięcia = sesja po ostatnim dniu z prawem do dywidendy (pomija weekendy, nie zna świąt)."""
+    d = date.fromisoformat(iso) + timedelta(days=1)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d.isoformat()
+
+
+def fix_ex_date(p, mine, today):
+    """
+    Yahoo w polu exDividendDate trzyma OSTATNIE odcięcie - także sprzed miesięcy, a nawet lat (VGO: 2017).
+    Ustawia w pozycji:
+      next_ex_date       - tylko przyszłe (albo dzisiejsze) odcięcie; None, gdy nic nie zapowiedziano
+      next_ex_source     - 'BiznesRadar' / 'Yahoo'
+      last_with_right    - ostatni dzień, w którym kupione akcje dają prawo do dywidendy (z BiznesRadar)
+      last_ex_date       - poprzednie odcięcie (do informacji, gdy nowego jeszcze nie ma)
+    """
+    yahoo_ex = p.get("next_ex_date")
+    upcoming = sorted(r["last_with_right"] for r in mine if r.get("last_with_right") and r["last_with_right"] >= today)
+    past = [next_weekday(r["last_with_right"]) for r in mine if r.get("last_with_right") and r["last_with_right"] < today]
+    if yahoo_ex and yahoo_ex < today:
+        past.append(yahoo_ex)
+    p["last_ex_date"] = max(past) if past else None
+    p["last_with_right"] = None
+    if upcoming:
+        p["next_ex_date"], p["next_ex_source"], p["last_with_right"] = next_weekday(upcoming[0]), SOURCE_NAME, upcoming[0]
+    elif yahoo_ex and yahoo_ex >= today:
+        p["next_ex_source"] = "Yahoo"
+    else:
+        p["next_ex_date"], p["next_ex_source"] = None, None
+
+
 def enrich(positions, rows, today=None):
     """
-    Dopisuje do każdej pozycji z /api/portfolio/dividends:
+    Dopisuje do każdej pozycji z /api/portfolio/dividends (i poprawia next_ex_date - patrz fix_ex_date):
       next_payment  - najbliższa wypłata (albo ostatnia, jeśli w tym sezonie już wypłacono): data, status, źródło
       payments      - wszystkie wypłaty z tabeli (np. dwie raty jak w Kętach)
     i do każdej realnej wypłaty z Yahoo (realized_dividends) pole payment_date, gdy da się ją dopasować.
@@ -148,6 +180,7 @@ def enrich(positions, rows, today=None):
 
     for p in positions:
         sym = gpw_symbol(p.get("ticker"))
+        fix_ex_date(p, by_symbol.get(sym, []) if sym else [], today)
         mine = sorted([r for r in by_symbol.get(sym, []) if r.get("payment_date")],
                       key=lambda r: r["payment_date"]) if sym else []
         p["payments"] = mine
